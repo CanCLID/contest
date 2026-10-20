@@ -7,8 +7,8 @@
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=3">
-  <script src="./app.mjs?v=3" type="module"></script>
+  <link rel="stylesheet" href="./styles.css?v=6">
+  <script src="./app.mjs?v=6" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳去主要內容</a>
@@ -33,7 +33,7 @@
         </div>
 
         <div class="arena-grid">
-          <section class="race-card" aria-label="打字賽場">
+          <section id="race-card" class="race-card" hidden aria-label="打字賽場">
             <div class="card-topline">
               <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="race-status">賽道準備好</span></div>
               <span id="race-group" class="subtle-label">本機試玩 · 無需登入</span>
@@ -46,9 +46,9 @@
             <div class="time-track" role="progressbar" aria-label="文章完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="time-bar"></div></div>
             <div class="typing-area">
               <div class="passage-meta"><span id="sentence-label">第 01 句</span><span>日常粵語 <span class="tiny-dot">·</span> 不用聲調</span></div>
-              <div id="typing-surface" class="typing-surface">
+              <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="input-feedback typing-hint">
                 <p id="passage" class="passage" aria-label="打字題目"></p>
-                <input id="answer" class="typing-capture" name="answer" form="typing-form" type="text" aria-label="直接輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
+                <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" form="typing-form" type="text" aria-label="直接輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
                 <span class="focus-hint">點一下文字繼續輸入</span>
               </div>
               <div class="up-next"><span>下一句</span><p id="next-sentence"></p></div>
@@ -99,7 +99,7 @@
       <section id="rules-view" class="view secondary-view" hidden aria-labelledby="rules-heading">
         <div class="page-heading"><h1 id="rules-heading">玩法</h1><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
         <div class="rules-grid">
-          <article class="rule-card"><h2>輸入同改錯</h2><p>直接打高亮字嘅粵拼，字母會顯示喺漢字上方。唔使聲調或標點，按空白鍵或 Enter 確認，錯字照樣前進。</p><p>未輸入字母時，按 Backspace 退返上一字，亦可退返上一句。最後一字提交即完場，之後唔可以改。</p></article>
+          <article class="rule-card"><h2>輸入同改錯</h2><p>直接打高亮字嘅粵拼，字母會顯示喺漢字上方。只接受 A–Z 字母，唔使聲調或標點，按空白鍵或 Enter 確認，錯字照樣前進。</p><p>未輸入字母時，按 Backspace 退返上一字，亦可退返上一句。最後一字提交即完場，之後唔可以改。</p></article>
           <article class="rule-card"><h2>固定文章，計時完成</h2><p>速度按音節／分鐘計，準確度按保留嘅答案計。改啱唔再扣分，但修正時間照計；中途唔暫停。</p><p>綜合分暫試 <code>速度 × 準確度²</code>（90% 代入 0.9），正式公式未定。只保存完成全文嘅成績。</p></article>
           <article class="rule-card"><h2>手機組同電腦組</h2><p>螢幕鍵盤揀手機組，實體鍵盤揀電腦組，平板亦按鍵盤分類。手機點一下題目，就可以用系統鍵盤輸入。</p><p>請自行確認組別，開賽後鎖定。網站無法可靠核實裝置或外接鍵盤。</p></article>
           <article class="rule-card rule-highlight"><h2>本機示範</h2><p>目前用原創示範文章，正式文章稍後提供。冇帳戶或同步對賽，紀錄只存喺呢個瀏覽器。</p><p>排行榜示範人物同成績均為虛構；未驗證防作弊或 2,000 人比賽容量。</p></article>

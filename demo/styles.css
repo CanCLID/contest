@@ -36,6 +36,8 @@ h2 { font-size: 22px; line-height: 1.4; }
 .hero { padding: 32px 0 24px; }
 .orange { color: var(--orange); }
 .arena-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
+#arena-view:not(.has-race) .hero { max-width: 480px; margin-inline: auto; }
+#arena-view:not(.has-race) .arena-grid { grid-template-columns: minmax(0, 480px); justify-content: center; }
 .race-card { background: var(--white); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .card-topline { padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; gap: 10px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
 .race-label { display: flex; align-items: center; gap: 10px; font-weight: 600; }
@@ -54,6 +56,7 @@ h2 { font-size: 22px; line-height: 1.4; }
 #sentence-label { font-weight: 600; }
 .tiny-dot { padding: 0 4px; }
 .typing-surface { position: relative; margin: 24px 0 28px; }
+.typing-surface:focus-visible { outline: 2px solid var(--green); outline-offset: 8px; border-radius: 4px; }
 body.running .typing-surface { cursor: text; }
 .passage { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px 6px; margin: 0; padding: 0 0 10px; font-size: 36px; line-height: 1.3; font-weight: 600; }
 .glyph { position: relative; display: inline-flex; flex-direction: column; align-items: center; width: 52px; color: #89938b; }
@@ -178,11 +181,13 @@ body.running #setup-fields { opacity: .65; }
   .group-heading { grid-column: 2; grid-row: 1; margin-top: 0; }
   .group-options { grid-column: 2; grid-row: 2 / span 2; }
   .article-info { grid-column: 1; }
+  #arena-view:not(.has-race) .setup-card fieldset { display: block; }
+  #arena-view:not(.has-race) .group-heading { margin-top: 24px; }
   .start-button { margin-top: 20px; }
   body.running .hero { display: none; }
   body.running .arena-grid { margin-top: 24px; }
-  body.running .race-card { grid-row: 1; }
-  body.running .setup-card { grid-row: 2; }
+  #arena-view.has-race .race-card { grid-row: 1; }
+  #arena-view.has-race .setup-card { grid-row: 2; }
   body.running .setup-heading, body.running .setup-card fieldset, body.running .demo-note { display: none; }
   body.running .start-button { margin-top: 0; }
 }

@@ -14,7 +14,13 @@ let countdownEnds = null;
 let ticker = null;
 let resultSaved = false;
 let composing = false;
-let deleteKeyHandled = false;
+let draft = "";
+let draftCursor = 0;
+let draftSelectionEnd = 0;
+let answerVersion = 0;
+let physicalEdit = null;
+let composition = null;
+let committedComposition = null;
 let currentGlyph = null;
 let currentAnswer = null;
 let storageAvailable = true;
@@ -79,7 +85,7 @@ function showView(view) {
 }
 
 function positionAnswer(scroll = false) {
-  if (!currentGlyph || $("#arena-view").hidden) return;
+  if (!currentGlyph || $("#arena-view").hidden || $("#race-card").hidden) return;
   if (scroll) currentGlyph.scrollIntoView({ block: "nearest", inline: "nearest" });
   const glyphBounds = currentGlyph.getBoundingClientRect();
   const surface = $("#typing-surface");
@@ -89,13 +95,61 @@ function positionAnswer(scroll = false) {
 }
 
 function focusAnswer() {
-  if ($("#answer").disabled) return;
+  if ($("#answer").disabled || $("#race-card").hidden) return;
   positionAnswer(true);
-  $("#answer").focus({ preventScroll: true });
+  const target = round?.group === "mobile" ? $("#answer") : $("#typing-surface");
+  target.focus({ preventScroll: true });
 }
 
 function renderDraft() {
-  if (currentAnswer) currentAnswer.textContent = run?.status === "running" ? $("#answer").value : "";
+  if (currentAnswer) currentAnswer.textContent = run?.status === "running" ? draft : "";
+}
+
+function setDraft(value, start, end = start) {
+  draft = value.replace(/[^a-z]/gi, "").toLowerCase();
+  draftCursor = Math.min(start ?? draft.length, draft.length);
+  draftSelectionEnd = Math.min(end ?? draftCursor, draft.length);
+  $("#answer").value = draft;
+  $("#answer").setSelectionRange(draftCursor, draftSelectionEnd);
+  renderDraft();
+}
+
+function restoreDraft() {
+  setDraft(draft, draftCursor, draftSelectionEnd);
+}
+
+function selection() {
+  const input = $("#answer");
+  return input.value === draft ? [input.selectionStart ?? draftCursor, input.selectionEnd ?? draftCursor] : [draftCursor, draftCursor];
+}
+
+function editDraft(letter = null) {
+  let [start, end] = selection();
+  if (letter === null && start === end) start = Math.max(0, start - 1);
+  const replacement = letter ?? "";
+  setDraft(draft.slice(0, start) + replacement + draft.slice(end), start + replacement.length);
+}
+
+function markPhysicalEdit() {
+  const edit = {};
+  physicalEdit = edit;
+  if (composition) composition.physical = true;
+  committedComposition = null;
+  // A canceled keydown can still be followed by native input in the same event turn.
+  setTimeout(() => { if (physicalEdit === edit) physicalEdit = null; }, 0);
+}
+
+function captureComposition(event) {
+  if (composition?.version === answerVersion && !composition.physical && typeof event.data === "string" && /^[a-z]*$/i.test(event.data)) {
+    const { base, start, end } = composition;
+    const letters = (event.data ?? "").toLowerCase();
+    setDraft(base.slice(0, start) + letters + base.slice(end), start + letters.length);
+  } else restoreDraft();
+}
+
+function isCompositionCommit(event) {
+  return /Composition/.test(event.inputType ?? "") ||
+    (committedComposition && event.data === committedComposition.data);
 }
 
 function renderPassage() {
@@ -170,6 +224,10 @@ function startRound() {
   run = null;
   resultSaved = false;
   composing = false;
+  composition = null;
+  committedComposition = null;
+  physicalEdit = null;
+  answerVersion++;
   round = { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
   countdownEnds = Date.now() + 3000;
   $("#setup-fields").disabled = true;
@@ -178,12 +236,14 @@ function startRound() {
   $("#start-note").textContent = "倒數 3 秒開始";
   $("#cancel-run").hidden = false;
   $("#result").hidden = true;
+  $("#race-card").hidden = false;
+  $("#arena-view").classList.add("has-race");
   $("#typing-form").hidden = false;
   $("#race-status").textContent = "準備起跑";
   $("#race-group").textContent = `${groupNames[round.group]} · 全文 ${tokens.length} 音節`;
   $("#countdown-overlay").hidden = false;
   $("#answer").disabled = false;
-  $("#answer").value = "";
+  setDraft("");
   $("#answer").placeholder = "倒數後，輸入粵拼";
   $("#input-feedback").textContent = "準備好，倒數後先開始輸入。";
   document.body.classList.add("running");
@@ -208,7 +268,8 @@ function tick() {
     run = createRun({ now: countdownEnds, questionSet: tokens });
     countdownEnds = null;
     $("#countdown-overlay").hidden = true;
-    $("#answer").value = "";
+    answerVersion++;
+    setDraft("");
     $("#answer").placeholder = "打粵拼，空白鍵確認";
     $("#race-status").textContent = "試玩進行中";
     $("#status-dot").classList.add("live");
@@ -226,10 +287,11 @@ function tick() {
 }
 
 function submit() {
-  if (composing || !run || run.status !== "running") return;
-  const value = $("#answer").value;
+  if ((composing && !composition?.physical) || !run || run.status !== "running") return;
+  const value = draft;
   run = submitAnswer(run, value, Date.now());
-  $("#answer").value = "";
+  answerVersion++;
+  setDraft("");
   if (run.status === "finished") {
     renderMetrics();
     renderPassage();
@@ -251,18 +313,18 @@ function submit() {
 }
 
 function undoLast() {
-  if (composing || !run || run.status !== "running" || run.index === 0) return;
+  if ((composing && !composition?.physical) || !run || run.status !== "running" || run.index === 0) return;
   run = undoAnswer(run, Date.now());
-  $("#answer").value = run.lastAnswer;
+  answerVersion++;
+  setDraft(run.lastAnswer, 0, run.lastAnswer.length);
   $("#input-feedback").textContent = `修改「${tokens[run.index].hanzi}」後確認。`;
   renderPassage();
   focusAnswer();
-  $("#answer").select();
   renderMetrics();
 }
 
 function handleDelete(event) {
-  if (event.isComposing || composing || $("#answer").value !== "" ||
+  if (event.isComposing || composing || draft !== "" ||
       !run || run.status !== "running" || run.index === 0) return;
   event.preventDefault();
   undoLast();
@@ -304,11 +366,18 @@ function resetRound() {
   countdownEnds = null;
   run = null;
   round = null;
+  composing = false;
+  composition = null;
+  committedComposition = null;
+  physicalEdit = null;
+  answerVersion++;
+  $("#race-card").hidden = true;
+  $("#arena-view").classList.remove("has-race");
   $("#countdown-overlay").hidden = true;
   $("#result").hidden = true;
   $("#typing-form").hidden = false;
   $("#answer").disabled = true;
-  $("#answer").value = "";
+  setDraft("");
   $("#answer").placeholder = "準備好就開始啦";
   $("#typing-surface").classList.remove("focused");
   $("#setup-fields").disabled = false;
@@ -405,42 +474,83 @@ $$("[data-board-group]").forEach(button => button.addEventListener("click", () =
 $("#start").addEventListener("click", startRound);
 $("#cancel-run").addEventListener("click", resetRound);
 $("#typing-form").addEventListener("submit", event => { event.preventDefault(); submit(); });
-$("#answer").addEventListener("compositionstart", () => { composing = true; });
-$("#answer").addEventListener("compositionupdate", renderDraft);
-$("#answer").addEventListener("compositionend", () => { composing = false; renderDraft(); });
-$("#answer").addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
-$("#answer").addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
+$("#answer").addEventListener("compositionstart", () => {
+  if (round?.group !== "mobile") { restoreDraft(); return; }
+  composing = true;
+  const [start, end] = selection();
+  composition = { version: answerVersion, base: draft, start, end, physical: !!physicalEdit };
+});
+$("#answer").addEventListener("compositionupdate", captureComposition);
+$("#answer").addEventListener("compositionend", event => {
+  captureComposition(event);
+  const commit = { data: event.data };
+  committedComposition = commit;
+  setTimeout(() => { if (committedComposition === commit) committedComposition = null; }, 0);
+  composing = false;
+  composition = null;
+});
+for (const selector of ["#answer", "#typing-surface"]) {
+  $(selector).addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
+  $(selector).addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
+}
 $("#typing-surface").addEventListener("click", focusAnswer);
-$("#answer").addEventListener("keydown", event => {
-  deleteKeyHandled = false;
-  if (event.isComposing || composing || event.keyCode === 229) {
-    if (event.key === "Enter") event.preventDefault();
+$("#typing-surface").addEventListener("keydown", event => {
+  if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Tab") return;
+  if (!run || run.status !== "running") return;
+  const letter = /^[a-z]$/i.test(event.key ?? "") ? event.key.toLowerCase()
+    : /^Key[A-Z]$/.test(event.code ?? "") ? event.code.slice(3).toLowerCase() : null;
+  if (letter) {
+    event.preventDefault();
+    markPhysicalEdit();
+    editDraft(letter);
     return;
   }
-  if (event.key === " " || event.key === "Enter") { event.preventDefault(); submit(); }
-  if (event.key === "Backspace" && handleDelete(event)) {
-    deleteKeyHandled = true;
-    setTimeout(() => { deleteKeyHandled = false; }, 0);
-  }
+  const key = event.code === "Space" ? " " : event.code === "NumpadEnter" ? "Enter"
+    : ["Enter", "Backspace"].includes(event.code) ? event.code : event.key;
+  if (![" ", "Enter", "Backspace"].includes(key)) return;
+  if ((event.isComposing || composing) && !event.code && !composition?.physical) return;
+  event.preventDefault();
+  markPhysicalEdit();
+  if (key !== "Backspace") submit();
+  else if (draft) editDraft();
+  else undoLast();
 });
 $("#answer").addEventListener("beforeinput", event => {
+  if (round?.group !== "mobile" || physicalEdit) {
+    if (event.cancelable !== false) event.preventDefault();
+    restoreDraft();
+    return;
+  }
   if (event.isComposing || composing) return;
+  if (isCompositionCommit(event)) {
+    if (event.cancelable !== false) event.preventDefault();
+    restoreDraft();
+    return;
+  }
+  committedComposition = null;
   if ((event.inputType === "insertText" && /^\s+$/u.test(event.data ?? "")) ||
       event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
     if (event.cancelable !== false) { event.preventDefault(); submit(); }
     return;
   }
-  if (event.inputType !== "deleteContentBackward") return;
-  if (deleteKeyHandled) {
-    event.preventDefault();
-    deleteKeyHandled = false;
-  } else handleDelete(event);
+  if (event.inputType === "deleteContentBackward") handleDelete(event);
 });
 $("#answer").addEventListener("input", event => {
-  // Some screen keyboards insert a space without a keydown event.
-  if (!event.isComposing && !composing && !/Composition/.test(event.inputType ?? "") &&
-      /\s$/.test($("#answer").value)) submit();
-  else renderDraft();
+  if (event.isComposing || composing) { captureComposition(event); return; }
+  if (round?.group !== "mobile" || physicalEdit || isCompositionCommit(event)) {
+    restoreDraft();
+    return;
+  }
+  committedComposition = null;
+  const value = $("#answer").value;
+  // Reject a non-Latin IME commit; never guess a pronunciation from its characters.
+  if (event.inputType !== "insertFromPaste" && /[^a-z\s]/i.test(value)) {
+    restoreDraft();
+    return;
+  }
+  const cursor = $("#answer").selectionStart ?? value.length;
+  setDraft(value, value.slice(0, cursor).replace(/[^a-z]/gi, "").length);
+  if (/\s$/.test(value)) submit();
 });
 $("#view-result-board").addEventListener("click", () => {
   boardGroup = round.group;

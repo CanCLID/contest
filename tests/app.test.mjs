@@ -15,10 +15,13 @@ const source = readFileSync(new URL("../demo/app.mjs", import.meta.url), "utf8")
 function element() {
   const listeners = new Map();
   const classes = new Set();
+  let value = "";
   return {
-    value: "", textContent: "", innerHTML: "", hidden: false,
+    get value() { return value; },
+    set value(next) { value = next; this.selectionStart = this.selectionEnd = value.length; },
+    textContent: "", innerHTML: "", hidden: false, selectionStart: 0, selectionEnd: 0,
     children: [], dataset: {}, style: {}, scrollLeft: 0, scrollTop: 0,
-    focusCalls: 0, scrollCalls: 0,
+    focusCalls: 0, scrollCalls: 0, measureCalls: 0,
     get className() { return [...classes].join(" "); },
     set className(value) { classes.clear(); value.split(/\s+/).filter(Boolean).forEach(name => classes.add(name)); },
     classList: {
@@ -27,13 +30,19 @@ function element() {
       contains(name) { return classes.has(name); },
       toggle(name, selected) { if (selected ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
     },
-    setAttribute() {}, removeAttribute() {}, select() {},
+    setAttribute() {}, removeAttribute() {},
+    select() { this.setSelectionRange(0, this.value.length); },
+    setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
     focus() { this.focusCalls++; this.fire("focus"); },
     blur() { this.fire("blur"); },
     scrollIntoView() { this.scrollCalls++; },
-    getBoundingClientRect() { return { left: 0, top: 0, width: 52, height: 80 }; },
+    getBoundingClientRect() { this.measureCalls++; return { left: 0, top: 0, width: 52, height: 80 }; },
     addEventListener(type, listener) { listeners.set(type, listener); },
-    fire(type, event = {}) { listeners.get(type)?.(event); },
+    fire(type, event = {}) {
+      event.target ??= this;
+      listeners.get(type)?.(event);
+      if (["keydown", "keyup"].includes(type)) this.parentElement?.fire(type, event);
+    },
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; },
   };
@@ -54,6 +63,8 @@ function openTab(store = new Map(), failures = {}) {
     return elements.get(selector);
   };
   get("#answer").disabled = true;
+  get("#answer").parentElement = get("#typing-surface");
+  get("#race-card").hidden = true;
   const views = ["arena", "leaderboard", "rules"].map(name => {
     const view = get(`#${name}-view`);
     view.id = `${name}-view`;
@@ -118,14 +129,14 @@ function readyRound(tab, name, at = 0) {
 function beginRound(tab, name, at = 0) {
   readyRound(tab, name, at);
   tab.setTime(at + 4000);
-  tab.get("#answer").value = tokens[0].answers[0];
+  tab.evaluate(`setDraft(${JSON.stringify(tokens[0].answers[0])})`);
   tab.evaluate("submit()");
 }
 
 function finishRemaining(tab, at = 0) {
   for (let index = tab.evaluate("run.index"); index < tokens.length; index++) {
     tab.setTime(at + 3000 + (index + 1) * 1000);
-    tab.get("#answer").value = tokens[index].answers[0];
+    tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])})`);
     tab.evaluate("submit()");
   }
 }
@@ -141,8 +152,123 @@ const glyphs = tab => tab.get("#passage").children.filter(node => node.classList
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
 const draft = tab => currentGlyph(tab)?.children[0].textContent;
 
+test("the race is hidden initially and after cancel, shown on start and retained after finishing", () => {
+  const tab = openTab();
+  assert.equal(tab.get("#race-card").hidden, true);
+  assert.equal(tab.get("#typing-surface").measureCalls, 0);
+  assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
+  tab.evaluate("startRound()");
+  assert.equal(tab.get("#race-card").hidden, false);
+  assert.equal(tab.get("#arena-view").classList.contains("has-race"), true);
+  tab.evaluate("resetRound()");
+  assert.equal(tab.get("#race-card").hidden, true);
+  assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
+  completeRound(tab, "Alpha", 10000);
+  assert.equal(tab.get("#race-card").hidden, false);
+  assert.equal(tab.get("#result").hidden, false);
+  assert.equal(tab.get("#arena-view").classList.contains("has-race"), true);
+});
+
+test("desktop uses a noneditable focus target and handles Process/229 keys without duplicate IME text", () => {
+  const tab = openTab();
+  readyRound(tab, "Alpha");
+  const surface = tab.get("#typing-surface");
+  const answer = tab.get("#answer");
+  assert.ok(surface.focusCalls > 0);
+  assert.equal(answer.focusCalls, 0);
+  let prevented = 0;
+  surface.fire("keydown", { key: "Process", code: "KeyG", keyCode: 229, isComposing: true, preventDefault() { prevented++; } });
+  assert.equal(draft(tab), "g");
+  answer.fire("beforeinput", { inputType: "insertText", data: "g", preventDefault() { prevented++; } });
+  answer.value = "gg";
+  answer.fire("input", { inputType: "insertText", data: "g" });
+  answer.fire("compositionstart");
+  answer.fire("compositionupdate", { data: "今" });
+  answer.value = "今";
+  answer.fire("compositionend", { data: "今" });
+  answer.fire("input", { inputType: "insertFromComposition", data: "今" });
+  assert.equal(draft(tab), "g");
+  assert.equal(answer.value, "g");
+  assert.equal(prevented, 2);
+  surface.fire("keydown", { key: "Q", code: "KeyA", preventDefault() {} });
+  assert.equal(draft(tab), "gq", "ASCII key respects the keyboard layout before falling back to code");
+  for (const modifier of ["ctrlKey", "metaKey", "altKey"]) {
+    surface.fire("keydown", { key: "a", code: "KeyA", [modifier]: true, preventDefault() { assert.fail("shortcut intercepted"); } });
+  }
+  assert.equal(draft(tab), "gq");
+});
+
+test("mobile physical input rejects stale composition after submission then accepts new native Latin", () => {
+  const tab = openTab();
+  tab.evaluate('group = "mobile"');
+  readyRound(tab, "Alpha");
+  const answer = tab.get("#answer");
+  assert.ok(answer.focusCalls > 0);
+  answer.fire("compositionstart");
+  for (const code of ["KeyG", "KeyA", "KeyM"]) {
+    answer.fire("keydown", { key: "Process", code, keyCode: 229, isComposing: true, preventDefault() {} });
+  }
+  assert.equal(draft(tab), "gam");
+  answer.fire("keydown", { key: "Process", code: "Space", isComposing: true, preventDefault() {} });
+  assert.equal(tab.evaluate("run.index"), 1);
+  answer.fire("compositionupdate", { data: "gam" });
+  answer.fire("compositionend", { data: "gam" });
+  answer.value = "gam";
+  answer.fire("input", { inputType: "insertText", data: "gam" });
+  assert.equal(draft(tab), "");
+  tab.flushTimeouts();
+  answer.value = "JAT";
+  answer.fire("input", { inputType: "insertText", data: "JAT" });
+  assert.equal(draft(tab), "jat");
+  answer.fire("keydown", { key: "Process", code: "Enter", keyCode: 229, preventDefault() {} });
+  assert.equal(tab.evaluate("run.index"), 2);
+  assert.equal(tab.evaluate("run.correct"), 2);
+});
+
+test("Backspace edits letters and duplicate events preserve the selected answer for replacement", () => {
+  const tab = openTab();
+  tab.evaluate('group = "mobile"');
+  readyRound(tab, "Alpha");
+  const answer = tab.get("#answer");
+  tab.evaluate('setDraft("gamm")');
+  answer.fire("keydown", { key: "Backspace", code: "Backspace", preventDefault() {} });
+  answer.fire("beforeinput", { inputType: "deleteContentBackward", preventDefault() {} });
+  assert.equal(draft(tab), "gam");
+  answer.fire("keydown", { key: "Enter", code: "Enter", preventDefault() {} });
+  answer.fire("keydown", { key: "Backspace", code: "Backspace", preventDefault() {} });
+  answer.fire("beforeinput", { inputType: "deleteContentBackward", preventDefault() {} });
+  answer.value = "";
+  answer.fire("input", { inputType: "deleteContentBackward" });
+  assert.equal(draft(tab), "gam");
+  assert.equal(answer.selectionStart, 0);
+  assert.equal(answer.selectionEnd, 3);
+  answer.fire("keydown", { key: "g", code: "KeyG", preventDefault() {} });
+  assert.equal(draft(tab), "g");
+});
+
+test("mobile input accepts ASCII and sanitizes pasted text without transliterating Chinese", () => {
+  const tab = openTab();
+  tab.evaluate('group = "mobile"');
+  readyRound(tab, "Alpha");
+  const answer = tab.get("#answer");
+  answer.value = "你";
+  answer.fire("input", { inputType: "insertText", data: "你" });
+  assert.equal(draft(tab), "");
+  answer.value = "GA";
+  answer.fire("input", { inputType: "insertText", data: "GA" });
+  assert.equal(draft(tab), "ga");
+  answer.value = "家";
+  answer.fire("input", { inputType: "insertText", data: "家" });
+  assert.equal(draft(tab), "ga");
+  answer.value = "Ab中C1";
+  answer.fire("input", { inputType: "insertFromPaste", data: "Ab中C1" });
+  assert.equal(draft(tab), "abc");
+  assert.equal(answer.value, "abc");
+});
+
 test("typing shows Jyutping above the current character without replacing or scrolling it", () => {
   const tab = openTab();
+  tab.evaluate('group = "mobile"');
   readyRound(tab, "Alpha");
   const glyph = currentGlyph(tab);
   const scrollCalls = glyph.scrollCalls;
@@ -167,11 +293,13 @@ test("typing shows Jyutping above the current character without replacing or scr
 
 test("empty submissions clear the displayed draft without advancing", () => {
   const tab = openTab();
+  tab.evaluate('group = "mobile"');
   readyRound(tab, "Alpha");
   tab.get("#answer").value = "gam";
   tab.get("#answer").fire("input", {});
   assert.equal(draft(tab), "gam");
-  tab.get("#answer").value = "  ";
+  tab.get("#answer").value = "";
+  tab.get("#answer").fire("input", {});
   tab.get("#answer").fire("keydown", { key: "Enter", preventDefault() {} });
   assert.equal(tab.get("#answer").value, "");
   assert.equal(draft(tab), "");
@@ -180,6 +308,7 @@ test("empty submissions clear the displayed draft without advancing", () => {
 
 test("composition updates the visible draft but does not submit on composition keys or commits", () => {
   const tab = openTab();
+  tab.evaluate('group = "mobile"');
   readyRound(tab, "Alpha");
   const answer = tab.get("#answer");
   answer.fire("compositionstart");
@@ -191,11 +320,12 @@ test("composition updates the visible draft but does not submit on composition k
   answer.fire("keydown", { key: "Enter", isComposing: true, preventDefault() {} });
   answer.fire("beforeinput", { inputType: "insertText", data: " ", isComposing: true, preventDefault() {} });
   assert.equal(tab.evaluate("run.index"), 0);
-  answer.value = "gam ";
-  answer.fire("compositionend");
-  answer.fire("input", { inputType: "insertCompositionText", isComposing: false });
-  assert.equal(draft(tab), "gam ");
+  answer.value = "今";
+  answer.fire("compositionend", { data: "今" });
+  answer.fire("input", { inputType: "insertCompositionText", data: "今", isComposing: false });
+  assert.equal(draft(tab), "gam");
   assert.equal(tab.evaluate("run.index"), 0);
+  tab.flushTimeouts();
   answer.fire("keydown", { key: "Enter", preventDefault() {} });
   assert.equal(tab.evaluate("run.index"), 1);
   assert.equal(tab.evaluate("run.answers[0].answer"), "gam");
@@ -203,6 +333,7 @@ test("composition updates the visible draft but does not submit on composition k
 
 test("mobile spaces submit through beforeinput or the uncancelable input fallback", () => {
   const tab = openTab();
+  tab.evaluate('group = "mobile"');
   readyRound(tab, "Alpha");
   const answer = tab.get("#answer");
   answer.value = tokens[0].answers[0];
@@ -214,6 +345,7 @@ test("mobile spaces submit through beforeinput or the uncancelable input fallbac
   assert.equal(answer.value, "");
   assert.equal(draft(tab), "");
   answer.value = tokens[1].answers[0];
+  answer.fire("input", { inputType: "insertText" });
   answer.fire("beforeinput", { inputType: "insertText", data: " ", cancelable: false, preventDefault() { assert.fail("uncancelable"); } });
   assert.equal(tab.evaluate("run.index"), 1);
   answer.value += " ";
@@ -231,17 +363,18 @@ test("clicking the passage or returning to the arena restores focus without inte
   assert.equal(answer.focusCalls, 0);
   readyRound(tab, "Alpha");
   assert.equal(surface.classList.contains("focused"), true);
-  answer.blur();
+  surface.blur();
   assert.equal(surface.classList.contains("focused"), false);
   surface.fire("click");
   assert.equal(surface.classList.contains("focused"), true);
   assert.ok(Number.isFinite(parseFloat(answer.style.left)));
   assert.ok(Number.isFinite(parseFloat(answer.style.top)));
   tab.evaluate('showView("rules")');
-  answer.blur();
-  const previousFocus = answer.focusCalls;
+  surface.blur();
+  const previousFocus = surface.focusCalls;
   tab.evaluate('showView("arena")');
-  assert.equal(answer.focusCalls, previousFocus + 1);
+  assert.equal(surface.focusCalls, previousFocus + 1);
+  assert.equal(answer.focusCalls, 0);
   answer.fire("keydown", { key: "Tab", preventDefault() { assert.fail("Tab must retain native navigation"); } });
   assert.equal(tab.evaluate("run.index"), 0);
 });
@@ -318,7 +451,7 @@ test("an incorrect submission advances to the next character and clears the inpu
   const tab = openTab();
   readyRound(tab, "Alpha");
   tab.setTime(4000);
-  tab.get("#answer").value = "zzz";
+  tab.evaluate('setDraft("zzz")');
   tab.evaluate("submit()");
   assert.equal(tab.evaluate("run.index"), 1);
   assert.equal(tab.get("#answer").value, "");
@@ -342,7 +475,7 @@ test("Backspace restores the previous answer once across keydown and beforeinput
   readyRound(tab, "Alpha");
   for (let index = 0; index <= sentenceEnd; index++) {
     tab.setTime(4000 + index * 1000);
-    tab.get("#answer").value = index === sentenceEnd ? "zzz" : tokens[index].answers[0];
+    tab.evaluate(`setDraft(${JSON.stringify(index === sentenceEnd ? "zzz" : tokens[index].answers[0])})`);
     tab.evaluate("submit()");
   }
   assert.equal(tab.evaluate("run.index"), sentenceEnd + 1);
@@ -370,7 +503,7 @@ test("Backspace restores the previous answer once across keydown and beforeinput
   tab.flushTimeouts();
 
   tab.setTime(5000 + (sentenceEnd + 1) * 1000);
-  tab.get("#answer").value = tokens[sentenceEnd].answers[0];
+  tab.evaluate(`setDraft(${JSON.stringify(tokens[sentenceEnd].answers[0])})`);
   tab.evaluate("submit()");
   assert.equal(tab.evaluate("run.index"), sentenceEnd + 1);
   assert.equal(tab.evaluate("getMetrics(run, Date.now()).correct"), sentenceEnd + 1);
@@ -379,6 +512,7 @@ test("Backspace restores the previous answer once across keydown and beforeinput
 
 test("a mobile beforeinput-only Backspace restores the previous answer from an empty field", () => {
   const tab = openTab();
+  tab.evaluate('group = "mobile"');
   beginRound(tab, "Alpha");
   assert.equal(tab.get("#answer").value, "");
   let prevented = false;
