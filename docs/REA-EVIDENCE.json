@@ -1,0 +1,298 @@
+{
+  "date": "2026-10-20",
+  "tool": "rea 6.7.0",
+  "target": "https://jyutping.io/practice",
+  "local_evidence_directory": "work/jyutping-rea (relative to the chat workspace, not this repository)",
+  "evidence_files": [
+    {
+      "label": "E1",
+      "file": "capture.json",
+      "sha256": "d015796b54bc1c4fbb6d3413b9696db9cdcc919a06d2787e2462ff6c94e7024e",
+      "bytes": 956591,
+      "evidence_id": "ev_f604c82c14bb566e13af367e09cb11599970ad225446cda782bd98bc423108ae",
+      "operation": "capture_browser_scenario",
+      "limitations": [
+        "Artifact identity is unavailable for this observation.",
+        "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+        "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+        "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+        "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+        "Captured response-body bytes are the result of Playwright's Response.body() API. Playwright may satisfy that API with a credentialed follow-up load of the request URL when CDP has no body, so transaction and event links do not verify that retained bytes came from the original network transaction.",
+        "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+        "Storage values are hashed only after declared-secret redaction.",
+        "Some selected network content was unavailable; per-transaction content states retain the reason.",
+        "Browser host platform and architecture were not observed."
+      ],
+      "completeness": {
+        "status": "incomplete",
+        "equality_eligible": false,
+        "missing_sections": [
+          "events"
+        ],
+        "truncated_sections": []
+      },
+      "browser_cleanup": "terminated-owned-process",
+      "event_retention": {
+        "retained": 140,
+        "dropped": 0,
+        "omissions": {
+          "by_kind": [],
+          "network_transactions": [],
+          "network_transaction_range": null
+        }
+      }
+    },
+    {
+      "label": "E2",
+      "file": "typing.json",
+      "sha256": "986f8dd4875613401566037d6019838781653ff9de7404c12b09f838c0fa6fd0",
+      "bytes": 3075840,
+      "evidence_id": "ev_df7d7931a5ad97f26cabf39255ce5ff25e4531196640458b563467ed137cd4eb",
+      "operation": "capture_browser_scenario",
+      "limitations": [
+        "Artifact identity is unavailable for this observation.",
+        "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+        "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+        "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+        "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+        "Captured response-body bytes are the result of Playwright's Response.body() API. Playwright may satisfy that API with a credentialed follow-up load of the request URL when CDP has no body, so transaction and event links do not verify that retained bytes came from the original network transaction.",
+        "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+        "Storage values are hashed only after declared-secret redaction.",
+        "Browser event collection reached a selected resource budget; per-kind omissions and affected network transaction IDs are listed in events.omissions, and event coverage is incomplete.",
+        "Browser host platform and architecture were not observed."
+      ],
+      "completeness": {
+        "status": "incomplete",
+        "equality_eligible": false,
+        "missing_sections": [
+          "events"
+        ],
+        "truncated_sections": []
+      },
+      "browser_cleanup": "terminated-owned-process",
+      "event_retention": {
+        "retained": 151,
+        "dropped": 1,
+        "omissions": {
+          "by_kind": [
+            {
+              "kind": "network-content",
+              "count": 1,
+              "reasons": [
+                "max-event-allocation-bytes"
+              ]
+            }
+          ],
+          "network_transactions": [
+            {
+              "transaction_id": "request-21",
+              "omitted_kinds": [
+                "network-content"
+              ],
+              "reasons": [
+                "max-event-allocation-bytes"
+              ]
+            }
+          ],
+          "network_transaction_range": null
+        }
+      }
+    },
+    {
+      "label": "E3",
+      "file": "export.json",
+      "sha256": "9130b904106a00a8fc5df742efebe7284af03f963011430e5b22b0e60de2c3b1",
+      "bytes": 17801,
+      "evidence_id": "ev_f37ecba03ecdfb2f085bb159323607643d0571dc470db93c42a81ac45afd6a7d",
+      "operation": "export_web_scripts",
+      "limitations": [
+        "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+        "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+        "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+        "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+        "Captured response-body bytes are the result of Playwright's Response.body() API. Playwright may satisfy that API with a credentialed follow-up load of the request URL when CDP has no body, so transaction and event links do not verify that retained bytes came from the original network transaction.",
+        "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+        "Storage values are hashed only after declared-secret redaction.",
+        "Some selected network content was unavailable; per-transaction content states retain the reason.",
+        "Only script bytes retained in this capture are exported. Sources are not refetched or executed, and a response or Debugger source does not prove execution.",
+        "Ordinary unambiguous URL paths preserve relative module layouts by origin, including case-distinct spellings. Query variants, exact path collisions, file/directory prefixes, inline sources, and unrepresentable paths are isolated. A case-distinct pair is isolated only when the destination filesystem cannot store both spellings; the record names that pair. Browser module relationships of isolated paths remain unknown.",
+        "Local JavaScript analysis does not implement browser import maps, root-relative URL resolution, remote URL loading, or browser runtime behavior. It may strip import queries and fragments; isolated variants are not canonical targets.",
+        "Source-map declarations are retained as metadata. No source maps or missing dependencies are fetched or reconstructed.",
+        "Scenario response bytes preserve the output of Playwright's Response.body() API; any source-body provenance caveat from the capture is retained in this manifest. Debugger sources are the exposed text encoded as UTF-8. Redacted bytes are exported exactly as retained, and may no longer parse as JavaScript."
+      ]
+    },
+    {
+      "label": "E4",
+      "file": "static.json",
+      "sha256": "8f2129bf802f15def33db147c3faf7a6fc5199ca813b3694bd39108d78a461e3",
+      "bytes": 42868644,
+      "evidence_id": "ev_fd87a74801853be98e21286c163bc4ba66d714e7da0dadaaffbe400cd8e6f739",
+      "operation": "analyze_javascript_application",
+      "limitations": [
+        "Caller-selected source analysis leaves 11 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "isolated/source-16-1472bc1491463a8f03f75fcdcd11b5795d0d0d93141860588380ca8292091400.js",
+          "isolated/source-14-4da90a7a992e0347dca85ec684f243c3a6a394b446900cd337fd3f94c3fef337.js",
+          "isolated/source-7-b51eec461eb315cd4a9fd980312723d18070504edcbf590bdd35e2e635b6e9c0.js"
+        ],
+        "unselected_files": 11
+      },
+      "root_artifact_sha256": "64dec550c96a9c55976f0af8cebe56971d7147796f5c90ab9cac450fcfef01c0",
+      "statistics": {
+        "relevant_files": 14,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 110738,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 3,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 28651,
+        "findings": 8,
+        "modules": 0,
+        "parse_failures": 0
+      }
+    },
+    {
+      "label": "E5",
+      "file": "typing-export.json",
+      "sha256": "868b38bb6fdcc37f16dee089d40a4cb59e759f2225a9c87b033f1c9d47637fea",
+      "bytes": 18898,
+      "evidence_id": "ev_ce97930f24fbce62c13b23957abd30cfc6968bd077099d6229260e2f109f2302",
+      "operation": "export_web_scripts",
+      "limitations": [
+        "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+        "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+        "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+        "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+        "Captured response-body bytes are the result of Playwright's Response.body() API. Playwright may satisfy that API with a credentialed follow-up load of the request URL when CDP has no body, so transaction and event links do not verify that retained bytes came from the original network transaction.",
+        "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+        "Storage values are hashed only after declared-secret redaction.",
+        "Browser event collection reached a selected resource budget; per-kind omissions and affected network transaction IDs are listed in events.omissions, and event coverage is incomplete.",
+        "Only script bytes retained in this capture are exported. Sources are not refetched or executed, and a response or Debugger source does not prove execution.",
+        "Ordinary unambiguous URL paths preserve relative module layouts by origin, including case-distinct spellings. Query variants, exact path collisions, file/directory prefixes, inline sources, and unrepresentable paths are isolated. A case-distinct pair is isolated only when the destination filesystem cannot store both spellings; the record names that pair. Browser module relationships of isolated paths remain unknown.",
+        "Local JavaScript analysis does not implement browser import maps, root-relative URL resolution, remote URL loading, or browser runtime behavior. It may strip import queries and fragments; isolated variants are not canonical targets.",
+        "Source-map declarations are retained as metadata. No source maps or missing dependencies are fetched or reconstructed.",
+        "Scenario response bytes preserve the output of Playwright's Response.body() API; any source-body provenance caveat from the capture is retained in this manifest. Debugger sources are the exposed text encoded as UTF-8. Redacted bytes are exported exactly as retained, and may no longer parse as JavaScript."
+      ]
+    },
+    {
+      "label": "E6",
+      "file": "supplemental-static.json",
+      "sha256": "dd927d1b2fd917d9e3ef5f8e66c8d88e4802c1f38b423b3a63e4496bdeb0a044",
+      "bytes": 37967455,
+      "evidence_id": "ev_b6e257421d76eb9138d8c224050a74e1ff26042047d34edac63b6594619dae76",
+      "operation": "analyze_javascript_application",
+      "limitations": [
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ],
+      "root_artifact_sha256": "1370e9406fc1cdcb4f2fdd196a60f03f56f39c130e6d179d5fbda78b53da4f5f",
+      "statistics": {
+        "relevant_files": 1,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 667887,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 1,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 71659,
+        "findings": 5,
+        "modules": 0,
+        "parse_failures": 0
+      }
+    },
+    {
+      "label": "E7",
+      "file": "timer.json",
+      "sha256": "ff183d836d8cd5cffcacf7b4a96a2a7a67d9b7c2f29700d03150aca68f6485d8",
+      "bytes": 16782,
+      "evidence_id": "ev_ef6ef358572d814fdfbb2bc569857857743f04ecfecc7ff7f2b98d6b53c6e0a3",
+      "operation": "capture_browser_scenario",
+      "limitations": [
+        "Artifact identity is unavailable for this observation.",
+        "Event sequence records provider receipt order; simultaneous browser causality is not inferred.",
+        "Network content is retained only when selected; Playwright response-body bytes are API results and are not guaranteed to match wire bytes.",
+        "Request bytes are limited to what Playwright exposes; not_exposed does not establish body absence or multipart file coverage.",
+        "Network content reads settle within 5 seconds each and the observer does not request bodies from unfinished responses.",
+        "Playwright scenario events do not expose request initiator stacks; receipt order does not prove causality.",
+        "Storage values are hashed only after declared-secret redaction.",
+        "Browser host platform and architecture were not observed."
+      ],
+      "completeness": {
+        "status": "complete",
+        "equality_eligible": true,
+        "missing_sections": [],
+        "truncated_sections": []
+      },
+      "browser_cleanup": "terminated-owned-process",
+      "event_retention": {
+        "retained": 0,
+        "dropped": 0,
+        "omissions": {
+          "by_kind": [],
+          "network_transactions": [],
+          "network_transaction_range": null
+        }
+      }
+    }
+  ],
+  "sources": [
+    {
+      "bundle": "3f653ef400ff674b.js",
+      "url": "https://jyutping.io/_next/static/chunks/3f653ef400ff674b.js?dpl=dpl_FbL867AFsKCEkF6kJByNH1bce8iz",
+      "sha256": "12cd989c9b4ae1dfd8d8cfa1da0edeed904a8ae654ce314044a4e798dbc333c3",
+      "bytes": 41637,
+      "acquisition": "REA export E3 of E1 retained response",
+      "local_file": "scripts/files/isolated/source-7-b51eec461eb315cd4a9fd980312723d18070504edcbf590bdd35e2e635b6e9c0.js"
+    },
+    {
+      "bundle": "feb79d6bd0b5f6c0.js",
+      "url": "https://jyutping.io/_next/static/chunks/feb79d6bd0b5f6c0.js?dpl=dpl_FbL867AFsKCEkF6kJByNH1bce8iz",
+      "sha256": "f7cc42b6cd84ef1dd45de81f872ca668c6077f3fb76a6ad62354cf16deaed0e9",
+      "bytes": 57223,
+      "acquisition": "REA export E3 of E1 retained response",
+      "local_file": "scripts/files/isolated/source-12-8888dafd5375b2d8c0dd589c1d3509645ccf9d9dd20954d876a3d8206b8f1e9b.js"
+    },
+    {
+      "bundle": "53eb7ce3892b93dd.js",
+      "url": "https://jyutping.io/_next/static/chunks/53eb7ce3892b93dd.js?dpl=dpl_FbL867AFsKCEkF6kJByNH1bce8iz",
+      "sha256": "0ffb2c42e46daed79a6eabe7c8965c0b88ded0150d5fcf1e490a6d2517f1e688",
+      "bytes": 58710,
+      "acquisition": "REA export E3 of E1 retained response",
+      "local_file": "scripts/files/isolated/source-14-4da90a7a992e0347dca85ec684f243c3a6a394b446900cd337fd3f94c3fef337.js"
+    },
+    {
+      "bundle": "79865102dd31ad47.js",
+      "url": "https://jyutping.io/_next/static/chunks/79865102dd31ad47.js?dpl=dpl_FbL867AFsKCEkF6kJByNH1bce8iz",
+      "sha256": "d8bcaef98f81dd96961ad9b343f014bb509126bc7a08a6e579bacb281aecccfe",
+      "bytes": 10391,
+      "acquisition": "REA export E3 of E1 retained response",
+      "local_file": "scripts/files/isolated/source-16-1472bc1491463a8f03f75fcdcd11b5795d0d0d93141860588380ca8292091400.js"
+    },
+    {
+      "bundle": "70f50a0949deb7b7.js",
+      "url": "https://jyutping.io/_next/static/chunks/70f50a0949deb7b7.js?dpl=dpl_FbL867AFsKCEkF6kJByNH1bce8iz",
+      "sha256": "936f5c69a944f3867ed83dcb8326615e74f1141c57c1d0e873d34af4a42f25c2",
+      "bytes": 667887,
+      "source": "direct HTTP fetch of REA-observed URL; not original captured response",
+      "acquisition": "Separate HTTP fetch of E2-observed script URL; original response body was not retained",
+      "local_file": "supplemental/70f50a0949deb7b7.js"
+    }
+  ],
+  "limitations": [
+    "This is an index, not the complete REA Evidence. Complete captures and source artifacts remain local.",
+    "Static graph coverage is partial; observations do not establish all runtime paths or backend behavior.",
+    "Scenario response bodies are Playwright API results, not guaranteed original wire bytes.",
+    "No third-party load test or Contest capacity test was performed."
+  ]
+}
