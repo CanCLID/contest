@@ -1,5 +1,5 @@
 import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats } from "./engine.mjs?v=9";
-import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs";
+import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs?v=10";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];

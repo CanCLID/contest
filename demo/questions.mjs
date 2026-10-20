@@ -31,12 +31,12 @@ export const QUESTIONS = [
   question(
     "tea-break",
     "太陽慢慢升高，我哋買咗兩杯茶，坐喺樹下休息。",
-    "taai joeng maan maan sing gou ngo dei maai zo loeng bui ca co hai syu haa jau sik",
+    "taai joeng maan maan sing gou ngo dei maai zo loeng bui caa co hai syu haa jau sik",
   ),
 ];
 
 export const ARTICLE = {
-  id: "park-morning-demo-v1",
+  id: "park-morning-demo-v2",
   title: "公園嘅早晨",
   text: QUESTIONS.map(item => item.text).join(""),
 };

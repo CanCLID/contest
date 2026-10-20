@@ -203,6 +203,19 @@ test("configuration rejects an invalid start or invalid question data", () => {
   }), TypeError);
 });
 
+test("the article accepts caa for 茶 and distinguishes its aa nucleus from ca", () => {
+  const tea = flattenQuestions().find(token => token.hanzi === "茶");
+  assert.ok(tea);
+  for (const [answer, correct] of [["caa", true], ["ca", false]]) {
+    const run = submitAnswer(createRun({ now: 0, questionSet: [tea] }), answer, 1000);
+    assert.equal(run.answers[0].correct, correct, answer);
+    const stats = getComponentStats(run);
+    assert.equal(component(stats, "initial", "c").accuracy, 100);
+    assert.equal(component(stats, "nucleus", "aa").accuracy, correct ? 100 : 0);
+    assert.equal(component(stats, "nucleus", "a").total, 0);
+  }
+});
+
 test("the fixed demo article has 4–6 aligned sentences and 60–100 playable characters", () => {
   assert.ok(QUESTIONS.length >= 4 && QUESTIONS.length <= 6);
   const tokens = flattenQuestions();
