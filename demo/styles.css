@@ -17,3 +17,19 @@
   .start-note,.card-foot{font-size:10px}
   .input-bottom p{font-size:11px}
 }
+.article-info{margin-top:20px;padding-top:15px;border-top:1px solid #d9dece}
+.article-info strong{font-size:15px}.article-info p{font-size:10px;color:var(--muted);margin:4px 0 0}
+.board-article{font-size:12px;color:var(--muted);align-self:center}
+.time-track>div{width:0}
+#time{font-size:32px}
+@media(max-width:760px){
+  .setup-card fieldset{display:block}
+  .group-options{max-width:100%}
+  .group-option{min-height:62px}
+  .group-option small{display:block}
+  .article-info{margin-top:15px;padding-top:12px}
+  .article-info p{font-size:11px}
+  #time{font-size:25px;letter-spacing:-1px}
+  .card-foot{flex-wrap:wrap}
+  .board-filters .segmented{flex:0 1 210px}
+}

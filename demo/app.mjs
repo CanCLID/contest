@@ -1,21 +1,20 @@
-import { createRun, submitAnswer, finishRun, getMetrics } from "./engine.mjs";
-import { QUESTIONS, flattenQuestions } from "./questions.mjs";
+import { createRun, submitAnswer, undoAnswer, getMetrics } from "./engine.mjs";
+import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs";
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
 const tokens = flattenQuestions();
-const storageKey = "canclid-contest-demo-v1";
+const storageKey = "canclid-contest-demo-v2";
 const groupNames = { desktop: "電腦組", mobile: "手機組" };
 let group = matchMedia("(max-width: 760px)").matches ? "mobile" : "desktop";
-let duration = 30;
 let boardGroup = group;
-let boardDuration = duration;
 let run = null;
 let round = null;
 let countdownEnds = null;
 let ticker = null;
 let resultSaved = false;
 let composing = false;
+let deleteKeyHandled = false;
 let storageAvailable = true;
 let records = readRecords();
 
@@ -23,11 +22,12 @@ function readRecords(fallback = []) {
   try {
     const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
     if (!Array.isArray(saved)) return [];
-    return saved.filter(item => item && item.rules === 1 &&
-      ["desktop", "mobile"].includes(item.group) && [30, 60].includes(item.duration) &&
+    return saved.filter(item => item && item.rules === 2 && item.articleId === ARTICLE.id &&
+      ["desktop", "mobile"].includes(item.group) &&
       typeof item.name === "string" && item.name.length <= 16 &&
       Number.isSafeInteger(item.correct) && item.correct >= 0 && item.correct <= tokens.length &&
-      Number.isSafeInteger(item.errors) && item.errors >= 0 && item.errors <= 100000 &&
+      Number.isSafeInteger(item.errors) && item.errors >= 0 && item.correct + item.errors === tokens.length &&
+      Number.isFinite(item.elapsedSeconds) && item.elapsedSeconds >= 0 &&
       Number.isFinite(item.at)).slice(-20);
   } catch {
     storageAvailable = false;
@@ -46,7 +46,7 @@ function writeRecords() {
 
 function mergeRecords(...sources) {
   const merged = new Map(sources.flat().map(item => [
-    item.id ?? JSON.stringify([item.at, item.name, item.group, item.duration, item.correct, item.errors]),
+    item.id ?? JSON.stringify([item.at, item.name, item.group, item.articleId, item.correct, item.errors]),
     item,
   ]));
   return [...merged.values()].sort((a, b) => a.at - b.at).slice(-20);
@@ -86,11 +86,8 @@ function renderPassage() {
     element.textContent = character;
     if (/\p{Script=Han}/u.test(character)) {
       element.classList.add("glyph");
-      if (absoluteIndex < index) element.classList.add("correct");
-      if (absoluteIndex === index) {
-        element.classList.add("current");
-        if (run?.lastResult === "incorrect") element.classList.add("incorrect");
-      }
+      if (absoluteIndex < index) element.classList.add(run.answers[absoluteIndex].correct ? "correct" : "incorrect");
+      if (absoluteIndex === index) element.classList.add("current");
       absoluteIndex++;
     }
     $("#passage").append(element);
@@ -100,21 +97,24 @@ function renderPassage() {
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);
 }
 
+function formatTime(seconds) {
+  const tenths = Math.floor(seconds * 10);
+  return `${String(Math.floor(tenths / 600)).padStart(2, "0")}:${String(Math.floor(tenths / 10) % 60).padStart(2, "0")}.${tenths % 10}`;
+}
+
 function renderMetrics(now = Date.now()) {
   const metrics = run ? getMetrics(run, now) : {
-    remainingSeconds: duration, correctPerMinute: 0, accuracy: null, correct: 0, errors: 0,
+    elapsedSeconds: 0, syllablesPerMinute: 0, accuracy: null, correct: 0, errors: 0, submitted: 0, progress: 0,
   };
-  const seconds = Math.ceil(metrics.remainingSeconds);
-  $("#time").textContent = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  $("#speed").textContent = String(Math.round(metrics.correctPerMinute));
+  $("#time").textContent = formatTime(metrics.elapsedSeconds);
+  $("#speed").textContent = String(Math.round(metrics.syllablesPerMinute));
   $("#accuracy").textContent = metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`;
   $("#attempts").textContent = metrics.correct + metrics.errors
     ? `${metrics.correct} 正確 / ${metrics.errors} 錯誤` : "未有提交";
-  $("#completed-count").textContent = `${metrics.correct} 個正確音節`;
-  const fraction = metrics.remainingSeconds / (run?.durationSeconds ?? duration) * 100;
+  $("#completed-count").textContent = `${metrics.submitted} / ${tokens.length} 音節`;
+  const fraction = metrics.progress * 100;
   $("#time-bar").style.width = `${fraction}%`;
   $(".time-track").setAttribute("aria-valuenow", String(Math.round(fraction)));
-  $(".time-track").classList.toggle("urgent", seconds <= 10 && Boolean(run));
 }
 
 function startRound() {
@@ -122,17 +122,17 @@ function startRound() {
   run = null;
   resultSaved = false;
   composing = false;
-  round = { group, duration, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 1 };
+  round = { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
   countdownEnds = Date.now() + 3000;
   $("#setup-fields").disabled = true;
   $("#start").disabled = true;
   $("#start").textContent = "準備起跑…";
-  $("#start-note").textContent = "組別同時限已鎖定，倒數後開始。";
+  $("#start-note").textContent = "本輪組別已鎖定，打完全文就結算。";
   $("#cancel-run").hidden = false;
   $("#result").hidden = true;
   $("#typing-form").hidden = false;
   $("#race-status").textContent = "準備起跑";
-  $("#race-group").textContent = `${groupNames[round.group]} · ${round.duration} 秒`;
+  $("#race-group").textContent = `${groupNames[round.group]} · 全文 ${tokens.length} 音節`;
   $("#countdown-overlay").hidden = false;
   $("#answer").disabled = false;
   $("#answer").value = "";
@@ -159,7 +159,7 @@ function tick() {
       $("#countdown-number").textContent = String(remaining);
       return;
     }
-    run = createRun({ durationSeconds: round.duration, now: countdownEnds, questionSet: tokens });
+    run = createRun({ now: countdownEnds, questionSet: tokens });
     countdownEnds = null;
     $("#countdown-overlay").hidden = true;
     $("#answer").value = "";
@@ -168,13 +168,12 @@ function tick() {
     $("#race-status").textContent = "試玩進行中";
     $("#status-dot").classList.add("live");
     $("#start").textContent = "跟住你嘅節奏打";
-    $("#start-note").textContent = "固定時間計分 · 答錯留原字再試";
+    $("#start-note").textContent = "最後一字提交即完場 · 中途唔暫停";
     $("#input-feedback").textContent = "開始喇！唔使打聲調數字。";
     if (!$("#arena-view").hidden) $("#answer").focus({ preventScroll: true });
     announce("開始！唔使打聲調數字。");
   }
   if (run) {
-    run = finishRun(run, now);
     renderMetrics(now);
     if (run.status === "finished") completeRound();
   }
@@ -183,7 +182,6 @@ function tick() {
 function submit() {
   if (composing || !run || run.status !== "running") return;
   const value = $("#answer").value;
-  const previousIndex = run.index;
   run = submitAnswer(run, value, Date.now());
   if (run.status === "finished") {
     renderMetrics();
@@ -195,18 +193,33 @@ function submit() {
     $("#answer").value = "";
     return;
   }
-  const correct = run.index > previousIndex;
-  $(".answer-wrap").classList.toggle("error", !correct);
-  if (correct) {
-    $("#answer").value = "";
+  $("#answer").value = "";
+  if (run.lastResult === "correct") {
     $("#input-feedback").textContent = `啱喇！下一個字：「${tokens[run.index].hanzi}」。`;
   } else {
-    $("#answer").value = value.trim();
-    $("#answer").select();
-    $("#input-feedback").textContent = "未啱，再試一次。呢次錯誤已計入準確度。";
+    $("#input-feedback").textContent = "呢個字未啱，已繼續；可以按 Backspace 退返修正。";
   }
   renderPassage();
   renderMetrics();
+}
+
+function undoLast() {
+  if (composing || !run || run.status !== "running" || run.index === 0) return;
+  run = undoAnswer(run, Date.now());
+  $("#answer").value = run.lastAnswer;
+  $("#answer").focus({ preventScroll: true });
+  $("#answer").select();
+  $("#input-feedback").textContent = `退返「${tokens[run.index].hanzi}」，修改後再確認。計時繼續。`;
+  renderPassage();
+  renderMetrics();
+}
+
+function handleDelete(event) {
+  if (event.isComposing || composing || $("#answer").value !== "" ||
+      !run || run.status !== "running" || run.index === 0) return;
+  event.preventDefault();
+  undoLast();
+  return true;
 }
 
 function completeRound() {
@@ -221,19 +234,19 @@ function completeRound() {
   $("#setup-fields").disabled = false;
   $("#start").disabled = false;
   $("#start").innerHTML = '再玩一場 <span aria-hidden="true">↗</span>';
-  $("#start-note").textContent = "可以改組別同時間，再挑戰自己。";
+  $("#start-note").textContent = "同一篇文章，再挑戰自己。";
   $("#race-status").textContent = "本輪已完成";
   $("#status-dot").classList.remove("live");
-  $("#result-title").textContent = run.index === tokens.length ? "全部打完，犀利！" : "時間到，完成喇！";
-  $("#result-summary").textContent = `${round.name}，你打啱咗 ${metrics.correct} 個音節，${metrics.errors} 次錯誤。${metrics.correct ? "再試一場，搵返自己嘅節奏。" : "熟習咗操作，下次再挑戰！"}`;
+  $("#result-title").textContent = `全文完成 · 綜合分 ${metrics.score.toFixed(1)}`;
+  $("#result-summary").textContent = `${round.name}，用時 ${formatTime(metrics.elapsedSeconds)}，${metrics.correct} 個正確、${metrics.errors} 個錯誤音節。綜合分係試算，正式公式未定案。`;
   if (!resultSaved) {
-    const result = { ...round, id: crypto.randomUUID(), correct: metrics.correct, errors: metrics.errors, at: Date.now() };
+    const result = { ...round, id: crypto.randomUUID(), correct: metrics.correct, errors: metrics.errors, elapsedSeconds: metrics.elapsedSeconds, at: Date.now() };
     // Merge persisted rounds with this tab's rounds, including failed writes.
     records = mergeRecords(readRecords(records), records, [result]);
     writeRecords();
     resultSaved = true;
     if (!$("#leaderboard-view").hidden) renderBoards();
-    announce(`完成。正確速度每分鐘 ${Math.round(metrics.correctPerMinute)} 個音節，提交準確度 ${metrics.accuracy === null ? "未有提交" : Math.round(metrics.accuracy) + "%"}。`);
+    announce(`全文完成。綜合分 ${metrics.score.toFixed(1)}，答案準確度 ${Math.round(metrics.accuracy)}%。`);
   }
   document.body.classList.remove("running");
 }
@@ -255,7 +268,7 @@ function resetRound() {
   $("#cancel-run").hidden = true;
   $("#start").disabled = false;
   $("#start").innerHTML = '開始試玩 <span aria-hidden="true">↗</span>';
-  $("#start-note").textContent = "倒數 3 秒後開始 · 中途唔會暫停";
+  $("#start-note").textContent = "倒數 3 秒後開始 · 最後一字提交即完場";
   $("#race-status").textContent = "賽道準備好";
   $("#race-group").textContent = "本機試玩 · 無需登入";
   $("#status-dot").classList.remove("live");
@@ -268,11 +281,13 @@ function resetRound() {
 }
 
 function rankRecords(items) {
-  return items.map(item => ({
-    ...item,
-    speed: item.correct / (item.duration / 60),
-    accuracy: item.correct + item.errors ? item.correct / (item.correct + item.errors) * 100 : null,
-  })).sort((a, b) => b.speed - a.speed || (b.accuracy ?? -1) - (a.accuracy ?? -1) || a.at - b.at);
+  return items.map(item => {
+    const submitted = item.correct + item.errors;
+    const accuracy = submitted ? item.correct / submitted * 100 : 0;
+    const speed = item.elapsedSeconds > 0 ? submitted / item.elapsedSeconds * 60 : 0;
+    return { ...item, speed, accuracy, score: speed * (accuracy / 100) ** 2 };
+  }).sort((a, b) => b.score - a.score || b.accuracy - a.accuracy ||
+    a.elapsedSeconds - b.elapsedSeconds || a.at - b.at);
 }
 
 function renderTable(container, items, sample = false) {
@@ -280,18 +295,18 @@ function renderTable(container, items, sample = false) {
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = "<span aria-hidden='true'>↗</span>呢條賽道，等你留低第一個紀錄。<p>完成一輪相同組別同時限嘅試玩，成績就會出現喺呢度。</p>";
+    empty.innerHTML = "<span aria-hidden='true'>↗</span>呢條賽道，等你留低第一個紀錄。<p>完成呢篇文章，成績就會出現喺所選組別。</p>";
     container.append(empty);
     return;
   }
   const table = document.createElement("table");
   table.className = "score-table";
-  table.innerHTML = "<thead><tr><th scope='col'>名次</th><th scope='col'>暱稱</th><th scope='col'>音節 / 分鐘</th><th scope='col'>提交準確度</th></tr></thead>";
+  table.innerHTML = "<thead><tr><th scope='col'>名次</th><th scope='col'>暱稱 / 用時</th><th scope='col'>綜合分</th><th scope='col'>準確度</th></tr></thead>";
   const tbody = document.createElement("tbody");
   let rank = 0;
   let last = null;
   for (const [index, item] of rankRecords(items).entries()) {
-    if (!last || item.speed !== last.speed || item.accuracy !== last.accuracy) rank = index + 1;
+    if (!last || item.score !== last.score || item.accuracy !== last.accuracy || item.elapsedSeconds !== last.elapsedSeconds) rank = index + 1;
     last = item;
     const row = document.createElement("tr");
     if (rank === 1 && item.correct > 0) row.className = "best";
@@ -301,11 +316,14 @@ function renderTable(container, items, sample = false) {
     nameCell.className = "score-name";
     nameCell.append(document.createTextNode(item.name));
     const source = document.createElement("small");
-    source.textContent = sample ? "虛構示範人物" : `${new Date(item.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · 本機`;
+    source.textContent = `${formatTime(item.elapsedSeconds)} · ${Math.round(item.speed)} 音節/分`;
     nameCell.append(source);
+    const origin = document.createElement("small");
+    origin.textContent = sample ? "虛構示範人物" : `${new Date(item.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · 本機`;
+    nameCell.append(origin);
     const speedCell = document.createElement("td");
     const speedText = document.createElement("strong");
-    speedText.textContent = String(Math.round(item.speed));
+    speedText.textContent = item.score.toFixed(1);
     speedCell.append(speedText);
     const accuracyCell = document.createElement("td");
     accuracyCell.textContent = item.accuracy === null ? "—" : `${Math.round(item.accuracy)}%`;
@@ -318,12 +336,11 @@ function renderTable(container, items, sample = false) {
 
 function renderBoards() {
   setPressed("[data-board-group]", "boardGroup", boardGroup);
-  setPressed("[data-board-duration]", "boardDuration", boardDuration);
-  renderTable($("#local-board"), records.filter(item => item.group === boardGroup && item.duration === boardDuration));
-  const base = boardGroup === "mobile" ? 23 : 41;
+  renderTable($("#local-board"), records.filter(item => item.group === boardGroup && item.articleId === ARTICLE.id && item.rules === 2));
+  const baseTime = boardGroup === "mobile" ? 105 : 65;
   const sample = ["打字阿晴", "粵拼小隊長", "慢慢嚟都得"].map((name, index) => ({
-    name, duration: boardDuration, correct: (base - index * 5) * boardDuration / 30,
-    errors: index + 1, at: index,
+    name, elapsedSeconds: baseTime + index * 12, correct: tokens.length - (index + 1) * 2,
+    errors: (index + 1) * 2, at: index,
   }));
   renderTable($("#sample-board"), sample, true);
   $("#storage-note").textContent = storageAvailable ? "" : "瀏覽器暫時唔容許保存紀錄；新成績只會喺今次開啟頁面期間保留。";
@@ -335,17 +352,8 @@ $$("[data-group]").forEach(button => button.addEventListener("click", () => {
   group = button.dataset.group;
   setPressed("[data-group]", "group", group);
 }));
-$$("[data-duration]").forEach(button => button.addEventListener("click", () => {
-  duration = Number(button.dataset.duration);
-  setPressed("[data-duration]", "duration", duration);
-  if (!run) renderMetrics();
-}));
 $$("[data-board-group]").forEach(button => button.addEventListener("click", () => {
   boardGroup = button.dataset.boardGroup;
-  renderBoards();
-}));
-$$("[data-board-duration]").forEach(button => button.addEventListener("click", () => {
-  boardDuration = Number(button.dataset.boardDuration);
   renderBoards();
 }));
 $("#start").addEventListener("click", startRound);
@@ -354,11 +362,23 @@ $("#typing-form").addEventListener("submit", event => { event.preventDefault(); 
 $("#answer").addEventListener("compositionstart", () => { composing = true; });
 $("#answer").addEventListener("compositionend", () => { composing = false; });
 $("#answer").addEventListener("keydown", event => {
+  deleteKeyHandled = false;
   if (event.isComposing || composing || event.keyCode === 229) {
     if (event.key === "Enter") event.preventDefault();
     return;
   }
   if (event.key === " ") { event.preventDefault(); submit(); }
+  if (event.key === "Backspace" && handleDelete(event)) {
+    deleteKeyHandled = true;
+    setTimeout(() => { deleteKeyHandled = false; }, 0);
+  }
+});
+$("#answer").addEventListener("beforeinput", event => {
+  if (event.inputType !== "deleteContentBackward") return;
+  if (deleteKeyHandled) {
+    event.preventDefault();
+    deleteKeyHandled = false;
+  } else handleDelete(event);
 });
 $("#answer").addEventListener("input", event => {
   // Some screen keyboards insert a space without a keydown event.
@@ -369,11 +389,10 @@ $("#submit-answer").addEventListener("click", () => {
 });
 $("#view-result-board").addEventListener("click", () => {
   boardGroup = round.group;
-  boardDuration = round.duration;
   showView("leaderboard");
 });
 $("#clear-scores").addEventListener("click", () => {
-  if (!confirm("清除呢部裝置全部組別同時限嘅試玩紀錄？")) return;
+  if (!confirm("清除呢部裝置目前文章、兩個組別嘅試玩紀錄？")) return;
   records = [];
   writeRecords();
   renderBoards();
@@ -389,6 +408,9 @@ window.addEventListener("storage", event => {
 });
 
 setPressed("[data-group]", "group", group);
+$("#article-title").textContent = ARTICLE.title;
+$("#article-detail").textContent = `示範粵文 · ${tokens.length} 音節 · 打完鬥快`;
+$("#board-article").textContent = `同篇比較：${ARTICLE.title}`;
 renderPassage();
 renderMetrics();
 renderBoards();

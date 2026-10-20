@@ -1,6 +1,6 @@
-export function createRun({ durationSeconds, now, questionSet }) {
-  if (![30, 60].includes(durationSeconds) || !Number.isFinite(now)) {
-    throw new TypeError("A run needs a 30 or 60 second duration and a finite start time.");
+export function createRun({ now, questionSet }) {
+  if (!Number.isFinite(now)) {
+    throw new TypeError("A run needs a finite start time.");
   }
   if (!Array.isArray(questionSet) || questionSet.length === 0 ||
       questionSet.some(token => !token.hanzi || !Array.isArray(token.answers) ||
@@ -10,12 +10,11 @@ export function createRun({ durationSeconds, now, questionSet }) {
 
   return {
     status: "running",
-    durationSeconds,
     startedAt: now,
-    deadline: now + durationSeconds * 1000,
     finishedAt: null,
     questionSet,
     index: 0,
+    answers: [],
     correct: 0,
     errors: 0,
     lastResult: null,
@@ -24,49 +23,65 @@ export function createRun({ durationSeconds, now, questionSet }) {
 }
 
 export function finishRun(run, now) {
-  if (run.status === "finished" ||
-      (now < run.deadline && run.index < run.questionSet.length)) {
+  if (run.status === "finished" || run.index < run.questionSet.length ||
+      !Number.isFinite(now) || now < run.startedAt) {
     return run;
   }
   return {
     ...run,
     status: "finished",
-    finishedAt: Math.min(now, run.deadline),
+    finishedAt: now,
   };
 }
 
 export function submitAnswer(run, answer, now) {
-  const current = finishRun(run, now);
-  if (current.status !== "running" || now < current.startedAt) return current;
+  if (run.status !== "running" || !Number.isFinite(now) || now < run.startedAt) return run;
 
   const normalized = answer.trim().toLowerCase();
-  if (!normalized) return current;
-  const correct = current.questionSet[current.index].answers.includes(normalized);
+  if (!normalized) return run;
+  const correct = run.questionSet[run.index].answers.includes(normalized);
   return finishRun({
-    ...current,
-    index: current.index + (correct ? 1 : 0),
-    correct: current.correct + (correct ? 1 : 0),
-    errors: current.errors + (correct ? 0 : 1),
+    ...run,
+    index: run.index + 1,
+    answers: [...run.answers, { answer: normalized, correct }],
+    correct: run.correct + (correct ? 1 : 0),
+    errors: run.errors + (correct ? 0 : 1),
     lastResult: correct ? "correct" : "incorrect",
     lastAnswer: normalized,
   }, now);
 }
 
+export function undoAnswer(run, now) {
+  if (run.status !== "running" || run.index === 0 ||
+      !Number.isFinite(now) || now < run.startedAt) return run;
+  const previous = run.answers.at(-1);
+  return {
+    ...run,
+    index: run.index - 1,
+    answers: run.answers.slice(0, -1),
+    correct: run.correct - (previous.correct ? 1 : 0),
+    errors: run.errors - (previous.correct ? 0 : 1),
+    lastResult: null,
+    lastAnswer: previous.answer,
+  };
+}
+
 export function getMetrics(run, now) {
   const effectiveNow = run.finishedAt ?? now;
-  const elapsedSeconds = Math.max(0, Math.min(
-    run.durationSeconds,
-    (effectiveNow - run.startedAt) / 1000,
-  ));
-  const attempts = run.correct + run.errors;
+  const elapsedSeconds = Math.max(0, (effectiveNow - run.startedAt) / 1000);
+  const submitted = run.answers.length;
+  const accuracyRatio = submitted ? run.correct / submitted : 0;
+  const syllablesPerMinute = elapsedSeconds ? submitted / elapsedSeconds * 60 : 0;
   return {
     correct: run.correct,
     errors: run.errors,
-    accuracy: attempts ? run.correct / attempts * 100 : null,
-    // Finishing the text early does not shorten the scoring denominator.
-    correctPerMinute: run.correct / (run.durationSeconds / 60),
+    submitted,
+    accuracy: submitted ? accuracyRatio * 100 : null,
     elapsedSeconds,
-    remainingSeconds: Math.max(0, run.durationSeconds - elapsedSeconds),
+    syllablesPerMinute,
+    correctPerMinute: elapsedSeconds ? run.correct / elapsedSeconds * 60 : 0,
+    // Provisional demo formula; the competition scoring rule is not decided.
+    score: syllablesPerMinute * accuracyRatio ** 2,
     progress: run.index / run.questionSet.length,
     total: run.questionSet.length,
   };

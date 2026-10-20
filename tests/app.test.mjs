@@ -6,7 +6,8 @@ import vm from "node:vm";
 import * as engine from "../demo/engine.mjs";
 import * as questions from "../demo/questions.mjs";
 
-const storageKey = "canclid-contest-demo-v1";
+const storageKey = "canclid-contest-demo-v2";
+const tokens = questions.flattenQuestions();
 const source = readFileSync(new URL("../demo/app.mjs", import.meta.url), "utf8")
   .replace(/^import .*;\n/gm, "");
 
@@ -32,6 +33,7 @@ function textOf(node) {
 
 function openTab(store = new Map(), failures = {}) {
   let now = 0;
+  const timeouts = [];
   const elements = new Map();
   const get = selector => {
     if (!elements.has(selector)) elements.set(selector, element());
@@ -74,6 +76,7 @@ function openTab(store = new Map(), failures = {}) {
     },
     setInterval: () => 1,
     clearInterval() {},
+    setTimeout(callback) { timeouts.push(callback); return timeouts.length; },
     confirm: () => true,
   });
   vm.runInContext(source, context, { filename: "demo/app.mjs" });
@@ -81,6 +84,7 @@ function openTab(store = new Map(), failures = {}) {
   return {
     get, evaluate,
     setTime(value) { now = value; },
+    flushTimeouts() { timeouts.splice(0).forEach(callback => callback()); },
     records: () => JSON.parse(evaluate("JSON.stringify(records)")),
     storageChanged() {
       window.fire("storage", { key: storageKey, newValue: store.get(storageKey) ?? null });
@@ -88,20 +92,32 @@ function openTab(store = new Map(), failures = {}) {
   };
 }
 
-function beginRound(tab, name, at = 0) {
+function readyRound(tab, name, at = 0) {
   tab.setTime(at);
   tab.get("#nickname").value = name;
   tab.evaluate("startRound()");
   tab.setTime(at + 3000);
   tab.evaluate("tick()");
-  tab.get("#answer").value = questions.flattenQuestions()[0].answers[0];
+}
+
+function beginRound(tab, name, at = 0) {
+  readyRound(tab, name, at);
+  tab.setTime(at + 4000);
+  tab.get("#answer").value = tokens[0].answers[0];
   tab.evaluate("submit()");
+}
+
+function finishRemaining(tab, at = 0) {
+  for (let index = tab.evaluate("run.index"); index < tokens.length; index++) {
+    tab.setTime(at + 3000 + (index + 1) * 1000);
+    tab.get("#answer").value = tokens[index].answers[0];
+    tab.evaluate("submit()");
+  }
 }
 
 function completeRound(tab, name, at = 0) {
   beginRound(tab, name, at);
-  tab.setTime(at + 33000);
-  tab.evaluate("tick()");
+  finishRemaining(tab, at);
 }
 
 const names = records => records.map(record => record.name);
@@ -112,10 +128,14 @@ test("finishing while the leaderboard is open immediately displays the new resul
   beginRound(tab, "Alpha");
   tab.evaluate('showView("leaderboard")');
   assert.doesNotMatch(textOf(tab.get("#local-board")), /Alpha/);
-  tab.setTime(33000);
-  tab.evaluate("tick()");
+  finishRemaining(tab);
   assert.match(textOf(tab.get("#local-board")), /Alpha/);
   assert.deepEqual(names(tab.records()), ["Alpha"]);
+  const [record] = tab.records();
+  assert.equal(record.rules, 2);
+  assert.equal(record.articleId, questions.ARTICLE.id);
+  assert.equal(record.elapsedSeconds, tokens.length);
+  assert.equal("duration" in record, false);
 });
 
 test("two already-open tabs finishing sequentially retain both results without duplicates", () => {
@@ -169,4 +189,96 @@ test("external saves refresh an open board and clearing does not resurrect old r
   assert.doesNotMatch(textOf(second.get("#local-board")), /Alpha/);
   completeRound(second, "Beta", 40000);
   assert.deepEqual(names(persisted(store)), ["Beta"]);
+});
+
+test("an incorrect submission advances to the next character and clears the input", () => {
+  const tab = openTab();
+  readyRound(tab, "Alpha");
+  tab.setTime(4000);
+  tab.get("#answer").value = "zzz";
+  tab.evaluate("submit()");
+  assert.equal(tab.evaluate("run.index"), 1);
+  assert.equal(tab.get("#answer").value, "");
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).correct"), 0);
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).errors"), 1);
+  assert.deepEqual(tab.records(), []);
+  finishRemaining(tab);
+  assert.ok(Math.abs(
+    tab.evaluate("rankRecords(records)[0].score") -
+    tab.evaluate("getMetrics(run, Date.now()).score"),
+  ) < 1e-10);
+});
+
+test("Backspace restores the previous answer once across keydown and beforeinput, then allows correction", () => {
+  const tab = openTab();
+  const sentenceEnd = tokens.findIndex(token => token.sentenceIndex === 1) - 1;
+  assert.ok(sentenceEnd >= 0);
+  readyRound(tab, "Alpha");
+  for (let index = 0; index <= sentenceEnd; index++) {
+    tab.setTime(4000 + index * 1000);
+    tab.get("#answer").value = index === sentenceEnd ? "zzz" : tokens[index].answers[0];
+    tab.evaluate("submit()");
+  }
+  assert.equal(tab.evaluate("run.index"), sentenceEnd + 1);
+  assert.equal(tab.get("#answer").value, "");
+
+  let prevented = 0;
+  tab.get("#answer").fire("keydown", {
+    key: "Backspace", preventDefault() { prevented++; },
+  });
+  let beforeinputPrevented = false;
+  tab.get("#answer").fire("beforeinput", {
+    inputType: "deleteContentBackward",
+    preventDefault() { prevented++; beforeinputPrevented = true; },
+  });
+  // A duplicate browser event must not delete from the restored answer.
+  if (!beforeinputPrevented) {
+    tab.get("#answer").value = tab.get("#answer").value.slice(0, -1);
+  }
+  assert.ok(prevented >= 1);
+  assert.equal(tab.evaluate("run.index"), sentenceEnd);
+  assert.equal(tab.get("#answer").value, "zzz");
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).errors"), 0);
+  tab.flushTimeouts();
+
+  tab.setTime(5000 + (sentenceEnd + 1) * 1000);
+  tab.get("#answer").value = tokens[sentenceEnd].answers[0];
+  tab.evaluate("submit()");
+  assert.equal(tab.evaluate("run.index"), sentenceEnd + 1);
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).correct"), sentenceEnd + 1);
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).accuracy"), 100);
+});
+
+test("a mobile beforeinput-only Backspace restores the previous answer from an empty field", () => {
+  const tab = openTab();
+  beginRound(tab, "Alpha");
+  assert.equal(tab.get("#answer").value, "");
+  let prevented = false;
+  tab.get("#answer").fire("beforeinput", {
+    inputType: "deleteContentBackward", preventDefault() { prevented = true; },
+  });
+  assert.equal(prevented, true);
+  assert.equal(tab.evaluate("run.index"), 0);
+  assert.equal(tab.get("#answer").value, tokens[0].answers[0]);
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).submitted"), 0);
+  assert.equal(tab.evaluate("getMetrics(run, Date.now()).correct"), 0);
+});
+
+test("old rules and other articles are excluded from the current local leaderboard", () => {
+  const store = new Map();
+  const valid = {
+    id: "valid", rules: 2, articleId: questions.ARTICLE.id, group: "desktop",
+    name: "Current", correct: tokens.length, errors: 0, elapsedSeconds: 60, at: 1000,
+  };
+  const old = { ...valid, id: "old-rules", rules: 1, name: "OldRules", duration: 30 };
+  store.set("canclid-contest-demo-v1", JSON.stringify([{ ...old, name: "OldKey" }]));
+  store.set(storageKey, JSON.stringify([
+    valid, old,
+    { ...valid, id: "other-article", articleId: "different-article-v1", name: "OtherArticle" },
+  ]));
+  const tab = openTab(store);
+  tab.evaluate('showView("leaderboard")');
+  assert.deepEqual(names(tab.records()), ["Current"]);
+  assert.match(textOf(tab.get("#local-board")), /Current/);
+  assert.doesNotMatch(textOf(tab.get("#local-board")), /OldRules|OtherArticle|OldKey/);
 });
