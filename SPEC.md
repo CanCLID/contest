@@ -1,10 +1,12 @@
 # Contest：粵拼打字比賽
 
-狀態：討論草稿 v0.7；純前端 demo 更新賽制，已批准公開 repo，Pages 部署準備中
+狀態：討論草稿 v0.7；純前端 demo v0.2 已部署 GitHub Pages
 
 更新：2026-10-20
 
 Repo：[CanCLID/contest](https://github.com/CanCLID/contest)
+
+Demo：[粵拼競速](https://canclid.github.io/contest/)
 
 呢份文件用嚟一齊討論產品規格同實現計劃。只有「已確認」項目係已作決定；其餘都係建議或者待討論，唔代表已經實作。每次討論後直接更新相關章節，並喺文末記低重要決定。
 
@@ -27,7 +29,7 @@ Repo：[CanCLID/contest](https://github.com/CanCLID/contest)
 - **手機用系統鍵盤，介面保持簡潔**；唔另外開發網站內置鍵盤。
 - 操作體驗參考 [jyutping.io](https://jyutping.io/)。
 - **目前先實現 demo，唔一次過實現成個正式網站。Demo 冇後端、冇帳戶。** 下文嘅登入、同步比賽及容量要求屬正式版本計劃。
-- **已批准將 CanCLID/contest 改為 public，直接部署 GitHub Pages**；目前部署準備中，完成後另記實際網址。
+- **CanCLID/contest 已按批准改為 public，直接部署 GitHub Pages**；[demo 已上線](https://canclid.github.io/contest/)。
 
 ### 1.1 當前 demo 範圍
 
@@ -43,7 +45,7 @@ Repo：[CanCLID/contest](https://github.com/CanCLID/contest)
 - Demo 試算分為「總輸入速度 × 準確度比例²」，先按試算分、再按準確度由高至低，最後按完成時間由短至長；三者完全相同就並列。**呢個公式係供比較嘅 demo 方案，唔代表正式權重已定案。**
 - 冇登入、短訊、Google 認證、主持人房間、多人同步、後端排名或防作弊；尚未測試 2,000 人正式比賽容量。
 
-GitHub Pages 部署方式見 [README](README.md)。用戶已批准將現有 `CanCLID/contest` repo 公開並直接部署，唔再等待公開範圍選擇。網站部署只上傳 `demo/`；repo 公開後，repo 內文件同 Git 歷史亦會公開。目前為部署準備中，未記作已上線。
+GitHub Pages 部署方式見 [README](README.md)。用戶已批准公開現有 `CanCLID/contest` repo，並已完成部署及線上驗證。網站部署只上傳 `demo/`；repo 內文件同 Git 歷史亦已公開。
 
 ## 2. 參考體驗
 
@@ -309,4 +311,5 @@ Demo 排序依次為試算綜合分由高至低、準確度由高至低、完成
 | 2026-10-20 | 最終分數兼顧速度同準確度，正式公式仍未定；demo 先比較總輸入速度 × 準確度比例² | 用戶確認綜合兩項；試算公式屬 demo 實現方案 |
 | 2026-10-20 | 正式題目用粵文，由用戶稍後提供；demo 暫用原創連貫示範文章 | 用戶確認題目方向及提供者 |
 | 2026-10-20 | 手機使用系統鍵盤，介面保持簡潔，唔開發網站內置鍵盤 | 用戶確認 |
-| 2026-10-20 | 已批准將現有 CanCLID/contest 改為 public，直接部署 GitHub Pages；目前部署準備中 | 用戶明確批准公開 repo 及部署 |
+| 2026-10-20 | 已批准將現有 CanCLID/contest 改為 public，直接部署 GitHub Pages | 用戶明確批准公開 repo 及部署 |
+| 2026-10-20 | Repo 已公開，demo v0.2 已部署 https://canclid.github.io/contest/；18 項測試通過，線上輸入及 Backspace 修正已驗證 | GitHub Actions run 39475288574 及瀏覽器驗收 |

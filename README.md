@@ -2,6 +2,8 @@
 
 粵拼打字比賽嘅純前端 demo，用嚟試輸入流程同討論賽規。正式需求同實現計劃見 [SPEC.md](SPEC.md)。
 
+**試玩：[粵拼競速 demo](https://canclid.github.io/contest/)**
+
 ## Demo 有乜
 
 - 選擇手機組或電腦組，打完同一篇原創示範粵文，以實際完成用時鬥快，唔設固定計分時限。
@@ -35,8 +37,10 @@ npm test
 
 ## GitHub Pages
 
-**CanCLID/contest 已按用戶批准改為 public；GitHub Pages 部署準備中。** 部署完成後會喺呢度補上實際網站連結。
+**已上線：[https://canclid.github.io/contest/](https://canclid.github.io/contest/)。** CanCLID/contest 已按用戶批准改為 public。
 
-已準備手動部署 workflow：喺 Settings → Pages 選擇 GitHub Actions，再喺 Actions 手動執行 **Deploy demo to GitHub Pages**。流程會先跑測試，只將 `demo/` 上傳為網站；repo 公開後，repo 內文件同 Git 歷史亦會公開。Push 本身唔會觸發部署。
+Pages 已設為 GitHub Actions 部署。之後更新 demo 並 push 後，喺 Actions 手動執行 **Deploy demo to GitHub Pages**。流程會先跑測試，只將 `demo/` 上傳為網站；repo 本身嘅文件同 Git 歷史亦已公開。Push 本身唔會觸發部署。
+
+2026-10-20 [首次部署成功](https://github.com/CanCLID/contest/actions/runs/39475288574)，已驗證線上輸入及 Backspace 修正，並確認六個網站資源均回傳 HTTP 200、內容雜湊同本機版本一致。
 
 GitHub Pages 只供呢個靜態 demo；正式服務嘅阿里雲部署、手機短訊／Google 登入、全球約 2,000 人同場比賽及兩組獨立排名，仍按 [SPEC.md](SPEC.md) 規劃。
