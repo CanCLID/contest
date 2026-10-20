@@ -153,6 +153,68 @@ const glyphs = tab => tab.get("#passage").children.filter(node => node.classList
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
 const draft = tab => currentGlyph(tab)?.children[0].textContent;
 
+test("component accuracy follows retained submissions, undo, correction, reset and replay", () => {
+  const tab = openTab();
+  const types = ["initial", "nucleus", "coda"];
+  const cell = (type, value) => {
+    const found = tab.get(`#component-${type}`).children.find(node => node.dataset.value === value);
+    assert.ok(found, `Missing ${type} cell: ${value}`);
+    assert.equal(found.children[0].textContent, value);
+    return found;
+  };
+  const expectRate = (type, value, rate, state) => {
+    const node = cell(type, value);
+    assert.equal(node.children[1].textContent, rate);
+    for (const name of ["correct", "incorrect", "mixed"]) {
+      assert.equal(node.classList.contains(name), name === state, `${type} ${value}: ${name}`);
+    }
+  };
+  const expectUnsubmitted = () => {
+    for (const type of types) {
+      const cells = tab.get(`#component-${type}`).children;
+      assert.ok(cells.length > 0, `${type} must render before any submission`);
+      for (const node of cells) expectRate(type, node.dataset.value, "—");
+    }
+  };
+  const key = value => tab.get("#typing-surface").fire("keydown", {
+    key: value, code: value, preventDefault() {},
+  });
+
+  expectUnsubmitted();
+  readyRound(tab, "Alpha");
+  assert.equal(tokens[0].hanzi, "今");
+  assert.ok(tokens[0].answers.includes("gam"));
+  tab.evaluate('setDraft("gan")');
+  expectUnsubmitted();
+  key("Enter");
+  expectRate("initial", "g", "100%", "correct");
+  expectRate("nucleus", "a", "100%", "correct");
+  expectRate("coda", "m", "0%", "incorrect");
+  expectRate("coda", "n", "—");
+  assert.equal(tab.evaluate("run.correct"), 0, "partial component credit must not change word scoring");
+  assert.equal(tab.evaluate("run.errors"), 1);
+
+  key("Backspace");
+  assert.equal(draft(tab), "gan");
+  expectUnsubmitted();
+  tab.evaluate('setDraft("gam")');
+  expectUnsubmitted();
+  key("Enter");
+  expectRate("initial", "g", "100%", "correct");
+  expectRate("nucleus", "a", "100%", "correct");
+  expectRate("coda", "m", "100%", "correct");
+  expectRate("coda", "n", "—");
+
+  tab.get("#cancel-run").fire("click");
+  expectUnsubmitted();
+  readyRound(tab, "Alpha", 10000);
+  expectUnsubmitted();
+  finishRemaining(tab, 10000);
+  expectRate("initial", "g", "100%", "correct");
+  tab.get("#play-again").fire("click");
+  expectUnsubmitted();
+});
+
 test("round settings become a frozen summary, survive replay, and are editable only after returning to setup", () => {
   const tab = openTab();
   assert.equal(tab.get("#race-card").hidden, true);

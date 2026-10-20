@@ -7,8 +7,8 @@
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=8">
-  <script src="./app.mjs?v=8" type="module"></script>
+  <link rel="stylesheet" href="./styles.css?v=9">
+  <script src="./app.mjs?v=9" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳去主要內容</a>
@@ -45,10 +45,18 @@
               <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="race-status">賽道準備好</span></div>
               <span id="race-group" class="subtle-label">本機試玩 · 無需登入</span>
             </div>
-            <div class="metrics">
+            <div class="race-overview">
+              <div class="metrics">
               <div class="metric"><span class="metric-label">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit">打完全文即結算</span></div>
               <div class="metric"><span class="metric-label">輸入速度</span><strong id="speed">0</strong><span class="metric-unit">音節 / 分鐘</span></div>
               <div class="metric"><span class="metric-label">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+              </div>
+              <section class="component-stats" aria-labelledby="component-heading">
+                <div class="component-heading"><h2 id="component-heading">分項準確度</h2><span>— 未輸入</span></div>
+                <div class="component-row"><span class="component-label" id="initial-label">聲母</span><div id="component-initial" class="component-cells" role="list" aria-labelledby="initial-label"></div></div>
+                <div class="component-row"><span class="component-label" id="nucleus-label">韻腹</span><div id="component-nucleus" class="component-cells" role="list" aria-labelledby="nucleus-label"></div></div>
+                <div class="component-row"><span class="component-label" id="coda-label">韻尾</span><div id="component-coda" class="component-cells" role="list" aria-labelledby="coda-label"></div></div>
+              </section>
             </div>
             <div class="time-track" role="progressbar" aria-label="文章完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="time-bar"></div></div>
             <div class="typing-area">

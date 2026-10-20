@@ -1,3 +1,52 @@
+export const COMPONENTS = {
+  initial: ["b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "ng", "h", "gw", "kw", "w", "z", "c", "s", "j"],
+  nucleus: ["aa", "a", "e", "i", "o", "u", "oe", "eo", "yu", "m", "ng"],
+  coda: ["i", "u", "m", "n", "ng", "p", "t", "k"],
+};
+
+const componentTypes = Object.keys(COMPONENTS);
+const initialsByLength = [...COMPONENTS.initial].sort((a, b) => b.length - a.length);
+const codasByLength = [...COMPONENTS.coda].sort((a, b) => b.length - a.length);
+
+export function splitJyutping(value) {
+  const syllable = value.trim().toLowerCase().replace(/[1-6]$/, "");
+  if (syllable === "m" || syllable === "ng") return { initial: "", nucleus: syllable, coda: "" };
+  const initial = initialsByLength.find(part => syllable.startsWith(part)) ?? "";
+  const remainder = syllable.slice(initial.length);
+  const coda = codasByLength.find(part => remainder.endsWith(part) &&
+    COMPONENTS.nucleus.includes(remainder.slice(0, -part.length))) ?? "";
+  // Keep an unknown remainder so a typo can still have a correct initial.
+  return { initial, nucleus: coda ? remainder.slice(0, -coda.length) : remainder, coda };
+}
+
+export function getComponentStats(run = null) {
+  const stats = Object.fromEntries(componentTypes.map(type => [type,
+    COMPONENTS[type].map(value => ({ value, correct: 0, total: 0, accuracy: null })),
+  ]));
+  for (const [index, submission] of (run?.answers ?? []).entries()) {
+    const candidates = run.questionSet[index].answers;
+    const actual = splitJyutping(submission.answer);
+    const exact = candidates.find(answer => answer === submission.answer);
+    let expected = splitJyutping(exact ?? candidates[0]);
+    if (!exact) {
+      // Compare one reading as a whole; earlier candidates win ties.
+      const matches = candidate => componentTypes.filter(type =>
+        candidate[type] && candidate[type] === actual[type]).length;
+      for (const candidate of candidates.slice(1).map(splitJyutping)) {
+        if (matches(candidate) > matches(expected)) expected = candidate;
+      }
+    }
+    for (const type of componentTypes) {
+      const cell = stats[type].find(item => item.value === expected[type]);
+      if (!cell) continue;
+      cell.total++;
+      if (actual[type] === expected[type]) cell.correct++;
+      cell.accuracy = cell.correct / cell.total * 100;
+    }
+  }
+  return stats;
+}
+
 export function createRun({ now, questionSet }) {
   if (!Number.isFinite(now)) {
     throw new TypeError("A run needs a finite start time.");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRun, submitAnswer, undoAnswer, finishRun, getMetrics } from "../demo/engine.mjs";
+import { COMPONENTS, splitJyutping, getComponentStats, createRun, submitAnswer, undoAnswer, finishRun, getMetrics } from "../demo/engine.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "../demo/questions.mjs";
 
 const questionSet = [
@@ -10,6 +10,81 @@ const questionSet = [
   { hanzi: "哋", answers: ["dei"], sentenceIndex: 1 },
 ];
 const start = () => createRun({ now: 1000, questionSet });
+
+const component = (stats, type, value) => stats[type].find(item => item.value === value);
+function componentRun(expected, answers) {
+  let run = createRun({ now: 0, questionSet: expected.map((accepted, sentenceIndex) => ({
+    hanzi: "字", answers: Array.isArray(accepted) ? accepted : [accepted], sentenceIndex,
+  })) });
+  answers.forEach((answer, index) => { run = submitAnswer(run, answer, (index + 1) * 1000); });
+  return run;
+}
+
+test("component splitting handles compound initials, nuclei, syllabic nasals and unknown remainders", () => {
+  for (const [answer, initial, nucleus, coda] of [
+    ["gwong", "gw", "o", "ng"], ["kwai", "kw", "a", "i"], ["ngoi", "ng", "o", "i"],
+    ["aau", "", "aa", "u"], ["soeng", "s", "oe", "ng"], ["seoi", "s", "eo", "i"],
+    ["jyut", "j", "yu", "t"], ["m", "", "m", ""], ["ng", "", "ng", ""],
+    ["aa", "", "aa", ""], ["zi", "z", "i", ""], [" GWO2 ", "gw", "o", ""],
+    ["b", "b", "", ""], ["zzz", "z", "zz", ""], ["xxaa", "", "xxaa", ""],
+    ["gzz", "g", "zz", ""],
+  ]) assert.deepEqual(splitJyutping(answer), { initial, nucleus, coda }, answer);
+});
+
+test("component accuracy counts expected parts separately and keeps partial matches on invalid input", () => {
+  const run = componentRun(["gam", "gam", "gwo", "gam"], ["gim", "kam", "gzz", "zzz"]);
+  const stats = getComponentStats(run);
+  assert.deepEqual(component(stats, "initial", "g"), { value: "g", correct: 1, total: 3, accuracy: 1 / 3 * 100 });
+  assert.deepEqual(component(stats, "initial", "gw"), { value: "gw", correct: 0, total: 1, accuracy: 0 });
+  assert.deepEqual(component(stats, "nucleus", "a"), { value: "a", correct: 1, total: 3, accuracy: 1 / 3 * 100 });
+  assert.deepEqual(component(stats, "coda", "m"), { value: "m", correct: 2, total: 3, accuracy: 2 / 3 * 100 });
+  assert.equal(component(stats, "initial", "z").total, 0, "incorrect actual parts are not extra attempts");
+  const partial = getComponentStats(componentRun(["gam"], ["gzz"]));
+  assert.equal(component(partial, "initial", "g").accuracy, 100);
+  assert.equal(component(partial, "nucleus", "a").accuracy, 0);
+  assert.equal(component(partial, "coda", "m").accuracy, 0);
+});
+
+test("empty parts have no cells and syllabic nasals count only as nuclei", () => {
+  const stats = getComponentStats(componentRun(["aa", "ng", "m"], ["baa", "m", "m"]));
+  assert.equal(component(stats, "nucleus", "aa").accuracy, 100);
+  assert.equal(component(stats, "nucleus", "ng").accuracy, 0);
+  assert.equal(component(stats, "nucleus", "m").accuracy, 100);
+  assert.ok(stats.initial.every(item => item.total === 0));
+  assert.ok(stats.coda.every(item => item.total === 0));
+});
+
+test("accepted readings use exact matches first, otherwise one best matching reading with stable ties", () => {
+  const exact = getComponentStats(componentRun([["nei", "lei"]], ["lei"]));
+  assert.equal(component(exact, "initial", "l").accuracy, 100);
+  assert.equal(component(exact, "initial", "n").total, 0);
+  const best = getComponentStats(componentRun([["maa", "gam"]], ["gim"]));
+  assert.equal(component(best, "initial", "g").accuracy, 100);
+  assert.equal(component(best, "initial", "m").total, 0);
+  const tie = getComponentStats(componentRun([["gam", "git"]], ["gim"]));
+  assert.equal(component(tie, "nucleus", "a").accuracy, 0);
+  assert.equal(component(tie, "coda", "m").accuracy, 100);
+  assert.equal(component(tie, "nucleus", "i").total, 0, "parts from another reading are not mixed in");
+  const reversed = getComponentStats(componentRun([["git", "gam"]], ["gim"]));
+  assert.equal(component(reversed, "nucleus", "i").accuracy, 100);
+  assert.equal(component(reversed, "coda", "t").accuracy, 0);
+});
+
+test("component counts follow current answers through undo, correction and a fresh run", () => {
+  const empty = getComponentStats();
+  for (const type of Object.keys(COMPONENTS)) {
+    assert.deepEqual(empty[type].map(item => item.value), COMPONENTS[type]);
+    assert.ok(empty[type].every(item => item.total === 0 && item.correct === 0 && item.accuracy === null));
+  }
+  const original = componentRun(["gam", "jat"], ["gim"]);
+  const before = getComponentStats(original);
+  const undone = undoAnswer(original, 2000);
+  assert.deepEqual(getComponentStats(undone), empty);
+  const corrected = submitAnswer(undone, "gam", 3000);
+  assert.equal(component(getComponentStats(corrected), "nucleus", "a").accuracy, 100);
+  assert.equal(component(before, "nucleus", "a").accuracy, 0);
+  assert.deepEqual(getComponentStats(componentRun(["gam", "jat"], [])), empty);
+});
 
 test("nonempty answers advance whether correct or incorrect, without mutating old states", () => {
   const original = start();

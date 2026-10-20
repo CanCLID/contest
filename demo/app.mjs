@@ -1,4 +1,4 @@
-import { createRun, submitAnswer, undoAnswer, getMetrics } from "./engine.mjs";
+import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats } from "./engine.mjs?v=9";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs";
 
 const $ = selector => document.querySelector(selector);
@@ -152,6 +152,33 @@ function isCompositionCommit(event) {
     (committedComposition && event.data === committedComposition.data);
 }
 
+function renderComponentStats() {
+  const labels = { initial: "聲母", nucleus: "韻腹", coda: "韻尾" };
+  for (const [part, items] of Object.entries(getComponentStats(run))) {
+    const cells = items.map(({ value, correct, total, accuracy }) => {
+      const cell = document.createElement("span");
+      cell.className = "component-cell";
+      cell.dataset.value = value;
+      cell.setAttribute("role", "listitem");
+      const rate = accuracy === null ? "—" : `${Math.round(accuracy)}%`;
+      cell.title = total
+        ? `${labels[part]} ${value}：${correct} / ${total} 正確，準確率 ${rate}，錯誤率 ${Math.round(100 - accuracy)}%`
+        : `${labels[part]} ${value}：未輸入`;
+      cell.setAttribute("aria-label", cell.title);
+      if (total) cell.classList.add(correct === total ? "correct" : correct === 0 ? "incorrect" : "mixed");
+      const sound = document.createElement("span");
+      sound.className = "component-sound";
+      sound.textContent = value;
+      const percent = document.createElement("span");
+      percent.className = "component-rate";
+      percent.textContent = rate;
+      cell.append(sound, percent);
+      return cell;
+    });
+    $(`#component-${part}`).replaceChildren(...cells);
+  }
+}
+
 function renderPassage() {
   const index = run?.index ?? 0;
   const sentenceIndex = tokens[Math.min(index, tokens.length - 1)].sentenceIndex;
@@ -196,6 +223,7 @@ function renderPassage() {
   $("#next-sentence").textContent = QUESTIONS[sentenceIndex + 1]?.text ?? "最後一段，跟住你嘅節奏完成。";
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);
   renderDraft();
+  renderComponentStats();
   positionAnswer();
 }
 
