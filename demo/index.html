@@ -7,8 +7,8 @@
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=6">
-  <script src="./app.mjs?v=6" type="module"></script>
+  <link rel="stylesheet" href="./styles.css?v=8">
+  <script src="./app.mjs?v=8" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳去主要內容</a>
@@ -33,6 +33,13 @@
         </div>
 
         <div class="arena-grid">
+          <aside id="round-summary" class="round-summary" hidden aria-label="本輪設定">
+            <dl class="round-details">
+              <div><dt>參賽者</dt><dd id="round-name"></dd></div>
+              <div><dt>參賽組別</dt><dd id="round-group"></dd></div>
+              <div class="round-article"><dt>文章</dt><dd><span id="round-article"></span><span id="round-length" class="round-length"></span></dd></div>
+            </dl>
+          </aside>
           <section id="race-card" class="race-card" hidden aria-label="打字賽場">
             <div class="card-topline">
               <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="race-status">賽道準備好</span></div>
@@ -64,7 +71,13 @@
             <div class="card-foot"><span id="completed-count">0 個音節</span></div>
           </section>
 
-          <aside class="setup-card">
+          <div id="round-actions" class="round-actions" hidden>
+            <button id="play-again" class="outline-button" hidden>再玩一場 <span aria-hidden="true">↗</span></button>
+            <button id="edit-settings" class="text-button" hidden>更改設定</button>
+            <button id="cancel-run" class="text-button cancel-button" hidden>放棄本輪，重新設定</button>
+          </div>
+
+          <aside id="setup-card" class="setup-card">
             <div class="setup-heading"><h2>試玩設定</h2></div>
             <fieldset id="setup-fields">
               <label class="field-label" for="nickname">暱稱</label>
@@ -79,7 +92,6 @@
             </fieldset>
             <button id="start" class="start-button">開始試玩 <span aria-hidden="true">↗</span></button>
             <p id="start-note" class="start-note">倒數 3 秒開始</p>
-            <button id="cancel-run" class="text-button cancel-button" hidden>放棄本輪，重新設定</button>
             <div class="demo-note"><p>本機試玩，成績只存喺呢個瀏覽器。</p></div>
           </aside>
         </div>

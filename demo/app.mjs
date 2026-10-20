@@ -219,8 +219,8 @@ function renderMetrics(now = Date.now()) {
   $(".time-track").setAttribute("aria-valuenow", String(Math.round(fraction)));
 }
 
-function startRound() {
-  if (countdownEnds !== null || run?.status === "running") return;
+function startRound(replay = false) {
+  if (countdownEnds !== null || run?.status === "running" || (replay && !round)) return;
   run = null;
   resultSaved = false;
   composing = false;
@@ -228,8 +228,18 @@ function startRound() {
   committedComposition = null;
   physicalEdit = null;
   answerVersion++;
-  round = { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
+  round = replay ? { ...round }
+    : { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
   countdownEnds = Date.now() + 3000;
+  $("#setup-card").hidden = true;
+  $("#round-summary").hidden = false;
+  $("#round-name").textContent = round.name;
+  $("#round-group").textContent = groupNames[round.group];
+  $("#round-article").textContent = ARTICLE.title;
+  $("#round-length").textContent = `${tokens.length} 音節`;
+  $("#round-actions").hidden = false;
+  $("#play-again").hidden = true;
+  $("#edit-settings").hidden = true;
   $("#setup-fields").disabled = true;
   $("#start").disabled = true;
   $("#start").textContent = "準備中…";
@@ -340,9 +350,9 @@ function completeRound() {
   $("#typing-form").hidden = true;
   $("#result").hidden = false;
   $("#cancel-run").hidden = true;
-  $("#setup-fields").disabled = false;
-  $("#start").disabled = false;
-  $("#start").innerHTML = '再玩一場 <span aria-hidden="true">↗</span>';
+  $("#setup-fields").disabled = true;
+  $("#play-again").hidden = false;
+  $("#edit-settings").hidden = false;
   $("#start-note").textContent = "";
   $("#race-status").textContent = "本輪已完成";
   $("#status-dot").classList.remove("live");
@@ -371,6 +381,11 @@ function resetRound() {
   committedComposition = null;
   physicalEdit = null;
   answerVersion++;
+  $("#setup-card").hidden = false;
+  $("#round-summary").hidden = true;
+  $("#round-actions").hidden = true;
+  $("#play-again").hidden = true;
+  $("#edit-settings").hidden = true;
   $("#race-card").hidden = true;
   $("#arena-view").classList.remove("has-race");
   $("#countdown-overlay").hidden = true;
@@ -471,7 +486,9 @@ $$("[data-board-group]").forEach(button => button.addEventListener("click", () =
   boardGroup = button.dataset.boardGroup;
   renderBoards();
 }));
-$("#start").addEventListener("click", startRound);
+$("#start").addEventListener("click", () => startRound());
+$("#play-again").addEventListener("click", () => startRound(true));
+$("#edit-settings").addEventListener("click", resetRound);
 $("#cancel-run").addEventListener("click", resetRound);
 $("#typing-form").addEventListener("submit", event => { event.preventDefault(); submit(); });
 $("#answer").addEventListener("compositionstart", () => {

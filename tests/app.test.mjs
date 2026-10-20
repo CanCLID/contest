@@ -65,6 +65,7 @@ function openTab(store = new Map(), failures = {}) {
   get("#answer").disabled = true;
   get("#answer").parentElement = get("#typing-surface");
   get("#race-card").hidden = true;
+  for (const id of ["round-summary", "round-actions", "play-again", "edit-settings"]) get(`#${id}`).hidden = true;
   const views = ["arena", "leaderboard", "rules"].map(name => {
     const view = get(`#${name}-view`);
     view.id = `${name}-view`;
@@ -152,21 +153,75 @@ const glyphs = tab => tab.get("#passage").children.filter(node => node.classList
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
 const draft = tab => currentGlyph(tab)?.children[0].textContent;
 
-test("the race is hidden initially and after cancel, shown on start and retained after finishing", () => {
+test("round settings become a frozen summary, survive replay, and are editable only after returning to setup", () => {
   const tab = openTab();
   assert.equal(tab.get("#race-card").hidden, true);
+  assert.equal(tab.get("#setup-card").hidden, false);
+  assert.equal(tab.get("#round-summary").hidden, true);
+  assert.equal(tab.get("#round-actions").hidden, true);
   assert.equal(tab.get("#typing-surface").measureCalls, 0);
   assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
-  tab.evaluate("startRound()");
+  tab.get("#nickname").value = " <b>甲</b> ";
+  tab.evaluate('group = "mobile"');
+  tab.get("#start").fire("click");
   assert.equal(tab.get("#race-card").hidden, false);
+  assert.equal(tab.get("#setup-card").hidden, true);
+  assert.equal(tab.get("#setup-fields").disabled, true);
+  assert.equal(tab.get("#round-summary").hidden, false);
+  assert.equal(tab.get("#round-name").textContent, "<b>甲</b>");
+  assert.equal(tab.get("#round-name").innerHTML, "", "the nickname is assigned as text, not HTML");
+  assert.equal(tab.get("#round-group").textContent, "手機組");
+  assert.equal(tab.get("#round-article").textContent, questions.ARTICLE.title);
+  assert.equal(tab.get("#round-length").textContent, `${tokens.length} 音節`);
+  assert.equal(tab.get("#round-actions").hidden, false);
+  assert.equal(tab.get("#cancel-run").hidden, false);
+  assert.equal(tab.get("#play-again").hidden, true);
+  assert.equal(tab.get("#edit-settings").hidden, true);
   assert.equal(tab.get("#arena-view").classList.contains("has-race"), true);
-  tab.evaluate("resetRound()");
-  assert.equal(tab.get("#race-card").hidden, true);
-  assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
-  completeRound(tab, "Alpha", 10000);
+  // Changes outside the disabled form cannot alter this round or its replay.
+  tab.get("#nickname").value = "Changed";
+  tab.evaluate('group = "desktop"');
+  tab.setTime(3000);
+  tab.evaluate("tick()");
+  finishRemaining(tab);
   assert.equal(tab.get("#race-card").hidden, false);
   assert.equal(tab.get("#result").hidden, false);
+  assert.equal(tab.get("#setup-card").hidden, true);
+  assert.equal(tab.get("#setup-fields").disabled, true);
+  assert.equal(tab.get("#round-name").textContent, "<b>甲</b>");
+  assert.equal(tab.get("#cancel-run").hidden, true);
+  assert.equal(tab.get("#play-again").hidden, false);
+  assert.equal(tab.get("#edit-settings").hidden, false);
   assert.equal(tab.get("#arena-view").classList.contains("has-race"), true);
+  tab.setTime(100000);
+  tab.get("#play-again").fire("click");
+  assert.equal(tab.evaluate("round.name"), "<b>甲</b>");
+  assert.equal(tab.evaluate("round.group"), "mobile");
+  assert.equal(tab.get("#round-group").textContent, "手機組");
+  assert.equal(tab.get("#play-again").hidden, true);
+  assert.equal(tab.get("#cancel-run").hidden, false);
+  tab.setTime(103000);
+  tab.evaluate("tick()");
+  finishRemaining(tab, 100000);
+  tab.get("#edit-settings").fire("click");
+  assert.equal(tab.get("#race-card").hidden, true);
+  assert.equal(tab.get("#setup-card").hidden, false);
+  assert.equal(tab.get("#setup-fields").disabled, false);
+  assert.equal(tab.get("#round-summary").hidden, true);
+  assert.equal(tab.get("#round-actions").hidden, true);
+  assert.equal(tab.get("#nickname").value, "Changed");
+  assert.equal(tab.evaluate("group"), "desktop");
+  assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
+  tab.get("#nickname").value = "Beta";
+  tab.get("#start").fire("click");
+  assert.equal(tab.get("#round-name").textContent, "Beta");
+  assert.equal(tab.get("#round-group").textContent, "電腦組");
+  tab.get("#cancel-run").fire("click");
+  assert.equal(tab.get("#setup-card").hidden, false);
+  assert.equal(tab.get("#round-summary").hidden, true);
+  assert.equal(tab.get("#round-actions").hidden, true);
+  assert.equal(tab.get("#race-card").hidden, true);
+  assert.deepEqual(names(tab.records()), ["<b>甲</b>", "<b>甲</b>"]);
 });
 
 test("desktop uses a noneditable focus target and handles Process/229 keys without duplicate IME text", () => {
