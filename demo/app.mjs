@@ -24,6 +24,7 @@ let composition = null;
 let committedComposition = null;
 let currentGlyph = null;
 let currentAnswer = null;
+let hintElements = [];
 let storageAvailable = true;
 let records = readRecords();
 
@@ -110,12 +111,27 @@ function renderDraft() {
 function renderHint() {
   const running = run?.status === "running";
   if (!running) hintsVisible = false;
-  const token = running && hintsVisible ? run.questionSet[run.index] : null;
   $("#hint-toggle").disabled = !running;
   $("#hint-toggle").setAttribute("aria-pressed", String(hintsVisible));
-  $("#jyutping-hint").hidden = !token;
-  $("#jyutping-hint").textContent = token ? `${token.hanzi}：${token.answers.join(" / ")}` : "";
+  $("#typing-surface").classList.toggle("show-hints", hintsVisible);
+  $("#next-sentence").classList.toggle("show-hints", hintsVisible);
+  hintElements.forEach(hint => { hint.hidden = !hintsVisible; });
   $("#hint-used").hidden = !round?.hintsUsed;
+}
+
+function createRuby(token) {
+  const ruby = document.createElement("ruby");
+  ruby.className = "glyph-ruby";
+  const hanzi = document.createElement("span");
+  hanzi.className = "glyph-hanzi";
+  hanzi.textContent = token.hanzi;
+  const hint = document.createElement("rt");
+  hint.className = "glyph-hint";
+  hint.textContent = token.answers.join(" / ");
+  hint.hidden = !hintsVisible;
+  hintElements.push(hint);
+  ruby.append(hanzi, hint);
+  return ruby;
 }
 
 function setDraft(value, start, end = start) {
@@ -200,6 +216,7 @@ function renderPassage() {
   let previousGlyph = null;
   currentGlyph = null;
   currentAnswer = null;
+  hintElements = [];
   $("#passage").replaceChildren();
   for (const character of question.text) {
     const element = document.createElement("span");
@@ -209,10 +226,7 @@ function renderPassage() {
       answer.className = "glyph-answer";
       answer.setAttribute("aria-hidden", "true");
       answer.textContent = run?.answers[absoluteIndex]?.answer ?? "";
-      const hanzi = document.createElement("span");
-      hanzi.className = "glyph-hanzi";
-      hanzi.textContent = character;
-      element.append(answer, hanzi);
+      element.append(answer, createRuby(tokens[absoluteIndex]));
       previousGlyph = element;
       if (absoluteIndex < index) element.classList.add(run.answers[absoluteIndex].correct ? "correct" : "incorrect");
       if (absoluteIndex === index) {
@@ -233,7 +247,15 @@ function renderPassage() {
     $("#passage").append(element);
   }
   $("#sentence-label").textContent = `第 ${String(sentenceIndex + 1).padStart(2, "0")} 句 / ${QUESTIONS.length}`;
-  $("#next-sentence").textContent = QUESTIONS[sentenceIndex + 1]?.text ?? "最後一段，跟住你嘅節奏完成。";
+  const next = $("#next-sentence");
+  next.replaceChildren();
+  const nextQuestion = QUESTIONS[sentenceIndex + 1];
+  if (nextQuestion) {
+    for (const character of nextQuestion.text) {
+      next.append(/\p{Script=Han}/u.test(character)
+        ? createRuby(tokens[absoluteIndex++]) : document.createTextNode(character));
+    }
+  } else next.append(document.createTextNode("最後一段，跟住你嘅節奏完成。"));
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);
   renderDraft();
   renderHint();

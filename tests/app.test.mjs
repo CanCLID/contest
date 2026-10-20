@@ -12,12 +12,13 @@ const source = readFileSync(new URL("../demo/app.mjs", import.meta.url), "utf8")
   .replace(/^import .*;\n/gm, "");
 
 // Model the DOM operations used by input, focus and persistence regressions.
-function element() {
+function element(tagName = "div") {
   const listeners = new Map();
   const classes = new Set();
   const attributes = new Map();
   let value = "";
   return {
+    tagName: tagName.toUpperCase(),
     get value() { return value; },
     set value(next) { value = next; this.selectionStart = this.selectionEnd = value.length; },
     textContent: "", innerHTML: "", hidden: false, selectionStart: 0, selectionEnd: 0,
@@ -61,7 +62,7 @@ function openTab(store = new Map(), failures = {}) {
   const timeouts = [];
   const elements = new Map();
   const get = selector => {
-    assert.ok(!["#submit-answer", ".answer-wrap"].includes(selector), `Removed control queried: ${selector}`);
+    assert.ok(!["#submit-answer", ".answer-wrap", "#jyutping-hint"].includes(selector), `Removed control queried: ${selector}`);
     if (!elements.has(selector)) elements.set(selector, element());
     return elements.get(selector);
   };
@@ -155,13 +156,31 @@ const persisted = store => JSON.parse(store.get(storageKey) || "[]");
 const glyphs = tab => tab.get("#passage").children.filter(node => node.classList.contains("glyph"));
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
 const draft = tab => currentGlyph(tab)?.children[0].textContent;
+const passageRubies = tab => glyphs(tab).map(glyph => glyph.children[1]);
+const previewRubies = tab => tab.get("#next-sentence").children.filter(node => node.tagName === "RUBY");
+const rubyHints = tab => [...passageRubies(tab), ...previewRubies(tab)].map(ruby => ruby.children[1]);
 
-test("hints only toggle during a run and preserve the draft, selection, clock and mobile focus", () => {
+function expectRubySentence(rubies, expected, visible) {
+  assert.equal(rubies.length, expected.length);
+  rubies.forEach((ruby, index) => {
+    assert.equal(ruby.tagName, "RUBY");
+    assert.equal(ruby.className, "glyph-ruby");
+    assert.equal(ruby.children[0].className, "glyph-hanzi");
+    assert.equal(ruby.children[0].textContent, expected[index].hanzi);
+    const hint = ruby.children[1];
+    assert.equal(hint.tagName, "RT");
+    assert.equal(hint.className, "glyph-hint");
+    assert.equal(hint.textContent, expected[index].answers.join(" / "));
+    assert.match(hint.textContent, /^[a-z]+(?: \/ [a-z]+)*$/, "ruby readings must be complete and toneless");
+    assert.equal(hint.hidden, !visible);
+  });
+}
+
+test("ruby hints only toggle during a run and preserve draft, selection, clock, focus and composition", () => {
   const tab = openTab();
   const toggle = tab.get("#hint-toggle");
-  const hint = tab.get("#jyutping-hint");
   assert.equal(toggle.disabled, true);
-  assert.equal(hint.hidden, true);
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
   toggle.fire("click");
   assert.equal(tab.evaluate("round"), null);
   tab.evaluate('group = "mobile"');
@@ -173,12 +192,13 @@ test("hints only toggle during a run and preserve the draft, selection, clock an
   tab.evaluate("tick()");
   assert.equal(toggle.disabled, false);
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
-  assert.equal(hint.hidden, true);
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
 
   tab.setTime(4250);
   tab.evaluate('setDraft("gamm", 1, 3); renderMetrics()');
   const answer = tab.get("#answer");
   const glyph = currentGlyph(tab);
+  const hints = rubyHints(tab);
   const run = tab.evaluate("run");
   const metrics = tab.evaluate("JSON.stringify(getMetrics(run, Date.now()))");
   const focusCalls = answer.focusCalls;
@@ -186,8 +206,10 @@ test("hints only toggle during a run and preserve the draft, selection, clock an
   toggle.fire("pointerdown", { preventDefault() { prevented = true; } });
   toggle.fire("click");
   assert.equal(prevented, true);
-  assert.equal(hint.textContent, `${tokens[0].hanzi}：${tokens[0].answers.join(" / ")}`);
-  assert.equal(hint.hidden, false);
+  expectRubySentence(passageRubies(tab), tokens.filter(token => token.sentenceIndex === 0), true);
+  expectRubySentence(previewRubies(tab), tokens.filter(token => token.sentenceIndex === 1), true);
+  assert.equal(tab.get("#typing-surface").classList.contains("show-hints"), true);
+  assert.equal(tab.get("#next-sentence").classList.contains("show-hints"), true);
   assert.equal(toggle.getAttribute("aria-pressed"), "true");
   assert.equal(tab.get("#hint-used").hidden, false);
   assert.equal(answer.focusCalls, focusCalls + 1);
@@ -201,44 +223,72 @@ test("hints only toggle during a run and preserve the draft, selection, clock an
   // Keyboard-generated clicks work without a preceding pointer event.
   toggle.fire("click", { detail: 0 });
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
-  assert.equal(hint.hidden, true);
-  assert.equal(hint.textContent, "");
+  assert.ok(hints.every(hint => hint.hidden));
+  assert.deepEqual(rubyHints(tab), hints, "toggling retains the existing ruby nodes");
+  assert.equal(tab.get("#typing-surface").classList.contains("show-hints"), false);
+  assert.equal(tab.get("#next-sentence").classList.contains("show-hints"), false);
   assert.equal(tab.evaluate("round.hintsUsed"), true);
   assert.deepEqual([answer.selectionStart, answer.selectionEnd], [1, 3]);
+
+  answer.fire("compositionstart");
+  const composition = tab.evaluate("composition");
+  toggle.fire("click");
+  assert.equal(tab.evaluate("composing"), true);
+  assert.equal(tab.evaluate("composition"), composition);
+  assert.equal(draft(tab), "gamm");
+  assert.deepEqual([answer.selectionStart, answer.selectionEnd], [1, 3]);
+  answer.fire("compositionupdate", { data: "aa" });
+  assert.equal(draft(tab), "gaam");
+  answer.fire("compositionend", { data: "aa" });
+  answer.fire("input", { inputType: "insertFromComposition", data: "aa" });
+  assert.equal(draft(tab), "gaam");
+  assert.equal(currentGlyph(tab), glyph);
+  assert.equal(tab.evaluate("run.index"), 0);
 });
 
-test("hints follow submissions and cross-sentence undo, list accepted readings, and reset for replay", () => {
+test("ruby hints cover correct, wrong and upcoming characters across sentences, then reset for replay", () => {
   const tab = openTab();
   const variantIndex = tokens.findIndex(token => token.hanzi === "行");
   assert.ok(variantIndex > 0);
+  const expectedTokens = tokens.map((token, index) => index === variantIndex ? { ...token, answers: ["haang", "hang"] } : token);
   tab.evaluate(`tokens[${variantIndex}] = { ...tokens[${variantIndex}], answers: ["haang", "hang"] }`);
   readyRound(tab, "Hinted");
   tab.get("#hint-toggle").fire("click");
-  const hint = tab.get("#jyutping-hint");
   const sentenceStart = tokens.findIndex(token => token.sentenceIndex === 1);
   for (let index = 0; index < sentenceStart; index++) {
     tab.setTime(4000 + index * 1000);
-    tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])}); submit()`);
+    tab.evaluate(`setDraft(${JSON.stringify(index === 0 ? "zzz" : tokens[index].answers[0])}); submit()`);
+    if (index === 1) {
+      assert.equal(glyphs(tab)[0].children[0].textContent, "zzz");
+      assert.equal(glyphs(tab)[0].classList.contains("incorrect"), true);
+      assert.equal(glyphs(tab)[1].classList.contains("correct"), true);
+      expectRubySentence(passageRubies(tab), tokens.filter(token => token.sentenceIndex === 0), true);
+    }
   }
-  assert.equal(hint.textContent, `${tokens[sentenceStart].hanzi}：${tokens[sentenceStart].answers.join(" / ")}`);
+  expectRubySentence(passageRubies(tab), tokens.filter(token => token.sentenceIndex === 1), true);
+  expectRubySentence(previewRubies(tab), expectedTokens.filter(token => token.sentenceIndex === 2), true);
+  assert.ok(tab.get("#next-sentence").children.filter(node => node.tagName !== "RUBY")
+    .every(node => !node.children && !/\p{Script=Han}/u.test(node.textContent)), "preview punctuation has no rt");
   tab.get("#typing-surface").fire("keydown", { key: "Backspace", preventDefault() {} });
   assert.equal(tab.evaluate("run.index"), sentenceStart - 1);
-  assert.equal(hint.textContent, `${tokens[sentenceStart - 1].hanzi}：${tokens[sentenceStart - 1].answers.join(" / ")}`);
+  expectRubySentence(passageRubies(tab), tokens.filter(token => token.sentenceIndex === 0), true);
+  expectRubySentence(previewRubies(tab), tokens.filter(token => token.sentenceIndex === 1), true);
   assert.equal(tab.evaluate("round.hintsUsed"), true);
   for (let index = sentenceStart - 1; index < variantIndex; index++) {
     tab.setTime(5000 + index * 1000);
     tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])}); submit()`);
   }
-  assert.equal(hint.textContent, "行：haang / hang");
+  expectRubySentence(passageRubies(tab), expectedTokens.filter(token => token.sentenceIndex === 2), true);
+  assert.equal(currentGlyph(tab).children[1].children[1].textContent, "haang / hang");
   finishRemaining(tab);
-  assert.equal(hint.hidden, true);
-  assert.equal(hint.textContent, "");
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.equal(tab.get("#typing-surface").classList.contains("show-hints"), false);
   assert.equal(tab.get("#hint-toggle").disabled, true);
   assert.equal(tab.get("#hint-toggle").getAttribute("aria-pressed"), "false");
   assert.equal(tab.records()[0].hintsUsed, true);
   assert.match(tab.get("#result-summary").textContent, /用過提示/);
   tab.get("#hint-toggle").fire("click");
-  assert.equal(hint.hidden, true);
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
 
   tab.setTime(100000);
   tab.get("#play-again").fire("click");
@@ -247,12 +297,12 @@ test("hints follow submissions and cross-sentence undo, list accepted readings, 
   assert.equal(tab.get("#hint-toggle").disabled, true);
   tab.setTime(103000);
   tab.evaluate("tick()");
-  assert.equal(hint.hidden, true);
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
   finishRemaining(tab, 100000);
   assert.deepEqual(tab.records().map(record => record.hintsUsed), [true, false]);
   assert.doesNotMatch(tab.get("#result-summary").textContent, /用過提示/);
   tab.get("#edit-settings").fire("click");
-  assert.equal(hint.hidden, true);
+  assert.ok(rubyHints(tab).every(hint => hint.hidden));
   assert.equal(tab.get("#hint-used").hidden, true);
   assert.equal(tab.get("#hint-toggle").disabled, true);
 });
@@ -532,9 +582,9 @@ test("typing shows Jyutping above the current character without replacing or scr
   readyRound(tab, "Alpha");
   const glyph = currentGlyph(tab);
   const scrollCalls = glyph.scrollCalls;
-  assert.equal(glyph.children[1].textContent, tokens[0].hanzi);
+  assert.equal(glyph.children[1].children[0].textContent, tokens[0].hanzi);
   assert.equal(glyph.children[0].className, "glyph-answer");
-  assert.equal(glyph.children[1].className, "glyph-hanzi");
+  assert.equal(glyph.children[1].className, "glyph-ruby");
   for (const value of ["g", "ga", tokens[0].answers[0]]) {
     tab.get("#answer").value = value;
     tab.get("#answer").fire("input", { inputType: "insertText" });
