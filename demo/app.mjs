@@ -15,6 +15,8 @@ let ticker = null;
 let resultSaved = false;
 let composing = false;
 let deleteKeyHandled = false;
+let currentGlyph = null;
+let currentAnswer = null;
 let storageAvailable = true;
 let records = readRecords();
 
@@ -73,6 +75,27 @@ function showView(view) {
     else button.removeAttribute("aria-current");
   });
   if (view === "leaderboard") renderBoards();
+  if (view === "arena" && run?.status === "running") focusAnswer();
+}
+
+function positionAnswer(scroll = false) {
+  if (!currentGlyph || $("#arena-view").hidden) return;
+  if (scroll) currentGlyph.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const glyphBounds = currentGlyph.getBoundingClientRect();
+  const surface = $("#typing-surface");
+  const surfaceBounds = surface.getBoundingClientRect();
+  $("#answer").style.left = `${glyphBounds.left - surfaceBounds.left + surface.scrollLeft + glyphBounds.width / 2}px`;
+  $("#answer").style.top = `${glyphBounds.top - surfaceBounds.top + surface.scrollTop}px`;
+}
+
+function focusAnswer() {
+  if ($("#answer").disabled) return;
+  positionAnswer(true);
+  $("#answer").focus({ preventScroll: true });
+}
+
+function renderDraft() {
+  if (currentAnswer) currentAnswer.textContent = run?.status === "running" ? $("#answer").value : "";
 }
 
 function renderPassage() {
@@ -80,21 +103,46 @@ function renderPassage() {
   const sentenceIndex = tokens[Math.min(index, tokens.length - 1)].sentenceIndex;
   const question = QUESTIONS[sentenceIndex];
   let absoluteIndex = tokens.findIndex(token => token.sentenceIndex === sentenceIndex);
+  let previousGlyph = null;
+  currentGlyph = null;
+  currentAnswer = null;
   $("#passage").replaceChildren();
   for (const character of question.text) {
     const element = document.createElement("span");
-    element.textContent = character;
     if (/\p{Script=Han}/u.test(character)) {
       element.classList.add("glyph");
+      const answer = document.createElement("span");
+      answer.className = "glyph-answer";
+      answer.setAttribute("aria-hidden", "true");
+      answer.textContent = run?.answers[absoluteIndex]?.answer ?? "";
+      const hanzi = document.createElement("span");
+      hanzi.className = "glyph-hanzi";
+      hanzi.textContent = character;
+      element.append(answer, hanzi);
+      previousGlyph = element;
       if (absoluteIndex < index) element.classList.add(run.answers[absoluteIndex].correct ? "correct" : "incorrect");
-      if (absoluteIndex === index) element.classList.add("current");
+      if (absoluteIndex === index) {
+        element.classList.add("current");
+        currentGlyph = element;
+        currentAnswer = answer;
+      }
       absoluteIndex++;
+    } else {
+      element.classList.add("punctuation");
+      element.textContent = character;
+      if (previousGlyph) {
+        previousGlyph.classList.add("punctuated");
+        previousGlyph.append(element);
+        continue;
+      }
     }
     $("#passage").append(element);
   }
   $("#sentence-label").textContent = `第 ${String(sentenceIndex + 1).padStart(2, "0")} 句 / ${QUESTIONS.length}`;
   $("#next-sentence").textContent = QUESTIONS[sentenceIndex + 1]?.text ?? "最後一段，跟住你嘅節奏完成。";
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);
+  renderDraft();
+  positionAnswer();
 }
 
 function formatTime(seconds) {
@@ -138,14 +186,12 @@ function startRound() {
   $("#answer").value = "";
   $("#answer").placeholder = "倒數後，輸入粵拼";
   $("#input-feedback").textContent = "準備好，倒數後先開始輸入。";
-  $(".answer-wrap").classList.remove("error");
   document.body.classList.add("running");
   showView("arena");
   renderPassage();
   renderMetrics();
   // Focus during the initiating tap so mobile browsers can open their keyboard.
-  $("#answer").focus({ preventScroll: true });
-  if (matchMedia("(max-width: 760px)").matches) $(".race-card").scrollIntoView({ block: "start" });
+  focusAnswer();
   tick();
   ticker = setInterval(tick, 100);
 }
@@ -164,13 +210,13 @@ function tick() {
     $("#countdown-overlay").hidden = true;
     $("#answer").value = "";
     $("#answer").placeholder = "打粵拼，空白鍵確認";
-    $("#submit-answer").disabled = false;
     $("#race-status").textContent = "試玩進行中";
     $("#status-dot").classList.add("live");
     $("#start").textContent = "進行中";
     $("#start-note").textContent = "最後一字提交即完場";
     $("#input-feedback").textContent = "開始喇！唔使打聲調數字。";
-    if (!$("#arena-view").hidden) $("#answer").focus({ preventScroll: true });
+    renderDraft();
+    if (!$("#arena-view").hidden) focusAnswer();
     announce("開始！唔使打聲調數字。");
   }
   if (run) {
@@ -183,6 +229,7 @@ function submit() {
   if (composing || !run || run.status !== "running") return;
   const value = $("#answer").value;
   run = submitAnswer(run, value, Date.now());
+  $("#answer").value = "";
   if (run.status === "finished") {
     renderMetrics();
     renderPassage();
@@ -190,16 +237,16 @@ function submit() {
     return;
   }
   if (!value.trim()) {
-    $("#answer").value = "";
+    renderDraft();
     return;
   }
-  $("#answer").value = "";
   if (run.lastResult === "correct") {
     $("#input-feedback").textContent = `下一字：${tokens[run.index].hanzi}`;
   } else {
     $("#input-feedback").textContent = "未啱；按 Backspace 可修改。";
   }
   renderPassage();
+  positionAnswer(true);
   renderMetrics();
 }
 
@@ -207,10 +254,10 @@ function undoLast() {
   if (composing || !run || run.status !== "running" || run.index === 0) return;
   run = undoAnswer(run, Date.now());
   $("#answer").value = run.lastAnswer;
-  $("#answer").focus({ preventScroll: true });
-  $("#answer").select();
   $("#input-feedback").textContent = `修改「${tokens[run.index].hanzi}」後確認。`;
   renderPassage();
+  focusAnswer();
+  $("#answer").select();
   renderMetrics();
 }
 
@@ -227,7 +274,7 @@ function completeRound() {
   ticker = null;
   const metrics = getMetrics(run, Date.now());
   $("#answer").disabled = true;
-  $("#submit-answer").disabled = true;
+  $("#typing-surface").classList.remove("focused");
   $("#typing-form").hidden = true;
   $("#result").hidden = false;
   $("#cancel-run").hidden = true;
@@ -263,7 +310,7 @@ function resetRound() {
   $("#answer").disabled = true;
   $("#answer").value = "";
   $("#answer").placeholder = "準備好就開始啦";
-  $("#submit-answer").disabled = true;
+  $("#typing-surface").classList.remove("focused");
   $("#setup-fields").disabled = false;
   $("#cancel-run").hidden = true;
   $("#start").disabled = false;
@@ -272,7 +319,6 @@ function resetRound() {
   $("#race-status").textContent = "賽道準備好";
   $("#race-group").textContent = "本機試玩 · 無需登入";
   $("#status-dot").classList.remove("live");
-  $(".answer-wrap").classList.remove("error");
   $("#input-feedback").textContent = "本輪已放棄，唔會記錄成績。";
   document.body.classList.remove("running");
   renderPassage();
@@ -360,20 +406,30 @@ $("#start").addEventListener("click", startRound);
 $("#cancel-run").addEventListener("click", resetRound);
 $("#typing-form").addEventListener("submit", event => { event.preventDefault(); submit(); });
 $("#answer").addEventListener("compositionstart", () => { composing = true; });
-$("#answer").addEventListener("compositionend", () => { composing = false; });
+$("#answer").addEventListener("compositionupdate", renderDraft);
+$("#answer").addEventListener("compositionend", () => { composing = false; renderDraft(); });
+$("#answer").addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
+$("#answer").addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
+$("#typing-surface").addEventListener("click", focusAnswer);
 $("#answer").addEventListener("keydown", event => {
   deleteKeyHandled = false;
   if (event.isComposing || composing || event.keyCode === 229) {
     if (event.key === "Enter") event.preventDefault();
     return;
   }
-  if (event.key === " ") { event.preventDefault(); submit(); }
+  if (event.key === " " || event.key === "Enter") { event.preventDefault(); submit(); }
   if (event.key === "Backspace" && handleDelete(event)) {
     deleteKeyHandled = true;
     setTimeout(() => { deleteKeyHandled = false; }, 0);
   }
 });
 $("#answer").addEventListener("beforeinput", event => {
+  if (event.isComposing || composing) return;
+  if ((event.inputType === "insertText" && /^\s+$/u.test(event.data ?? "")) ||
+      event.inputType === "insertLineBreak" || event.inputType === "insertParagraph") {
+    if (event.cancelable !== false) { event.preventDefault(); submit(); }
+    return;
+  }
   if (event.inputType !== "deleteContentBackward") return;
   if (deleteKeyHandled) {
     event.preventDefault();
@@ -382,10 +438,9 @@ $("#answer").addEventListener("beforeinput", event => {
 });
 $("#answer").addEventListener("input", event => {
   // Some screen keyboards insert a space without a keydown event.
-  if (!event.isComposing && !composing && /\s$/.test($("#answer").value)) submit();
-});
-$("#submit-answer").addEventListener("click", () => {
-  if (run?.status === "running") $("#answer").focus({ preventScroll: true });
+  if (!event.isComposing && !composing && !/Composition/.test(event.inputType ?? "") &&
+      /\s$/.test($("#answer").value)) submit();
+  else renderDraft();
 });
 $("#view-result-board").addEventListener("click", () => {
   boardGroup = round.group;

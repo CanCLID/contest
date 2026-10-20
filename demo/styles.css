@@ -53,24 +53,28 @@ h2 { font-size: 22px; line-height: 1.4; }
 .passage-meta { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 #sentence-label { font-weight: 600; }
 .tiny-dot { padding: 0 4px; }
-.passage { font-size: 32px; line-height: 1.9; font-weight: 600; letter-spacing: 2px; margin: 20px 0 18px; word-break: break-all; }
-.glyph { border-radius: 4px; padding: 3px 1px; }
-.glyph.current { color: var(--orange); background: var(--orange-light); box-shadow: 0 3px 0 var(--orange); }
-.glyph.correct { color: #52765d; }
-.glyph.incorrect { color: #ad3323; background: #ffe4df; box-shadow: 0 3px 0 #ad3323; }
+.typing-surface { position: relative; margin: 24px 0 28px; }
+body.running .typing-surface { cursor: text; }
+.passage { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px 6px; margin: 0; padding: 0 0 10px; font-size: 36px; line-height: 1.3; font-weight: 600; }
+.glyph { position: relative; display: inline-flex; flex-direction: column; align-items: center; width: 52px; color: #89938b; }
+.glyph-answer { display: block; width: 100%; height: 26px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 16px; line-height: 24px; font-weight: 500; }
+.glyph-hanzi { position: relative; display: block; }
+.glyph.current { color: var(--orange); }
+.glyph.current .glyph-hanzi::after { content: ""; position: absolute; bottom: -7px; left: 0; width: 100%; height: 4px; border-radius: 2px; background: var(--orange); }
+body.running .typing-surface:not(.focused) .glyph.current .glyph-hanzi::after { background: #adb5aa; }
+.glyph.correct { color: var(--green); }
+.glyph.incorrect { color: #ad3323; }
+.glyph.incorrect .glyph-hanzi { text-decoration: underline wavy; text-decoration-thickness: 1px; text-underline-offset: 6px; }
+.punctuation { color: #89938b; }
+.glyph.punctuated { width: 78px; padding-right: 26px; }
+.glyph > .punctuation { position: absolute; right: 0; bottom: 0; }
+.typing-capture { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }
+.focus-hint { display: none; margin-top: 18px; color: var(--muted); font-size: 14px; font-weight: 400; }
+body.running .typing-surface:not(.focused) .focus-hint { display: block; }
 .up-next { display: flex; gap: 12px; align-items: baseline; font-size: 14px; color: var(--muted); margin-bottom: 24px; }
 .up-next > span { white-space: nowrap; }
 .up-next p { margin: 0; }
 .typing-form { margin: 0; }
-.input-label { display: block; font-size: 16px; margin-bottom: 8px; }
-.answer-wrap { display: flex; align-items: center; min-height: 60px; border: 1px solid #becbb9; border-radius: 8px; background: #fff; }
-.answer-wrap:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px #22745315; }
-.input-chevron { padding-left: 16px; color: var(--orange); font-size: 28px; }
-#answer { min-width: 0; width: 100%; padding: 12px; border: 0; outline: none; background: transparent; font-size: 22px; color: var(--ink); }
-#answer::placeholder { font-size: 16px; color: var(--muted); }
-#submit-answer { margin: 6px; padding: 10px 14px; background: #edf0e4; border: 0; border-radius: 5px; font-size: 16px; white-space: nowrap; }
-#submit-answer > span { margin-left: 8px; }
-#submit-answer:disabled { opacity: .5; }
 .input-bottom { padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .input-bottom p { margin: 0; font-size: 14px; color: var(--muted); }
 .input-bottom p:empty { display: none; }
@@ -204,12 +208,10 @@ body.running #setup-fields { opacity: .65; }
   #time { font-size: 26px; line-height: 1.6154; }
   .metric-label, .metric-unit { font-size: 14px; }
   .typing-area { padding: 20px 18px; }
-  .passage { font-size: 30px; line-height: 1.85; letter-spacing: 1px; margin: 18px 0; }
+  .passage { font-size: 32px; gap: 22px 4px; }
+  .glyph { width: 46px; }
+  .glyph.punctuated { width: 72px; }
   .up-next { gap: 10px; }
-  .input-chevron { padding-left: 12px; }
-  #answer { font-size: 22px; padding-left: 10px; }
-  #submit-answer { padding: 10px 12px; }
-  #submit-answer > span { display: none; }
   .card-foot { padding: 12px 18px; }
   .secondary-view { padding-top: 24px; }
   .page-heading { gap: 16px; margin-bottom: 24px; }
