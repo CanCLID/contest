@@ -15,6 +15,7 @@ const source = readFileSync(new URL("../demo/app.mjs", import.meta.url), "utf8")
 function element() {
   const listeners = new Map();
   const classes = new Set();
+  const attributes = new Map();
   let value = "";
   return {
     get value() { return value; },
@@ -30,7 +31,9 @@ function element() {
       contains(name) { return classes.has(name); },
       toggle(name, selected) { if (selected ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
     },
-    setAttribute() {}, removeAttribute() {},
+    setAttribute(name, value) { attributes.set(name, String(value)); },
+    getAttribute(name) { return attributes.get(name) ?? null; },
+    removeAttribute(name) { attributes.delete(name); },
     select() { this.setSelectionRange(0, this.value.length); },
     setSelectionRange(start, end) { this.selectionStart = start; this.selectionEnd = end; },
     focus() { this.focusCalls++; this.fire("focus"); },
@@ -152,6 +155,146 @@ const persisted = store => JSON.parse(store.get(storageKey) || "[]");
 const glyphs = tab => tab.get("#passage").children.filter(node => node.classList.contains("glyph"));
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
 const draft = tab => currentGlyph(tab)?.children[0].textContent;
+
+test("hints only toggle during a run and preserve the draft, selection, clock and mobile focus", () => {
+  const tab = openTab();
+  const toggle = tab.get("#hint-toggle");
+  const hint = tab.get("#jyutping-hint");
+  assert.equal(toggle.disabled, true);
+  assert.equal(hint.hidden, true);
+  toggle.fire("click");
+  assert.equal(tab.evaluate("round"), null);
+  tab.evaluate('group = "mobile"');
+  tab.get("#start").fire("click");
+  toggle.fire("click");
+  assert.equal(toggle.disabled, true);
+  assert.equal(tab.evaluate("round.hintsUsed"), false);
+  tab.setTime(3000);
+  tab.evaluate("tick()");
+  assert.equal(toggle.disabled, false);
+  assert.equal(toggle.getAttribute("aria-pressed"), "false");
+  assert.equal(hint.hidden, true);
+
+  tab.setTime(4250);
+  tab.evaluate('setDraft("gamm", 1, 3); renderMetrics()');
+  const answer = tab.get("#answer");
+  const glyph = currentGlyph(tab);
+  const run = tab.evaluate("run");
+  const metrics = tab.evaluate("JSON.stringify(getMetrics(run, Date.now()))");
+  const focusCalls = answer.focusCalls;
+  let prevented = false;
+  toggle.fire("pointerdown", { preventDefault() { prevented = true; } });
+  toggle.fire("click");
+  assert.equal(prevented, true);
+  assert.equal(hint.textContent, `${tokens[0].hanzi}：${tokens[0].answers.join(" / ")}`);
+  assert.equal(hint.hidden, false);
+  assert.equal(toggle.getAttribute("aria-pressed"), "true");
+  assert.equal(tab.get("#hint-used").hidden, false);
+  assert.equal(answer.focusCalls, focusCalls + 1);
+  assert.equal(currentGlyph(tab), glyph, "toggling must not rebuild the passage");
+  assert.equal(draft(tab), "gamm");
+  assert.deepEqual([answer.selectionStart, answer.selectionEnd], [1, 3]);
+  assert.equal(tab.evaluate("run"), run);
+  assert.equal(tab.evaluate("JSON.stringify(getMetrics(run, Date.now()))"), metrics);
+  assert.equal(tab.get("#time").textContent, "00:01.2");
+
+  // Keyboard-generated clicks work without a preceding pointer event.
+  toggle.fire("click", { detail: 0 });
+  assert.equal(toggle.getAttribute("aria-pressed"), "false");
+  assert.equal(hint.hidden, true);
+  assert.equal(hint.textContent, "");
+  assert.equal(tab.evaluate("round.hintsUsed"), true);
+  assert.deepEqual([answer.selectionStart, answer.selectionEnd], [1, 3]);
+});
+
+test("hints follow submissions and cross-sentence undo, list accepted readings, and reset for replay", () => {
+  const tab = openTab();
+  const variantIndex = tokens.findIndex(token => token.hanzi === "行");
+  assert.ok(variantIndex > 0);
+  tab.evaluate(`tokens[${variantIndex}] = { ...tokens[${variantIndex}], answers: ["haang", "hang"] }`);
+  readyRound(tab, "Hinted");
+  tab.get("#hint-toggle").fire("click");
+  const hint = tab.get("#jyutping-hint");
+  const sentenceStart = tokens.findIndex(token => token.sentenceIndex === 1);
+  for (let index = 0; index < sentenceStart; index++) {
+    tab.setTime(4000 + index * 1000);
+    tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])}); submit()`);
+  }
+  assert.equal(hint.textContent, `${tokens[sentenceStart].hanzi}：${tokens[sentenceStart].answers.join(" / ")}`);
+  tab.get("#typing-surface").fire("keydown", { key: "Backspace", preventDefault() {} });
+  assert.equal(tab.evaluate("run.index"), sentenceStart - 1);
+  assert.equal(hint.textContent, `${tokens[sentenceStart - 1].hanzi}：${tokens[sentenceStart - 1].answers.join(" / ")}`);
+  assert.equal(tab.evaluate("round.hintsUsed"), true);
+  for (let index = sentenceStart - 1; index < variantIndex; index++) {
+    tab.setTime(5000 + index * 1000);
+    tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])}); submit()`);
+  }
+  assert.equal(hint.textContent, "行：haang / hang");
+  finishRemaining(tab);
+  assert.equal(hint.hidden, true);
+  assert.equal(hint.textContent, "");
+  assert.equal(tab.get("#hint-toggle").disabled, true);
+  assert.equal(tab.get("#hint-toggle").getAttribute("aria-pressed"), "false");
+  assert.equal(tab.records()[0].hintsUsed, true);
+  assert.match(tab.get("#result-summary").textContent, /用過提示/);
+  tab.get("#hint-toggle").fire("click");
+  assert.equal(hint.hidden, true);
+
+  tab.setTime(100000);
+  tab.get("#play-again").fire("click");
+  assert.equal(tab.evaluate("round.hintsUsed"), false);
+  assert.equal(tab.get("#hint-used").hidden, true);
+  assert.equal(tab.get("#hint-toggle").disabled, true);
+  tab.setTime(103000);
+  tab.evaluate("tick()");
+  assert.equal(hint.hidden, true);
+  finishRemaining(tab, 100000);
+  assert.deepEqual(tab.records().map(record => record.hintsUsed), [true, false]);
+  assert.doesNotMatch(tab.get("#result-summary").textContent, /用過提示/);
+  tab.get("#edit-settings").fire("click");
+  assert.equal(hint.hidden, true);
+  assert.equal(tab.get("#hint-used").hidden, true);
+  assert.equal(tab.get("#hint-toggle").disabled, true);
+});
+
+test("legacy and unhinted rounds rank separately from recent hinted rounds; invalid flags are rejected", () => {
+  const valid = {
+    rules: 2, articleId: questions.ARTICLE.id, group: "desktop",
+    correct: tokens.length, errors: 0, elapsedSeconds: 60, at: 1000,
+  };
+  const store = new Map([[storageKey, JSON.stringify([
+    { ...valid, id: "legacy", name: "Legacy", elapsedSeconds: 30 },
+    { ...valid, id: "plain", name: "Plain", hintsUsed: false },
+    { ...valid, id: "hint-old", name: "HintOld", hintsUsed: true, elapsedSeconds: 10 },
+    { ...valid, id: "hint-new", name: "HintNew", hintsUsed: true, at: 2000 },
+    { ...valid, id: "mobile", name: "MobileHint", hintsUsed: true, group: "mobile" },
+    ...[null, "false", "true", 0, 1, {}].map((hintsUsed, index) =>
+      ({ ...valid, id: `invalid-${index}`, name: "Invalid", hintsUsed })),
+  ])]]);
+  const tab = openTab(store);
+  assert.deepEqual(names(tab.records()), ["Legacy", "Plain", "HintOld", "HintNew", "MobileHint"]);
+  assert.equal(tab.records()[0].hintsUsed, false);
+  const rows = selector => tab.get(selector).children[0].children[0].children;
+  assert.deepEqual(rows("#local-board").map(row => row.children[1].children[0].textContent), ["Legacy", "Plain"]);
+  assert.equal(rows("#local-board")[0].classList.contains("best"), true);
+  assert.equal(tab.get("#hinted-board-card").hidden, false);
+  assert.deepEqual(rows("#hinted-board").map(row => row.children[0].children[0].textContent), ["HintNew", "HintOld"]);
+  assert.doesNotMatch(tab.get("#hinted-board").children[0].innerHTML, /名次/);
+  for (const row of rows("#hinted-board")) {
+    assert.equal(row.children.length, 3, "hinted results show name, score and accuracy without a rank");
+    assert.equal(row.classList.contains("best"), false);
+    assert.ok(Number(row.children[1].children[0].textContent) > 0);
+    assert.equal(row.children[2].textContent, "100%");
+  }
+  tab.evaluate('boardGroup = "mobile"; renderBoards()');
+  assert.doesNotMatch(textOf(tab.get("#local-board")), /MobileHint/);
+  assert.deepEqual(rows("#hinted-board").map(row => row.children[0].children[0].textContent), ["MobileHint"]);
+  tab.get("#clear-scores").fire("click");
+  assert.deepEqual(tab.records(), []);
+  assert.deepEqual(persisted(store), []);
+  assert.equal(tab.get("#hinted-board-card").hidden, true);
+  assert.equal(tab.get("#clear-scores").hidden, true);
+});
 
 test("component accuracy follows retained submissions, undo, correction, reset and replay", () => {
   const tab = openTab();

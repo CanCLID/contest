@@ -13,6 +13,7 @@ let round = null;
 let countdownEnds = null;
 let ticker = null;
 let resultSaved = false;
+let hintsVisible = false;
 let composing = false;
 let draft = "";
 let draftCursor = 0;
@@ -36,7 +37,8 @@ function readRecords(fallback = []) {
       Number.isSafeInteger(item.correct) && item.correct >= 0 && item.correct <= tokens.length &&
       Number.isSafeInteger(item.errors) && item.errors >= 0 && item.correct + item.errors === tokens.length &&
       Number.isFinite(item.elapsedSeconds) && item.elapsedSeconds >= 0 &&
-      Number.isFinite(item.at)).slice(-20);
+      Number.isFinite(item.at) && (item.hintsUsed === undefined || typeof item.hintsUsed === "boolean"))
+      .slice(-20).map(item => ({ ...item, hintsUsed: item.hintsUsed ?? false }));
   } catch {
     storageAvailable = false;
     return fallback;
@@ -103,6 +105,17 @@ function focusAnswer() {
 
 function renderDraft() {
   if (currentAnswer) currentAnswer.textContent = run?.status === "running" ? draft : "";
+}
+
+function renderHint() {
+  const running = run?.status === "running";
+  if (!running) hintsVisible = false;
+  const token = running && hintsVisible ? run.questionSet[run.index] : null;
+  $("#hint-toggle").disabled = !running;
+  $("#hint-toggle").setAttribute("aria-pressed", String(hintsVisible));
+  $("#jyutping-hint").hidden = !token;
+  $("#jyutping-hint").textContent = token ? `${token.hanzi}：${token.answers.join(" / ")}` : "";
+  $("#hint-used").hidden = !round?.hintsUsed;
 }
 
 function setDraft(value, start, end = start) {
@@ -223,6 +236,7 @@ function renderPassage() {
   $("#next-sentence").textContent = QUESTIONS[sentenceIndex + 1]?.text ?? "最後一段，跟住你嘅節奏完成。";
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);
   renderDraft();
+  renderHint();
   renderComponentStats();
   positionAnswer();
 }
@@ -258,6 +272,8 @@ function startRound(replay = false) {
   answerVersion++;
   round = replay ? { ...round }
     : { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
+  hintsVisible = false;
+  round.hintsUsed = false;
   countdownEnds = Date.now() + 3000;
   $("#setup-card").hidden = true;
   $("#round-summary").hidden = false;
@@ -315,6 +331,7 @@ function tick() {
     $("#start-note").textContent = "最後一字提交即完場";
     $("#input-feedback").textContent = "開始喇！唔使打聲調數字。";
     renderDraft();
+    renderHint();
     if (!$("#arena-view").hidden) focusAnswer();
     announce("開始！唔使打聲調數字。");
   }
@@ -385,7 +402,8 @@ function completeRound() {
   $("#race-status").textContent = "本輪已完成";
   $("#status-dot").classList.remove("live");
   $("#result-title").textContent = `全文完成 · 試算綜合分 ${metrics.score.toFixed(1)}`;
-  $("#result-summary").textContent = `${round.name} · ${formatTime(metrics.elapsedSeconds)} · ${metrics.correct} 啱／${metrics.errors} 錯`;
+  $("#result-summary").textContent = `${round.name} · ${formatTime(metrics.elapsedSeconds)} · ${metrics.correct} 啱／${metrics.errors} 錯${round.hintsUsed ? " · 用過提示" : ""}`;
+  renderHint();
   if (!resultSaved) {
     const result = { ...round, id: crypto.randomUUID(), correct: metrics.correct, errors: metrics.errors, elapsedSeconds: metrics.elapsedSeconds, at: Date.now() };
     // Merge persisted rounds with this tab's rounds, including failed writes.
@@ -404,6 +422,7 @@ function resetRound() {
   countdownEnds = null;
   run = null;
   round = null;
+  hintsVisible = false;
   composing = false;
   composition = null;
   committedComposition = null;
@@ -448,7 +467,7 @@ function rankRecords(items) {
     a.elapsedSeconds - b.elapsedSeconds || a.at - b.at);
 }
 
-function renderTable(container, items, sample = false) {
+function renderTable(container, items, sample = false, ranked = true) {
   container.replaceChildren();
   if (!items.length) {
     const empty = document.createElement("div");
@@ -459,17 +478,22 @@ function renderTable(container, items, sample = false) {
   }
   const table = document.createElement("table");
   table.className = "score-table";
-  table.innerHTML = "<thead><tr><th scope='col'>名次</th><th scope='col'>暱稱 / 用時</th><th scope='col'>綜合分</th><th scope='col'>準確度</th></tr></thead>";
+  table.innerHTML = `<thead><tr>${ranked ? "<th scope='col'>名次</th>" : ""}<th scope='col'>暱稱 / 用時</th><th scope='col'>綜合分</th><th scope='col'>準確度</th></tr></thead>`;
   const tbody = document.createElement("tbody");
   let rank = 0;
   let last = null;
-  for (const [index, item] of rankRecords(items).entries()) {
+  const ordered = rankRecords(items);
+  if (!ranked) ordered.sort((a, b) => b.at - a.at);
+  for (const [index, item] of ordered.entries()) {
     if (!last || item.score !== last.score || item.accuracy !== last.accuracy || item.elapsedSeconds !== last.elapsedSeconds) rank = index + 1;
     last = item;
     const row = document.createElement("tr");
-    if (rank === 1 && item.correct > 0) row.className = "best";
-    const rankCell = document.createElement("td");
-    rankCell.textContent = item.correct ? String(rank).padStart(2, "0") : "—";
+    if (ranked) {
+      if (rank === 1 && item.correct > 0) row.className = "best";
+      const rankCell = document.createElement("td");
+      rankCell.textContent = item.correct ? String(rank).padStart(2, "0") : "—";
+      row.append(rankCell);
+    }
     const nameCell = document.createElement("td");
     nameCell.className = "score-name";
     nameCell.append(document.createTextNode(item.name));
@@ -485,7 +509,7 @@ function renderTable(container, items, sample = false) {
     speedCell.append(speedText);
     const accuracyCell = document.createElement("td");
     accuracyCell.textContent = item.accuracy === null ? "—" : `${Math.round(item.accuracy)}%`;
-    row.append(rankCell, nameCell, speedCell, accuracyCell);
+    row.append(nameCell, speedCell, accuracyCell);
     tbody.append(row);
   }
   table.append(tbody);
@@ -494,7 +518,11 @@ function renderTable(container, items, sample = false) {
 
 function renderBoards() {
   setPressed("[data-board-group]", "boardGroup", boardGroup);
-  renderTable($("#local-board"), records.filter(item => item.group === boardGroup && item.articleId === ARTICLE.id && item.rules === 2));
+  const groupRecords = records.filter(item => item.group === boardGroup && item.articleId === ARTICLE.id && item.rules === 2);
+  renderTable($("#local-board"), groupRecords.filter(item => !item.hintsUsed));
+  const hintedRecords = groupRecords.filter(item => item.hintsUsed);
+  $("#hinted-board-card").hidden = hintedRecords.length === 0;
+  renderTable($("#hinted-board"), hintedRecords, false, false);
   const baseTime = boardGroup === "mobile" ? 105 : 65;
   const sample = ["打字阿晴", "粵拼小隊長", "慢慢嚟都得"].map((name, index) => ({
     name, elapsedSeconds: baseTime + index * 12, correct: tokens.length - (index + 1) * 2,
@@ -518,6 +546,18 @@ $("#start").addEventListener("click", () => startRound());
 $("#play-again").addEventListener("click", () => startRound(true));
 $("#edit-settings").addEventListener("click", resetRound);
 $("#cancel-run").addEventListener("click", resetRound);
+$("#hint-toggle").addEventListener("pointerdown", event => {
+  if (run?.status === "running") event.preventDefault();
+});
+$("#hint-toggle").addEventListener("click", () => {
+  if (run?.status !== "running") return;
+  const [start, end] = selection();
+  hintsVisible = !hintsVisible;
+  if (hintsVisible) round.hintsUsed = true;
+  renderHint();
+  focusAnswer();
+  $("#answer").setSelectionRange(start, end);
+});
 $("#typing-form").addEventListener("submit", event => { event.preventDefault(); submit(); });
 $("#answer").addEventListener("compositionstart", () => {
   if (round?.group !== "mobile") { restoreDraft(); return; }
