@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f0">
+  <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
+  <title>粵拼競速 · CanCLID</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.mjs" type="module"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳去主要內容</a>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="粵拼競速首頁">
+        <span class="brand-mark" aria-hidden="true">拼<span>↗</span></span>
+        <span class="brand-type">粵拼競速<small>CANCLID CONTEST</small></span>
+      </a>
+      <nav class="nav" aria-label="主要導覽">
+        <button class="nav-link active" data-view="arena" aria-current="page">試玩賽場</button>
+        <button class="nav-link" data-view="leaderboard">排行榜</button>
+        <button class="nav-link" data-view="rules">玩法</button>
+      </nav>
+      <span class="demo-badge"><span></span>展示版</span>
+    </header>
+
+    <main id="main">
+      <section id="arena-view" class="view">
+        <div class="hero">
+          <div>
+            <p class="eyebrow"><span class="short-line"></span> 用你熟悉嘅語言，打出自己嘅節奏</p>
+            <h1>一齊打粵拼。<br>睇吓你有<span class="orange">幾快<span class="spark" aria-hidden="true">↗</span></span></h1>
+            <p class="hero-description">睇中文字，打出粵拼。每一個音節，<br class="mobile-break">都係你嘅主場。</p>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="track track-one"></div><div class="track track-two"></div><div class="track track-three"></div>
+            <span class="art-word">快</span>
+            <span class="art-key key-one">faai</span>
+            <span class="art-key key-two">space <span>↵</span></span>
+            <span class="art-caption">READY. SET. JYUTPING.</span>
+            <span class="art-star">✳</span>
+          </div>
+        </div>
+
+        <div class="arena-grid">
+          <section class="race-card" aria-label="打字賽場">
+            <div class="card-topline">
+              <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="race-status">賽道準備好</span></div>
+              <span id="race-group" class="subtle-label">本機試玩 · 無需登入</span>
+            </div>
+            <div class="metrics">
+              <div class="metric"><span class="metric-label">剩餘時間</span><strong id="time">00:30</strong><span class="metric-unit">固定時限</span></div>
+              <div class="metric"><span class="metric-label">正確速度</span><strong id="speed">0</strong><span class="metric-unit">音節 / 分鐘</span></div>
+              <div class="metric"><span class="metric-label">提交準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+            </div>
+            <div class="time-track" role="progressbar" aria-label="剩餘時間比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><div id="time-bar"></div></div>
+            <div class="typing-area">
+              <div class="passage-meta"><span id="sentence-label">第 01 句</span><span>日常粵語 <span class="tiny-dot">·</span> 不用聲調</span></div>
+              <p id="passage" class="passage" aria-label="打字題目"></p>
+              <div class="up-next"><span>下一句</span><p id="next-sentence"></p></div>
+              <form id="typing-form" class="typing-form" autocomplete="off">
+                <label for="answer" class="input-label">輸入標示字嘅粵拼</label>
+                <div class="answer-wrap">
+                  <span class="input-chevron" aria-hidden="true">›</span>
+                  <input id="answer" name="answer" type="text" placeholder="準備好就開始啦" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="input-feedback">
+                  <button id="submit-answer" type="submit" disabled aria-label="提交粵拼答案">確認 <span aria-hidden="true">↵</span></button>
+                </div>
+                <div class="input-bottom"><p id="input-feedback" role="status">按「開始試玩」，倒數後開始計時。</p><span class="key-hint"><kbd>space</kbd> 或 <kbd>enter</kbd> 確認</span></div>
+              </form>
+              <div id="result" class="result" hidden>
+                <span class="result-icon" aria-hidden="true">✳</span>
+                <div><h2 id="result-title">完成喇！</h2><p id="result-summary"></p><button class="text-button" id="view-result-board">睇本機成績 <span aria-hidden="true">↗</span></button></div>
+              </div>
+              <div id="countdown-overlay" class="countdown-overlay" hidden><span>準備起跑</span><strong id="countdown-number">3</strong><small>放鬆手指，跟住自己嘅節奏。</small></div>
+            </div>
+            <div class="card-foot"><span><span class="green-dot"></span>答啱先前進，打錯可以再試</span><span id="completed-count">0 個正確音節</span></div>
+          </section>
+
+          <aside class="setup-card">
+            <div class="setup-heading"><span class="eyebrow">YOUR NEXT ROUND</span><h2>準備好未？</h2><p>揀好組別，試一場就知。</p></div>
+            <fieldset id="setup-fields">
+              <label class="field-label" for="nickname">你嘅暱稱 <span>只用喺呢部裝置</span></label>
+              <input id="nickname" class="nickname-input" maxlength="16" placeholder="粵拼新星" autocomplete="off">
+              <legend class="sr-only">本輪試玩設定</legend>
+              <div class="field-label group-heading" id="group-label">參賽組別</div>
+              <div class="group-options" role="group" aria-labelledby="group-label">
+                <button type="button" class="group-option selected" data-group="desktop" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>電腦組<small>實體鍵盤</small></span><span class="choice-dot"></span></button>
+                <button type="button" class="group-option" data-group="mobile" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg><span>手機組<small>螢幕鍵盤</small></span><span class="choice-dot"></span></button>
+              </div>
+              <p class="field-help">按目前視窗建議組別，請自行確認。</p>
+              <div class="field-label duration-label" id="duration-label">試玩時間</div>
+              <div class="segmented duration-options" role="group" aria-labelledby="duration-label"><button type="button" class="selected" data-duration="30" aria-pressed="true">30 秒 <span>熱身</span></button><button type="button" data-duration="60" aria-pressed="false">60 秒 <span>挑戰</span></button></div>
+            </fieldset>
+            <button id="start" class="start-button">開始試玩 <span aria-hidden="true">↗</span></button>
+            <p id="start-note" class="start-note">倒數 3 秒後開始 · 中途唔會暫停</p>
+            <button id="cancel-run" class="text-button cancel-button" hidden>放棄本輪，重新設定</button>
+            <div class="demo-note"><span aria-hidden="true">ⓘ</span><p>呢度係互動 demo。冇登入、冇真人配對，成績只記喺你嘅瀏覽器。</p></div>
+          </aside>
+        </div>
+        <div class="steps-strip">
+          <div><span class="step-number">01</span><p><strong>睇中文字</strong><span>橙色標記就係目前嘅字</span></p></div>
+          <div><span class="step-number">02</span><p><strong>打出粵拼</strong><span>只打字母，再按空白鍵確認</span></p></div>
+          <div><span class="step-number">03</span><p><strong>挑戰自己</strong><span>速度同準度，一眼睇清楚</span></p></div>
+          <button class="text-button" data-view="rules">睇完整玩法 <span aria-hidden="true">↗</span></button>
+        </div>
+      </section>
+
+      <section id="leaderboard-view" class="view secondary-view" hidden aria-labelledby="leaderboard-heading">
+        <p class="eyebrow">EVERY SYLLABLE COUNTS</p>
+        <div class="page-heading"><div><h1 id="leaderboard-heading">快得嚟，<span class="orange">又要準。</span></h1><p>兩個組別，各有自己嘅主場。</p></div><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
+        <div class="board-filters">
+          <div class="segmented" aria-label="排行榜組別" role="group"><button data-board-group="desktop" class="selected" aria-pressed="true">電腦組</button><button data-board-group="mobile" aria-pressed="false">手機組</button></div>
+          <div class="segmented" aria-label="排行榜時限" role="group"><button data-board-duration="30" class="selected" aria-pressed="true">30 秒</button><button data-board-duration="60" aria-pressed="false">60 秒</button></div>
+        </div>
+        <section class="board-card"><div class="board-heading"><div><h2>你嘅試玩紀錄</h2><p>呢部裝置最近 20 輪完整試玩；相同組別同時限獨立排名。</p></div><span class="pill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores">清除本機紀錄</button></section>
+        <section class="board-card sample-board"><div class="board-heading"><div><h2>排行榜效果預覽</h2><p>以下全部係虛構示範數據，唔係真人參賽成績。</p></div><span class="pill">示範數據</span></div><div id="sample-board"></div></section>
+        <p class="board-rule">Demo 暫按正確速度排序，同速再比較提交準確度；完全相同則並列。正式賽制仍待討論。</p>
+      </section>
+
+      <section id="rules-view" class="view secondary-view" hidden aria-labelledby="rules-heading">
+        <p class="eyebrow">A LITTLE PRACTICE. A LOT OF POSSIBILITIES.</p>
+        <div class="page-heading"><div><h1 id="rules-heading">打得順，<span class="orange">由呢度開始。</span></h1><p>今次先試手感，正式比賽規則一齊再傾。</p></div><button class="outline-button" data-view="arena">即刻試玩 ↗</button></div>
+        <div class="rules-grid">
+          <article class="rule-card"><span class="step-number">01 / 輸入</span><h2>一個字，一個音節。</h2><p>讀橙色標示嘅中文字，輸入粵拼字母，再按空白鍵、Enter 或「確認」。例如「快」輸入 <code>faai</code>。Demo 唔打聲調數字；大小寫都接受，標點唔使打。</p><p>提交前可以刪改。答錯會留喺原字，答啱先前進。每次錯誤提交都會計算；空白提交唔計。</p></article>
+          <article class="rule-card"><span class="step-number">02 / 計分</span><h2>每個正確音節都算數。</h2><p>正確速度 ＝ 正確音節數 ÷ 本輪固定分鐘數。30 秒打啱 20 個音節，就係每分鐘 40 個。比賽進行中亦用同一個固定分母。</p><p>提交準確度 ＝ 正確次數 ÷ 全部非空提交次數。提交前刪改唔扣準度。時間到即停止收答案；中途切去其他頁面亦會繼續計時。</p></article>
+          <article class="rule-card"><span class="step-number">03 / 分組</span><h2>揀返適合你嘅賽道。</h2><p>電腦組用實體鍵盤；手機組只用螢幕鍵盤，唔用外接鍵盤。平板用螢幕鍵盤可選手機組，用實體鍵盤請選電腦組。開跑之後本輪組別就會鎖定。</p><p>畫面尺寸只用嚟預選，請自行確認。Demo 唔會偵測外接鍵盤，亦無法靠視窗大細核實裝置。</p></article>
+          <article class="rule-card rule-highlight"><span class="step-number">04 / 展示範圍</span><h2>先玩一場，再一齊改。</h2><p>呢個版本用嚟畀團隊審覈介面同打字手感。題目原創，暫用無聲調、30 或 60 秒同答錯重試嘅玩法；呢啲並非已定案嘅正式賽規。</p><p>冇帳戶、冇後端、冇同步對賽或防作弊。紀錄只存本機，排行榜示範人物係虛構；亦未驗證 2,000 人比賽容量。</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer"><span>CanCLID <span class="footer-slash">/</span> 用粵語，連住大家。</span><span>粵拼競速 · 互動展示版 <span class="version">v0.1</span></span></footer>
+  </div>
+  <div class="sr-only" id="announcer" aria-live="polite"></div>
+</body>
+</html>
