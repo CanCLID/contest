@@ -1,4 +1,4 @@
-import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats } from "./engine.mjs?v=9";
+import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats, splitJyutping } from "./engine.mjs?v=9";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs?v=10";
 
 const $ = selector => document.querySelector(selector);
@@ -23,8 +23,8 @@ let physicalEdit = null;
 let composition = null;
 let committedComposition = null;
 let currentGlyph = null;
-let currentAnswer = null;
-let hintElements = [];
+let currentReading = null;
+let readingElements = [];
 let storageAvailable = true;
 let records = readRecords();
 
@@ -105,7 +105,8 @@ function focusAnswer() {
 }
 
 function renderDraft() {
-  if (currentAnswer) currentAnswer.textContent = run?.status === "running" ? draft : "";
+  if (currentReading) renderReading(currentReading);
+  if (round?.group === "mobile" && run?.status === "running") positionAnswer(false);
 }
 
 function renderHint() {
@@ -115,22 +116,85 @@ function renderHint() {
   $("#hint-toggle").setAttribute("aria-pressed", String(hintsVisible));
   $("#typing-surface").classList.toggle("show-hints", hintsVisible);
   $("#next-sentence").classList.toggle("show-hints", hintsVisible);
-  hintElements.forEach(hint => { hint.hidden = !hintsVisible; });
+  readingElements.forEach(renderReading);
   $("#hint-used").hidden = !round?.hintsUsed;
 }
 
-function createRuby(token) {
+function readingParts(answer) {
+  const { initial, nucleus, coda } = splitJyutping(answer);
+  return [initial, nucleus + coda];
+}
+
+function expectedReading(answers, input) {
+  const exact = answers.find(answer => answer === input);
+  if (exact) return exact;
+  const prefix = answers.find(answer => answer.startsWith(input));
+  if (prefix) return prefix;
+  const actual = readingParts(input);
+  const matches = answer => readingParts(answer).filter((part, index) => part && part === actual[index]).length;
+  return answers.reduce((best, answer) => matches(answer) > matches(best) ? answer : best);
+}
+
+function renderReading({ element, token, index, preview }) {
+  const submitted = run?.answers[index];
+  const input = submitted?.answer ?? (run?.status === "running" && run.index === index ? draft : "");
+  const expected = expectedReading(token.answers, input);
+  const segments = [];
+  const add = (type, text) => { if (text) segments.push({ type, text }); };
+  let correction = false;
+  if (submitted && !submitted.correct) {
+    const actualParts = readingParts(input);
+    readingParts(expected).forEach((part, index) => {
+      const actual = actualParts[index];
+      if (part === actual) add("typed", actual);
+      else {
+        correction = true;
+        // Match the source's initial (wrong first) and rime (expected first) corrections.
+        if (index === 0) add("wrong", actual);
+        add("correct", part);
+        if (index === 1) add("wrong", actual);
+      }
+    });
+  } else if (!submitted && hintsVisible) {
+    if (!input) add("hint", token.answers.join(" / "));
+    else if (expected.startsWith(input)) {
+      add("typed", input);
+      add("hint", expected.slice(input.length));
+    } else {
+      let prefix = 0;
+      while (prefix < expected.length && expected[prefix] === input[prefix]) prefix++;
+      const overlap = Math.min(input.length, expected.length);
+      add("typed", input.slice(0, prefix));
+      add("correct", expected.slice(prefix, overlap));
+      add("wrong", input.slice(prefix));
+      add("hint", expected.slice(overlap));
+      correction = true;
+    }
+  } else add("typed", input);
+  element.dataset.input = input;
+  element.dataset.expected = expected;
+  element.hidden = preview && !hintsVisible;
+  element.setAttribute("aria-label", input
+    ? `${token.hanzi}：輸入 ${input}${correction ? `，正確讀法 ${expected}` : ""}`
+    : hintsVisible ? `${token.hanzi}：${token.answers.join(" / ")}` : "");
+  element.replaceChildren(...segments.map(({ type, text }) => {
+    const segment = document.createElement(type === "wrong" ? "del" : "span");
+    segment.className = `reading-${type}`;
+    segment.textContent = text;
+    return segment;
+  }));
+}
+
+function createRuby(token, index, preview = false) {
   const ruby = document.createElement("ruby");
   ruby.className = "glyph-ruby";
   const hanzi = document.createElement("span");
   hanzi.className = "glyph-hanzi";
   hanzi.textContent = token.hanzi;
-  const hint = document.createElement("rt");
-  hint.className = "glyph-hint";
-  hint.textContent = token.answers.join(" / ");
-  hint.hidden = !hintsVisible;
-  hintElements.push(hint);
-  ruby.append(hanzi, hint);
+  const reading = document.createElement("rt");
+  reading.className = "glyph-reading";
+  readingElements.push({ element: reading, token, index, preview });
+  ruby.append(hanzi, reading);
   return ruby;
 }
 
@@ -215,24 +279,20 @@ function renderPassage() {
   let absoluteIndex = tokens.findIndex(token => token.sentenceIndex === sentenceIndex);
   let previousGlyph = null;
   currentGlyph = null;
-  currentAnswer = null;
-  hintElements = [];
+  currentReading = null;
+  readingElements = [];
   $("#passage").replaceChildren();
   for (const character of question.text) {
     const element = document.createElement("span");
     if (/\p{Script=Han}/u.test(character)) {
       element.classList.add("glyph");
-      const answer = document.createElement("span");
-      answer.className = "glyph-answer";
-      answer.setAttribute("aria-hidden", "true");
-      answer.textContent = run?.answers[absoluteIndex]?.answer ?? "";
-      element.append(answer, createRuby(tokens[absoluteIndex]));
+      element.append(createRuby(tokens[absoluteIndex], absoluteIndex));
       previousGlyph = element;
       if (absoluteIndex < index) element.classList.add(run.answers[absoluteIndex].correct ? "correct" : "incorrect");
       if (absoluteIndex === index) {
         element.classList.add("current");
         currentGlyph = element;
-        currentAnswer = answer;
+        currentReading = readingElements.at(-1);
       }
       absoluteIndex++;
     } else {
@@ -252,8 +312,10 @@ function renderPassage() {
   const nextQuestion = QUESTIONS[sentenceIndex + 1];
   if (nextQuestion) {
     for (const character of nextQuestion.text) {
-      next.append(/\p{Script=Han}/u.test(character)
-        ? createRuby(tokens[absoluteIndex++]) : document.createTextNode(character));
+      if (/\p{Script=Han}/u.test(character)) {
+        next.append(createRuby(tokens[absoluteIndex], absoluteIndex, true));
+        absoluteIndex++;
+      } else next.append(document.createTextNode(character));
     }
   } else next.append(document.createTextNode("最後一段，跟住你嘅節奏完成。"));
   $("#passage").setAttribute("aria-label", `${question.text} 目前要打：${tokens[index]?.hanzi ?? "已完成全部題目"}`);

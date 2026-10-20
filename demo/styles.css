@@ -95,16 +95,15 @@ h2 { font-size: 22px; line-height: 1.4; }
 .typing-surface:focus-visible { outline: 2px solid var(--green); outline-offset: 8px; border-radius: 4px; }
 body.running .typing-surface { cursor: text; }
 .passage { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px 6px; margin: 0; padding: 0 0 10px; font-size: 36px; line-height: 1.3; font-weight: 600; }
-.glyph { position: relative; display: inline-flex; flex-direction: column; align-items: center; width: 52px; color: #89938b; }
-.glyph-answer { display: block; width: 100%; height: 26px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 16px; line-height: 24px; font-weight: 500; }
+.glyph { position: relative; display: inline-flex; flex-direction: column; align-items: center; width: max-content; min-width: 64px; max-width: 100%; color: #89938b; }
 .glyph-hanzi { position: relative; display: inline-block; }
-.glyph-ruby { ruby-align: center; ruby-position: over; }
-.glyph-hint { color: var(--ink); font-size: 16px; font-weight: 500; line-height: 1.5; white-space: nowrap; }
-.show-hints .glyph { width: max-content; min-width: 52px; padding-bottom: 36px; }
-.show-hints .glyph-answer { position: absolute; bottom: 0; left: 0; }
-.show-hints .glyph.punctuated { width: max-content; min-width: 78px; }
-.show-hints .glyph.punctuated .glyph-answer { width: calc(100% - 26px); }
-.show-hints .glyph > .punctuation { bottom: 36px; }
+.glyph-ruby { display: inline-flex; flex-direction: column-reverse; align-items: center; max-width: 100%; }
+.glyph-reading { display: block; min-height: 28px; max-width: 100%; text-align: center; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 17px; font-weight: 500; line-height: 28px; overflow-wrap: anywhere; }
+.reading-hint { color: #737c73; }
+.reading-typed { color: #202722; }
+.reading-correct, .reading-wrong { margin-inline: 1px; padding: 2px 3px; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.reading-correct { color: #20643f; background: #d7ebdc; }
+.reading-wrong { color: #a12e2e; background: #f4dada; text-decoration: line-through; text-decoration-thickness: 2px; }
 .glyph.current { color: var(--orange); }
 .glyph.current .glyph-hanzi::after { content: ""; position: absolute; bottom: -7px; left: 0; width: 100%; height: 4px; border-radius: 2px; background: var(--orange); }
 body.running .typing-surface:not(.focused) .glyph.current .glyph-hanzi::after { background: #adb5aa; }
@@ -112,7 +111,7 @@ body.running .typing-surface:not(.focused) .glyph.current .glyph-hanzi::after { 
 .glyph.incorrect { color: #ad3323; }
 .glyph.incorrect .glyph-hanzi { text-decoration: underline wavy; text-decoration-thickness: 1px; text-underline-offset: 6px; }
 .punctuation { color: #89938b; }
-.glyph.punctuated { width: 78px; padding-right: 26px; }
+.glyph.punctuated { min-width: 90px; padding-right: 26px; }
 .glyph > .punctuation { position: absolute; right: 0; bottom: 0; }
 .typing-capture { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; pointer-events: none; }
 .focus-hint { display: none; position: absolute; top: 100%; margin-top: 0; color: var(--muted); font-size: 14px; font-weight: 400; }
@@ -120,8 +119,8 @@ body.running .typing-surface:not(.focused) .focus-hint { display: block; }
 .up-next { display: flex; gap: 12px; align-items: baseline; font-size: 14px; color: var(--muted); margin-bottom: 24px; }
 .up-next > span { white-space: nowrap; }
 .up-next p { margin: 0; }
-.up-next ruby { ruby-align: center; ruby-position: over; }
-.up-next rt { color: var(--muted); font-size: 14px; line-height: 1.5; white-space: nowrap; }
+.up-next ruby { vertical-align: bottom; }
+.up-next .glyph-reading { min-height: 21px; font-size: 14px; line-height: 1.5; }
 .up-next .show-hints { font-size: 16px; line-height: 2.6; }
 .typing-form { margin: 0; }
 .input-bottom { padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -253,10 +252,8 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   .typing-area { padding: 20px 18px; }
   .component-stats { padding: 20px 18px; }
   .passage { font-size: 32px; gap: 22px 4px; }
-  .glyph { width: 46px; }
-  .glyph.punctuated { width: 72px; }
-  .show-hints .glyph { min-width: 46px; }
-  .show-hints .glyph.punctuated { min-width: 72px; }
+  .glyph { min-width: 60px; }
+  .glyph.punctuated { min-width: 86px; }
   .up-next { gap: 10px; }
   .card-foot { padding: 12px 18px; }
   .secondary-view { padding-top: 24px; }

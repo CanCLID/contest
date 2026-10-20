@@ -155,10 +155,12 @@ const names = records => records.map(record => record.name);
 const persisted = store => JSON.parse(store.get(storageKey) || "[]");
 const glyphs = tab => tab.get("#passage").children.filter(node => node.classList.contains("glyph"));
 const currentGlyph = tab => glyphs(tab).find(node => node.classList.contains("current"));
-const draft = tab => currentGlyph(tab)?.children[0].textContent;
-const passageRubies = tab => glyphs(tab).map(glyph => glyph.children[1]);
+const readingOf = glyph => glyph?.children[0].children[1];
+const draft = tab => readingOf(currentGlyph(tab))?.dataset.input;
+const passageRubies = tab => glyphs(tab).map(glyph => glyph.children[0]);
 const previewRubies = tab => tab.get("#next-sentence").children.filter(node => node.tagName === "RUBY");
-const rubyHints = tab => [...passageRubies(tab), ...previewRubies(tab)].map(ruby => ruby.children[1]);
+const rubyReadings = tab => [...passageRubies(tab), ...previewRubies(tab)].map(ruby => ruby.children[1]);
+const readingSegments = reading => reading.children.map(part => [part.className, part.textContent]);
 
 function expectRubySentence(rubies, expected, visible) {
   assert.equal(rubies.length, expected.length);
@@ -167,20 +169,125 @@ function expectRubySentence(rubies, expected, visible) {
     assert.equal(ruby.className, "glyph-ruby");
     assert.equal(ruby.children[0].className, "glyph-hanzi");
     assert.equal(ruby.children[0].textContent, expected[index].hanzi);
-    const hint = ruby.children[1];
-    assert.equal(hint.tagName, "RT");
-    assert.equal(hint.className, "glyph-hint");
-    assert.equal(hint.textContent, expected[index].answers.join(" / "));
-    assert.match(hint.textContent, /^[a-z]+(?: \/ [a-z]+)*$/, "ruby readings must be complete and toneless");
-    assert.equal(hint.hidden, !visible);
+    const reading = ruby.children[1];
+    assert.equal(reading.tagName, "RT");
+    assert.equal(reading.className, "glyph-reading");
+    const expectedText = reading.children.filter(part => part.className !== "reading-wrong").map(part => part.textContent).join("");
+    if (reading.dataset.input) assert.ok(expected[index].answers.includes(expectedText), expectedText);
+    else assert.equal(expectedText, expected[index].answers.join(" / "));
+    assert.match(expectedText, /^[a-z]+(?: \/ [a-z]+)*$/, "ruby readings must be complete and toneless");
+    assert.equal(reading.hidden, !visible);
   });
 }
+
+test("one reading line turns the hinted prefix black without rebuilding the glyph, ruby or rt", () => {
+  const tab = openTab();
+  readyRound(tab, "Alpha");
+  const glyph = currentGlyph(tab);
+  const ruby = glyph.children[0];
+  const reading = readingOf(glyph);
+  assert.equal(glyph.children.length, 1);
+  assert.equal(reading.hidden, false, "the empty passage reading reserves its row");
+  assert.deepEqual(readingSegments(reading), []);
+  tab.get("#hint-toggle").fire("click");
+  for (const [input, expected] of [
+    ["", [["reading-hint", "gam"]]],
+    ["g", [["reading-typed", "g"], ["reading-hint", "am"]]],
+    ["ga", [["reading-typed", "ga"], ["reading-hint", "m"]]],
+    ["gam", [["reading-typed", "gam"]]],
+    ["gz", [["reading-typed", "g"], ["reading-correct", "a"], ["reading-wrong", "z"], ["reading-hint", "m"]]],
+  ]) {
+    tab.evaluate(`setDraft(${JSON.stringify(input)})`);
+    assert.deepEqual(readingSegments(reading), expected);
+    assert.equal(reading.dataset.input, input);
+    assert.equal(currentGlyph(tab), glyph);
+    assert.equal(glyph.children[0], ruby);
+    assert.equal(readingOf(glyph), reading);
+  }
+  tab.get("#hint-toggle").fire("click");
+  assert.deepEqual(readingSegments(reading), [["reading-typed", "gz"]]);
+  assert.equal(readingOf(glyph), reading);
+  assert.ok(previewRubies(tab).every(ruby => ruby.children[1].hidden));
+  tab.evaluate('setDraft("")');
+  assert.equal(reading.hidden, false);
+  assert.deepEqual(readingSegments(reading), []);
+});
+
+test("submitted errors show initial and rime corrections even with hints off", () => {
+  for (const [expected, input, segments] of [
+    ["bui", "bei", [["reading-typed", "b"], ["reading-correct", "ui"], ["reading-wrong", "ei"]]],
+    ["gam", "g", [["reading-typed", "g"], ["reading-correct", "am"]]],
+    ["gam", "gamm", [["reading-typed", "g"], ["reading-correct", "am"], ["reading-wrong", "amm"]]],
+    ["gam", "kam", [["reading-wrong", "k"], ["reading-correct", "g"], ["reading-typed", "am"]]],
+    ["aa", "baa", [["reading-wrong", "b"], ["reading-typed", "aa"]]],
+  ]) {
+    const tab = openTab();
+    tab.evaluate(`tokens[0] = { ...tokens[0], answers: [${JSON.stringify(expected)}] }`);
+    readyRound(tab, "Alpha");
+    tab.evaluate(`setDraft(${JSON.stringify(input)}); submit()`);
+    const reading = readingOf(glyphs(tab)[0]);
+    assert.deepEqual(readingSegments(reading), segments, `${expected} vs ${input}`);
+    assert.equal(reading.dataset.input, input);
+    assert.match(reading.getAttribute("aria-label"), new RegExp(`輸入 ${input}，正確讀法 ${expected}`));
+    assert.ok(reading.children.filter(part => part.className === "reading-wrong").every(part => part.tagName === "DEL"));
+    assert.equal(tab.evaluate("round.hintsUsed"), false, "post-submit correction does not count as a hint");
+    tab.get("#hint-toggle").fire("click");
+    tab.get("#hint-toggle").fire("click");
+    assert.equal(readingOf(glyphs(tab)[0]), reading);
+    assert.deepEqual(readingSegments(reading), segments);
+  }
+});
+
+test("Backspace restores an incorrect answer for repair in the same reading line", () => {
+  const tab = openTab();
+  readyRound(tab, "Alpha");
+  tab.get("#hint-toggle").fire("click");
+  tab.evaluate('setDraft("gan"); submit()');
+  const surface = tab.get("#typing-surface");
+  const key = value => surface.fire("keydown", { key: value, preventDefault() {} });
+  key("Backspace");
+  const reading = readingOf(currentGlyph(tab));
+  assert.equal(reading.dataset.input, "gan");
+  assert.deepEqual(readingSegments(reading), [["reading-typed", "ga"], ["reading-correct", "m"], ["reading-wrong", "n"]]);
+  key("g");
+  assert.deepEqual(readingSegments(reading), [["reading-typed", "g"], ["reading-hint", "am"]]);
+  key("a");
+  key("m");
+  assert.equal(readingOf(currentGlyph(tab)), reading);
+  assert.deepEqual(readingSegments(reading), [["reading-typed", "gam"]]);
+  key("Enter");
+  assert.equal(tab.evaluate("run.errors"), 0);
+  assert.deepEqual(readingSegments(readingOf(glyphs(tab)[0])), [["reading-typed", "gam"]]);
+});
+
+test("accepted variants select a valid prefix or exact reading, and long errors stay in a few segments", () => {
+  const tab = openTab();
+  tab.evaluate('tokens[0] = { ...tokens[0], answers: ["haang", "hang"] }');
+  readyRound(tab, "Alpha");
+  tab.get("#hint-toggle").fire("click");
+  const reading = readingOf(currentGlyph(tab));
+  assert.deepEqual(readingSegments(reading), [["reading-hint", "haang / hang"]]);
+  tab.evaluate('setDraft("han")');
+  assert.deepEqual(readingSegments(reading), [["reading-typed", "han"], ["reading-hint", "g"]]);
+  tab.evaluate('setDraft("hang"); submit()');
+  assert.equal(tab.evaluate("run.answers[0].correct"), true);
+  assert.deepEqual(readingSegments(readingOf(glyphs(tab)[0])), [["reading-typed", "hang"]]);
+  assert.equal(tab.evaluate('expectedReading(["gam", "kam"], "kaa")'), "kam");
+  assert.equal(tab.evaluate('expectedReading(["gam", "gaam"], "gum")'), "gam", "ties retain answer order");
+  tab.evaluate('setDraft("z".repeat(100000))');
+  const longReading = readingOf(currentGlyph(tab));
+  assert.equal(longReading.dataset.input.length, 100000);
+  assert.ok(longReading.children.length <= 4, "a long typo must not allocate a node or diff matrix per letter");
+  assert.equal(longReading.children.find(part => part.className === "reading-wrong").textContent.length, 100000);
+  tab.evaluate("submit()");
+  assert.ok(readingOf(glyphs(tab)[1]).children.length <= 4);
+});
 
 test("ruby hints only toggle during a run and preserve draft, selection, clock, focus and composition", () => {
   const tab = openTab();
   const toggle = tab.get("#hint-toggle");
   assert.equal(toggle.disabled, true);
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
   toggle.fire("click");
   assert.equal(tab.evaluate("round"), null);
   tab.evaluate('group = "mobile"');
@@ -192,13 +299,13 @@ test("ruby hints only toggle during a run and preserve draft, selection, clock, 
   tab.evaluate("tick()");
   assert.equal(toggle.disabled, false);
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
 
   tab.setTime(4250);
   tab.evaluate('setDraft("gamm", 1, 3); renderMetrics()');
   const answer = tab.get("#answer");
   const glyph = currentGlyph(tab);
-  const hints = rubyHints(tab);
+  const hints = rubyReadings(tab);
   const run = tab.evaluate("run");
   const metrics = tab.evaluate("JSON.stringify(getMetrics(run, Date.now()))");
   const focusCalls = answer.focusCalls;
@@ -223,8 +330,8 @@ test("ruby hints only toggle during a run and preserve draft, selection, clock, 
   // Keyboard-generated clicks work without a preceding pointer event.
   toggle.fire("click", { detail: 0 });
   assert.equal(toggle.getAttribute("aria-pressed"), "false");
-  assert.ok(hints.every(hint => hint.hidden));
-  assert.deepEqual(rubyHints(tab), hints, "toggling retains the existing ruby nodes");
+  assert.ok(hints.every(reading => !reading.children.some(part => part.className === "reading-hint")));
+  assert.deepEqual(rubyReadings(tab), hints, "toggling retains the existing ruby nodes");
   assert.equal(tab.get("#typing-surface").classList.contains("show-hints"), false);
   assert.equal(tab.get("#next-sentence").classList.contains("show-hints"), false);
   assert.equal(tab.evaluate("round.hintsUsed"), true);
@@ -259,7 +366,7 @@ test("ruby hints cover correct, wrong and upcoming characters across sentences, 
     tab.setTime(4000 + index * 1000);
     tab.evaluate(`setDraft(${JSON.stringify(index === 0 ? "zzz" : tokens[index].answers[0])}); submit()`);
     if (index === 1) {
-      assert.equal(glyphs(tab)[0].children[0].textContent, "zzz");
+      assert.equal(readingOf(glyphs(tab)[0]).dataset.input, "zzz");
       assert.equal(glyphs(tab)[0].classList.contains("incorrect"), true);
       assert.equal(glyphs(tab)[1].classList.contains("correct"), true);
       expectRubySentence(passageRubies(tab), tokens.filter(token => token.sentenceIndex === 0), true);
@@ -279,16 +386,16 @@ test("ruby hints cover correct, wrong and upcoming characters across sentences, 
     tab.evaluate(`setDraft(${JSON.stringify(tokens[index].answers[0])}); submit()`);
   }
   expectRubySentence(passageRubies(tab), expectedTokens.filter(token => token.sentenceIndex === 2), true);
-  assert.equal(currentGlyph(tab).children[1].children[1].textContent, "haang / hang");
+  assert.equal(textOf(readingOf(currentGlyph(tab))), "haang / hang");
   finishRemaining(tab);
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
   assert.equal(tab.get("#typing-surface").classList.contains("show-hints"), false);
   assert.equal(tab.get("#hint-toggle").disabled, true);
   assert.equal(tab.get("#hint-toggle").getAttribute("aria-pressed"), "false");
   assert.equal(tab.records()[0].hintsUsed, true);
   assert.match(tab.get("#result-summary").textContent, /用過提示/);
   tab.get("#hint-toggle").fire("click");
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
 
   tab.setTime(100000);
   tab.get("#play-again").fire("click");
@@ -297,12 +404,12 @@ test("ruby hints cover correct, wrong and upcoming characters across sentences, 
   assert.equal(tab.get("#hint-toggle").disabled, true);
   tab.setTime(103000);
   tab.evaluate("tick()");
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
   finishRemaining(tab, 100000);
   assert.deepEqual(tab.records().map(record => record.hintsUsed), [true, false]);
   assert.doesNotMatch(tab.get("#result-summary").textContent, /用過提示/);
   tab.get("#edit-settings").fire("click");
-  assert.ok(rubyHints(tab).every(hint => hint.hidden));
+  assert.ok(rubyReadings(tab).every(reading => !reading.children.some(part => part.className === "reading-hint")));
   assert.equal(tab.get("#hint-used").hidden, true);
   assert.equal(tab.get("#hint-toggle").disabled, true);
 });
@@ -582,9 +689,9 @@ test("typing shows Jyutping above the current character without replacing or scr
   readyRound(tab, "Alpha");
   const glyph = currentGlyph(tab);
   const scrollCalls = glyph.scrollCalls;
-  assert.equal(glyph.children[1].children[0].textContent, tokens[0].hanzi);
-  assert.equal(glyph.children[0].className, "glyph-answer");
-  assert.equal(glyph.children[1].className, "glyph-ruby");
+  assert.equal(glyph.children[0].children[0].textContent, tokens[0].hanzi);
+  assert.equal(glyph.children[0].className, "glyph-ruby");
+  assert.equal(readingOf(glyph).className, "glyph-reading");
   for (const value of ["g", "ga", tokens[0].answers[0]]) {
     tab.get("#answer").value = value;
     tab.get("#answer").fire("input", { inputType: "insertText" });
@@ -596,9 +703,45 @@ test("typing shows Jyutping above the current character without replacing or scr
   tab.get("#answer").fire("keydown", { key: "Enter", preventDefault() { prevented = true; } });
   assert.equal(prevented, true);
   assert.equal(tab.evaluate("run.index"), 1);
-  assert.equal(glyphs(tab)[0].children[0].textContent, tokens[0].answers[0]);
+  assert.equal(readingOf(glyphs(tab)[0]).dataset.input, tokens[0].answers[0]);
   assert.equal(glyphs(tab)[0].classList.contains("correct"), true);
   assert.equal(draft(tab), "");
+});
+
+test("mobile draft wrapping moves the capture input without scrolling, focusing or rebuilding", () => {
+  const tab = openTab();
+  tab.evaluate('group = "mobile"');
+  readyRound(tab, "Alpha");
+  tab.get("#hint-toggle").fire("click");
+  const glyph = currentGlyph(tab);
+  const reading = readingOf(glyph);
+  const answer = tab.get("#answer");
+  const surface = tab.get("#typing-surface");
+  surface.scrollLeft = 3;
+  surface.scrollTop = 7;
+  surface.getBoundingClientRect = () => ({ left: 10, top: 80 });
+  glyph.getBoundingClientRect = function () {
+    this.measureCalls++;
+    return reading.dataset.input.length > 3
+      ? { left: 15, top: 180, width: 90 }
+      : { left: 250, top: 100, width: 60 };
+  };
+  tab.evaluate('setDraft("ga")');
+  assert.equal(answer.style.left, "273px");
+  assert.equal(answer.style.top, "27px");
+  const measurements = glyph.measureCalls;
+  const scrolls = glyph.scrollCalls;
+  const focuses = answer.focusCalls;
+  tab.evaluate('setDraft("gamm", 1, 3)');
+  assert.equal(answer.style.left, "53px");
+  assert.equal(answer.style.top, "107px");
+  assert.equal(glyph.measureCalls, measurements + 1);
+  assert.equal(glyph.scrollCalls, scrolls);
+  assert.equal(answer.focusCalls, focuses);
+  assert.deepEqual([answer.selectionStart, answer.selectionEnd], [1, 3]);
+  assert.equal(currentGlyph(tab), glyph);
+  assert.equal(readingOf(glyph), reading);
+  assert.equal(reading.dataset.input, "gamm");
 });
 
 test("empty submissions clear the displayed draft without advancing", () => {
@@ -662,7 +805,7 @@ test("mobile spaces submit through beforeinput or the uncancelable input fallbac
   answer.fire("input", { inputType: "insertText", data: " " });
   assert.equal(tab.evaluate("run.index"), 2);
   assert.equal(answer.value, "");
-  assert.equal(glyphs(tab)[1].children[0].textContent, tokens[1].answers[0]);
+  assert.equal(readingOf(glyphs(tab)[1]).dataset.input, tokens[1].answers[0]);
 });
 
 test("clicking the passage or returning to the arena restores focus without intercepting Tab", () => {
@@ -767,7 +910,7 @@ test("an incorrect submission advances to the next character and clears the inpu
   assert.equal(tab.get("#answer").value, "");
   assert.equal(tab.evaluate("getMetrics(run, Date.now()).correct"), 0);
   assert.equal(tab.evaluate("getMetrics(run, Date.now()).errors"), 1);
-  assert.equal(glyphs(tab)[0].children[0].textContent, "zzz");
+  assert.equal(readingOf(glyphs(tab)[0]).dataset.input, "zzz");
   assert.equal(glyphs(tab)[0].classList.contains("incorrect"), true);
   assert.equal(draft(tab), "");
   assert.deepEqual(tab.records(), []);
