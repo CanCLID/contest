@@ -126,8 +126,8 @@ function startRound() {
   countdownEnds = Date.now() + 3000;
   $("#setup-fields").disabled = true;
   $("#start").disabled = true;
-  $("#start").textContent = "準備起跑…";
-  $("#start-note").textContent = "本輪組別已鎖定，打完全文就結算。";
+  $("#start").textContent = "準備中…";
+  $("#start-note").textContent = "倒數 3 秒開始";
   $("#cancel-run").hidden = false;
   $("#result").hidden = true;
   $("#typing-form").hidden = false;
@@ -167,8 +167,8 @@ function tick() {
     $("#submit-answer").disabled = false;
     $("#race-status").textContent = "試玩進行中";
     $("#status-dot").classList.add("live");
-    $("#start").textContent = "跟住你嘅節奏打";
-    $("#start-note").textContent = "最後一字提交即完場 · 中途唔暫停";
+    $("#start").textContent = "進行中";
+    $("#start-note").textContent = "最後一字提交即完場";
     $("#input-feedback").textContent = "開始喇！唔使打聲調數字。";
     if (!$("#arena-view").hidden) $("#answer").focus({ preventScroll: true });
     announce("開始！唔使打聲調數字。");
@@ -195,9 +195,9 @@ function submit() {
   }
   $("#answer").value = "";
   if (run.lastResult === "correct") {
-    $("#input-feedback").textContent = `啱喇！下一個字：「${tokens[run.index].hanzi}」。`;
+    $("#input-feedback").textContent = `下一字：${tokens[run.index].hanzi}`;
   } else {
-    $("#input-feedback").textContent = "呢個字未啱，已繼續；可以按 Backspace 退返修正。";
+    $("#input-feedback").textContent = "未啱；按 Backspace 可修改。";
   }
   renderPassage();
   renderMetrics();
@@ -209,7 +209,7 @@ function undoLast() {
   $("#answer").value = run.lastAnswer;
   $("#answer").focus({ preventScroll: true });
   $("#answer").select();
-  $("#input-feedback").textContent = `退返「${tokens[run.index].hanzi}」，修改後再確認。計時繼續。`;
+  $("#input-feedback").textContent = `修改「${tokens[run.index].hanzi}」後確認。`;
   renderPassage();
   renderMetrics();
 }
@@ -234,11 +234,11 @@ function completeRound() {
   $("#setup-fields").disabled = false;
   $("#start").disabled = false;
   $("#start").innerHTML = '再玩一場 <span aria-hidden="true">↗</span>';
-  $("#start-note").textContent = "同一篇文章，再挑戰自己。";
+  $("#start-note").textContent = "";
   $("#race-status").textContent = "本輪已完成";
   $("#status-dot").classList.remove("live");
-  $("#result-title").textContent = `全文完成 · 綜合分 ${metrics.score.toFixed(1)}`;
-  $("#result-summary").textContent = `${round.name}，用時 ${formatTime(metrics.elapsedSeconds)}，${metrics.correct} 個正確、${metrics.errors} 個錯誤音節。綜合分係試算，正式公式未定案。`;
+  $("#result-title").textContent = `全文完成 · 試算綜合分 ${metrics.score.toFixed(1)}`;
+  $("#result-summary").textContent = `${round.name} · ${formatTime(metrics.elapsedSeconds)} · ${metrics.correct} 啱／${metrics.errors} 錯`;
   if (!resultSaved) {
     const result = { ...round, id: crypto.randomUUID(), correct: metrics.correct, errors: metrics.errors, elapsedSeconds: metrics.elapsedSeconds, at: Date.now() };
     // Merge persisted rounds with this tab's rounds, including failed writes.
@@ -268,7 +268,7 @@ function resetRound() {
   $("#cancel-run").hidden = true;
   $("#start").disabled = false;
   $("#start").innerHTML = '開始試玩 <span aria-hidden="true">↗</span>';
-  $("#start-note").textContent = "倒數 3 秒後開始 · 最後一字提交即完場";
+  $("#start-note").textContent = "倒數 3 秒開始";
   $("#race-status").textContent = "賽道準備好";
   $("#race-group").textContent = "本機試玩 · 無需登入";
   $("#status-dot").classList.remove("live");
@@ -295,7 +295,7 @@ function renderTable(container, items, sample = false) {
   if (!items.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = "<span aria-hidden='true'>↗</span>呢條賽道，等你留低第一個紀錄。<p>完成呢篇文章，成績就會出現喺所選組別。</p>";
+    empty.innerHTML = "未有紀錄。<p>完成全文後會顯示喺呢度。</p>";
     container.append(empty);
     return;
   }
@@ -343,7 +343,7 @@ function renderBoards() {
     errors: (index + 1) * 2, at: index,
   }));
   renderTable($("#sample-board"), sample, true);
-  $("#storage-note").textContent = storageAvailable ? "" : "瀏覽器暫時唔容許保存紀錄；新成績只會喺今次開啟頁面期間保留。";
+  $("#storage-note").textContent = storageAvailable ? "" : "未能保存紀錄，關頁後新成績會遺失。";
   $("#clear-scores").hidden = records.length === 0;
 }
 
@@ -409,7 +409,7 @@ window.addEventListener("storage", event => {
 
 setPressed("[data-group]", "group", group);
 $("#article-title").textContent = ARTICLE.title;
-$("#article-detail").textContent = `示範粵文 · ${tokens.length} 音節 · 打完鬥快`;
+$("#article-detail").textContent = `示範粵文 · ${tokens.length} 音節`;
 $("#board-article").textContent = `同篇比較：${ARTICLE.title}`;
 renderPassage();
 renderMetrics();
