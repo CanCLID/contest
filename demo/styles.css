@@ -28,7 +28,7 @@ h2 { font-size: 22px; line-height: 1.4; }
 .brand-mark > span { position: absolute; right: -5px; top: -7px; background: var(--paper); color: var(--orange); font-size: 22px; width: 20px; height: 22px; line-height: 22px; }
 .brand-type { font-size: 22px; font-weight: 700; letter-spacing: 1px; }
 .nav { display: flex; gap: 28px; }
-.nav-link { border: 0; background: none; padding: 16px 0; color: var(--muted); font-size: 16px; }
+.nav-link { border: 0; background: none; padding: 16px 0; color: var(--muted); font-size: 16px; text-decoration: none; }
 .nav-link.active { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px var(--orange); }
 .demo-badge, .pill { font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
 .demo-badge { display: flex; align-items: center; gap: 8px; }

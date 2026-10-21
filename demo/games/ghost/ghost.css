@@ -1,0 +1,45 @@
+/* 幽靈競速：只補賽道、對手選擇同賽果嘅樣式，其餘沿用 demo/styles.css。 */
+.view { padding-top: 24px; }
+#setup-view .hero, #setup-view .arena-grid { max-width: 720px; margin-inline: auto; }
+#race-view .race-card, #race-view .round-actions { max-width: 1000px; margin-inline: auto; }
+.nav-link { text-decoration: none; }
+.ghost-tagline { margin: 12px 0 0; color: var(--muted); font-size: 16px; }
+
+.ghost-picker { display: grid; gap: 10px; }
+.opponent-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px; border: 1px solid #cbd3c3; border-radius: 8px; background: var(--white); cursor: pointer; }
+.opponent-option input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--green); }
+.opponent-option.selected { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+.opponent-option.disabled { cursor: default; opacity: .6; }
+.opponent-text strong { display: block; font-size: 16px; }
+.opponent-text small { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+
+.track { display: grid; gap: 14px; padding: 22px 24px; border-bottom: 1px solid var(--line); }
+.lane { display: grid; grid-template-columns: 60px minmax(0, 1fr) 104px; align-items: center; gap: 14px; }
+.lane-label { font-size: 14px; font-weight: 600; }
+.lane-track { height: 14px; border-radius: 7px; background: #edeee5; overflow: hidden; }
+.lane-fill { width: 0; height: 100%; border-radius: 7px; background: var(--green); transition: width .15s linear; }
+.ghost-lane .lane-label { color: var(--muted); }
+.ghost-lane .lane-fill { background: repeating-linear-gradient(90deg, #a9b5a6 0 6px, #c3ccbd 6px 12px); }
+.lane-value { font-size: 14px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+#passage { font-size: 30px; gap: 18px 5px; }
+#passage .glyph { min-width: 54px; }
+#passage .glyph.punctuated { min-width: 78px; padding-right: 22px; }
+#passage .glyph-reading { min-height: 24px; font-size: 15px; line-height: 24px; }
+
+.result-details { display: grid; gap: 6px; margin: 0 0 12px; }
+.result-details > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; }
+.result-details dt { color: var(--muted); font-size: 14px; }
+.result-details dd { margin: 0; font-size: 16px; font-weight: 600; }
+.result .result-best { margin: 0; color: var(--green); font-size: 14px; }
+.result .storage-note { margin: 8px 0 0; color: #ad3323; }
+
+@media (max-width: 600px) {
+  .track { padding: 18px; }
+  .lane { grid-template-columns: 48px minmax(0, 1fr) 86px; gap: 10px; }
+  #passage { font-size: 26px; gap: 14px 4px; }
+  #passage .glyph { min-width: 46px; }
+  #passage .glyph.punctuated { min-width: 66px; padding-right: 18px; }
+  #passage .glyph-reading { font-size: 14px; }
+  .result-details > div { grid-template-columns: 1fr; gap: 2px; }
+}

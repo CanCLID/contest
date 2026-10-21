@@ -7,7 +7,7 @@
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=14">
+  <link rel="stylesheet" href="./styles.css?v=15">
   <script src="./app.mjs?v=14" type="module"></script>
 </head>
 <body>
@@ -22,6 +22,7 @@
         <button class="nav-link active" data-view="arena" aria-current="page">試玩賽場</button>
         <button class="nav-link" data-view="leaderboard">排行榜</button>
         <button class="nav-link" data-view="rules">玩法</button>
+        <a class="nav-link" href="./games/">小遊戲</a>
       </nav>
       <span class="demo-badge"><span></span>試玩模式</span>
     </header>
@@ -117,14 +118,14 @@
         <section class="board-card"><div class="board-heading"><div><h2>無提示成績</h2><p>同組別、文章同規則比較。有提示同無提示合共保存最近 20 輪。</p></div><span class="pill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores">清除本機紀錄</button></section>
         <section id="hinted-board-card" class="board-card" hidden><div class="board-heading"><div><h2>用過提示嘅紀錄</h2><p>按最近完成排列，只供練習參考，唔參與排名。</p></div><span class="pill">用過提示</span></div><div id="hinted-board"></div></section>
         <section class="board-card sample-board"><div class="board-heading"><div><h2>排行榜效果預覽</h2><p>以下全部係虛構示範數據，唔係真人參賽成績。</p></div><span class="pill">示範數據</span></div><div id="sample-board"></div></section>
-        <p class="board-rule">試算綜合分 ＝ 輸入速度 × 準確度²。同分先比較準確度，再比較完成時間；全部相同則並列。正式計分公式未定案。</p>
+        <p class="board-rule">試算綜合分 ＝ 輸入速度 × 準確度²，淨係 demo 試算，方便同場比較。正式方向已定：準確度門檻＋「正確音節／分鐘 × 準確度」，三題型以組內中位數標準化合成，詳見 SPEC §5.5。同分先比較準確度，再比較完成時間；全部相同則並列。</p>
       </section>
 
       <section id="rules-view" class="view secondary-view" hidden aria-labelledby="rules-heading">
         <div class="page-heading"><h1 id="rules-heading">玩法</h1><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
         <div class="rules-grid">
           <article class="rule-card"><h2>輸入同改錯</h2><p>直接打高亮字嘅粵拼，字母會顯示喺漢字上方。只接受 A–Z 字母，唔使聲調或標點，按空白鍵或 Enter 確認，錯字照樣前進。</p><p>未輸入字母時，按 Backspace 退返上一字，亦可退返上一句。最後一字提交即完場，之後唔可以改。</p><p>開「粵拼提示」後，每個字上方都會顯示灰色、無聲調嘅正確粵拼，打啱嘅字母會原位變黑。錯誤部分用紅色刪線標示，旁邊綠色係正確答案。用過提示嘅紀錄會分開顯示，唔參與無提示排名。</p></article>
-          <article class="rule-card"><h2>固定文章，計時完成</h2><p>速度按音節／分鐘計，準確度按保留嘅答案計。改啱唔再扣分，但修正時間照計；中途唔暫停。</p><p>綜合分暫試 <code>速度 × 準確度²</code>（90% 代入 0.9），正式公式未定。只保存完成全文嘅成績。</p></article>
+          <article class="rule-card"><h2>固定文章，計時完成</h2><p>速度按音節／分鐘計，準確度按保留嘅答案計。改啱唔再扣分，但修正時間照計；中途唔暫停。</p><p>綜合分暫試 <code>速度 × 準確度²</code>（90% 代入 0.9），淨係 demo 試算、方便比較。正式方向已定：準確度門檻＋<code>正確音節／分鐘 × 準確度</code>，三題型以組內中位數標準化合成，詳見 SPEC §5.5。只保存完成全文嘅成績。</p></article>
           <article class="rule-card"><h2>手機組同電腦組</h2><p>螢幕鍵盤揀手機組，實體鍵盤揀電腦組，平板亦按鍵盤分類。手機點一下題目，就可以用系統鍵盤輸入。</p><p>請自行確認組別，開賽後鎖定。網站無法可靠核實裝置或外接鍵盤。</p></article>
           <article class="rule-card rule-highlight"><h2>本機示範</h2><p>目前用原創示範文章，正式文章稍後提供。冇帳戶或同步對賽，紀錄只存喺呢個瀏覽器。</p><p>排行榜示範人物同成績均為虛構；未驗證防作弊或 2,000 人比賽容量。</p></article>
         </div>

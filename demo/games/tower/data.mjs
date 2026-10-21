@@ -1,0 +1,808 @@
+// 聲韻解鎖塔題庫：常用、讀音無爭議嘅單字，粵拼一律小寫、無聲調。
+// 注意：未經人手校對，正式賽前須校對。
+// 每個字嘅元件（initial／nucleus／coda）由 splitJyutping 即時計出；
+// 多過一個讀音嘅字，以第一個讀音嘅元件為準。
+import { COMPONENTS, splitJyutping } from "../../engine.mjs";
+
+const BANK_A = [
+  // 韻腹 aa（無韻尾）
+  { hanzi: "爸", answers: ["baa"] },
+  { hanzi: "巴", answers: ["baa"] },
+  { hanzi: "怕", answers: ["paa"] },
+  { hanzi: "爬", answers: ["paa"] },
+  { hanzi: "媽", answers: ["maa"] },
+  { hanzi: "麻", answers: ["maa"] },
+  { hanzi: "馬", answers: ["maa"] },
+  { hanzi: "罵", answers: ["maa"] },
+  { hanzi: "花", answers: ["faa"] },
+  { hanzi: "化", answers: ["faa"] },
+  { hanzi: "打", answers: ["daa"] },
+  { hanzi: "拿", answers: ["naa"] },
+  { hanzi: "啦", answers: ["laa"] },
+  { hanzi: "家", answers: ["gaa"] },
+  { hanzi: "加", answers: ["gaa"] },
+  { hanzi: "牙", answers: ["ngaa"] },
+  { hanzi: "蝦", answers: ["haa"] },
+  { hanzi: "瓜", answers: ["gwaa"] },
+  { hanzi: "誇", answers: ["kwaa"] },
+  { hanzi: "話", answers: ["waa"] },
+  { hanzi: "渣", answers: ["zaa"] },
+  { hanzi: "茶", answers: ["caa"] },
+  { hanzi: "沙", answers: ["saa"] },
+  { hanzi: "也", answers: ["jaa"] },
+  { hanzi: "呀", answers: ["aa"] },
+
+  // 韻腹 i（無韻尾）
+  { hanzi: "啲", answers: ["di"] },
+  { hanzi: "知", answers: ["zi"] },
+  { hanzi: "支", answers: ["zi"] },
+  { hanzi: "志", answers: ["zi"] },
+  { hanzi: "紙", answers: ["zi"] },
+  { hanzi: "子", answers: ["zi"] },
+  { hanzi: "次", answers: ["ci"] },
+  { hanzi: "詞", answers: ["ci"] },
+  { hanzi: "思", answers: ["si"] },
+  { hanzi: "詩", answers: ["si"] },
+  { hanzi: "時", answers: ["si"] },
+  { hanzi: "事", answers: ["si"] },
+  { hanzi: "衣", answers: ["ji"] },
+  { hanzi: "意", answers: ["ji"] },
+  { hanzi: "而", answers: ["ji"] },
+  { hanzi: "二", answers: ["ji"] },
+
+  // 韻腹 u（無韻尾）
+  { hanzi: "夫", answers: ["fu"] },
+  { hanzi: "苦", answers: ["fu"] },
+  { hanzi: "富", answers: ["fu"] },
+  { hanzi: "褲", answers: ["fu"] },
+  { hanzi: "父", answers: ["fu"] },
+  { hanzi: "姑", answers: ["gu"] },
+  { hanzi: "古", answers: ["gu"] },
+  { hanzi: "烏", answers: ["wu"] },
+  { hanzi: "湖", answers: ["wu"] },
+
+  // 韻腹 o（無韻尾）
+  { hanzi: "波", answers: ["bo"] },
+  { hanzi: "破", answers: ["po"] },
+  { hanzi: "錯", answers: ["co"] },
+  { hanzi: "魔", answers: ["mo"] },
+  { hanzi: "火", answers: ["fo"] },
+  { hanzi: "科", answers: ["fo"] },
+  { hanzi: "多", answers: ["do"] },
+  { hanzi: "拖", answers: ["to"] },
+  { hanzi: "囉", answers: ["lo"] },
+  { hanzi: "哥", answers: ["go"] },
+  { hanzi: "個", answers: ["go"] },
+  { hanzi: "左", answers: ["zo"] },
+  { hanzi: "初", answers: ["co"] },
+  { hanzi: "梳", answers: ["so"] },
+  { hanzi: "河", answers: ["ho"] },
+  { hanzi: "可", answers: ["ho"] },
+  { hanzi: "我", answers: ["ngo"] },
+  { hanzi: "窩", answers: ["wo"] },
+  { hanzi: "和", answers: ["wo"] },
+  { hanzi: "過", answers: ["gwo"] },
+
+  // 韻腹 e（無韻尾）
+  { hanzi: "咩", answers: ["me"] },
+  { hanzi: "嘅", answers: ["ge"] },
+  { hanzi: "姐", answers: ["ze"] },
+  { hanzi: "車", answers: ["ce"] },
+  { hanzi: "些", answers: ["se"] },
+  { hanzi: "寫", answers: ["se"] },
+  { hanzi: "嘢", answers: ["je"] },
+  { hanzi: "夜", answers: ["je"] },
+
+  // 韻腹 oe（無韻尾）
+  { hanzi: "靴", answers: ["hoe"] },
+
+  // 韻腹 yu（無韻尾）
+  { hanzi: "魚", answers: ["jyu"] },
+  { hanzi: "雨", answers: ["jyu"] },
+  { hanzi: "書", answers: ["syu"] },
+  { hanzi: "樹", answers: ["syu"] },
+  { hanzi: "住", answers: ["zyu"] },
+  { hanzi: "豬", answers: ["zyu"] },
+  { hanzi: "主", answers: ["zyu"] },
+  { hanzi: "語", answers: ["jyu"] },
+  { hanzi: "如", answers: ["jyu"] },
+  { hanzi: "處", answers: ["cyu"] },
+
+  // 韻腹 m／ng
+  { hanzi: "唔", answers: ["m"] },
+  { hanzi: "五", answers: ["ng"] },
+  { hanzi: "午", answers: ["ng"] },
+  { hanzi: "誤", answers: ["ng"] },
+
+  // 韻尾 i · 韻腹 aa
+  { hanzi: "街", answers: ["gaai"] },
+  { hanzi: "買", answers: ["maai"] },
+  { hanzi: "賣", answers: ["maai"] },
+  { hanzi: "大", answers: ["daai"] },
+  { hanzi: "太", answers: ["taai"] },
+  { hanzi: "拜", answers: ["baai"] },
+  { hanzi: "奶", answers: ["naai"] },
+  { hanzi: "快", answers: ["faai"] },
+  { hanzi: "怪", answers: ["gwaai"] },
+  { hanzi: "壞", answers: ["waai"] },
+  { hanzi: "解", answers: ["gaai"] },
+  { hanzi: "鞋", answers: ["haai"] },
+
+  // 韻尾 u · 韻腹 aa
+  { hanzi: "包", answers: ["baau"] },
+  { hanzi: "貓", answers: ["maau"] },
+  { hanzi: "交", answers: ["gaau"] },
+  { hanzi: "考", answers: ["haau"] },
+  { hanzi: "找", answers: ["zaau"] },
+  { hanzi: "炒", answers: ["caau"] },
+  { hanzi: "飽", answers: ["baau"] },
+  { hanzi: "跑", answers: ["paau"] },
+  { hanzi: "咬", answers: ["ngaau"] },
+
+  // 韻尾 m · 韻腹 aa
+  { hanzi: "三", answers: ["saam"] },
+  { hanzi: "衫", answers: ["saam"] },
+  { hanzi: "南", answers: ["naam"] },
+  { hanzi: "藍", answers: ["laam"] },
+  { hanzi: "減", answers: ["gaam"] },
+  { hanzi: "喊", answers: ["haam"] },
+  { hanzi: "擔", answers: ["daam"] },
+  { hanzi: "貪", answers: ["taam"] },
+  { hanzi: "參", answers: ["caam"] },
+  { hanzi: "監", answers: ["gaam"] },
+
+  // 韻尾 n · 韻腹 aa
+  { hanzi: "山", answers: ["saan"] },
+  { hanzi: "單", answers: ["daan"] },
+  { hanzi: "但", answers: ["daan"] },
+  { hanzi: "難", answers: ["naan"] },
+  { hanzi: "懶", answers: ["laan"] },
+  { hanzi: "間", answers: ["gaan"] },
+  { hanzi: "限", answers: ["haan"] },
+  { hanzi: "讚", answers: ["zaan"] },
+  { hanzi: "餐", answers: ["caan"] },
+  { hanzi: "班", answers: ["baan"] },
+  { hanzi: "板", answers: ["baan"] },
+  { hanzi: "慢", answers: ["maan"] },
+  { hanzi: "萬", answers: ["maan"] },
+  { hanzi: "飯", answers: ["faan"] },
+  { hanzi: "灣", answers: ["waan"] },
+  { hanzi: "關", answers: ["gwaan"] },
+
+  // 韻尾 ng · 韻腹 aa
+  { hanzi: "冷", answers: ["laang"] },
+  { hanzi: "盲", answers: ["maang"] },
+  { hanzi: "撐", answers: ["caang"] },
+  { hanzi: "硬", answers: ["ngaang"] },
+  { hanzi: "橙", answers: ["caang"] },
+
+  // 韻尾 p · 韻腹 aa
+  { hanzi: "答", answers: ["daap"] },
+  { hanzi: "塔", answers: ["taap"] },
+  { hanzi: "雜", answers: ["zaap"] },
+  { hanzi: "立", answers: ["laap"] },
+  { hanzi: "甲", answers: ["gaap"] },
+  { hanzi: "集", answers: ["zaap"] },
+  { hanzi: "插", answers: ["caap"] },
+
+  // 韻尾 t · 韻腹 aa
+  { hanzi: "殺", answers: ["saat"] },
+  { hanzi: "辣", answers: ["laat"] },
+  { hanzi: "刷", answers: ["caat"] },
+  { hanzi: "八", answers: ["baat"] },
+  { hanzi: "發", answers: ["faat"] },
+  { hanzi: "達", answers: ["daat"] },
+  { hanzi: "察", answers: ["caat"] },
+  { hanzi: "法", answers: ["faat"] },
+  { hanzi: "壓", answers: ["aat"] },
+
+  // 韻尾 k · 韻腹 aa
+  { hanzi: "百", answers: ["baak"] },
+  { hanzi: "白", answers: ["baak"] },
+  { hanzi: "拍", answers: ["paak"] },
+  { hanzi: "格", answers: ["gaak"] },
+  { hanzi: "客", answers: ["haak"] },
+  { hanzi: "責", answers: ["zaak"] },
+  { hanzi: "拆", answers: ["caak"] },
+  { hanzi: "測", answers: ["caak"] },
+  { hanzi: "劃", answers: ["waak"] },
+  { hanzi: "額", answers: ["ngaak"] },
+];
+
+const BANK_B = [
+  // 韻尾 i · 韻腹 a
+  { hanzi: "細", answers: ["sai"] },
+  { hanzi: "西", answers: ["sai"] },
+  { hanzi: "低", answers: ["dai"] },
+  { hanzi: "底", answers: ["dai"] },
+  { hanzi: "睇", answers: ["tai"] },
+  { hanzi: "泥", answers: ["nai"] },
+  { hanzi: "禮", answers: ["lai"] },
+  { hanzi: "雞", answers: ["gai"] },
+  { hanzi: "係", answers: ["hai"] },
+  { hanzi: "妻", answers: ["cai"] },
+  { hanzi: "齊", answers: ["cai"] },
+  { hanzi: "批", answers: ["pai"] },
+  { hanzi: "米", answers: ["mai"] },
+  { hanzi: "費", answers: ["fai"] },
+  { hanzi: "位", answers: ["wai"] },
+  { hanzi: "貴", answers: ["gwai"] },
+  { hanzi: "規", answers: ["kwai"] },
+  { hanzi: "危", answers: ["ngai"] },
+
+  // 韻尾 u · 韻腹 a
+  { hanzi: "九", answers: ["gau"] },
+  { hanzi: "狗", answers: ["gau"] },
+  { hanzi: "口", answers: ["hau"] },
+  { hanzi: "後", answers: ["hau"] },
+  { hanzi: "走", answers: ["zau"] },
+  { hanzi: "秋", answers: ["cau"] },
+  { hanzi: "手", answers: ["sau"] },
+  { hanzi: "收", answers: ["sau"] },
+  { hanzi: "豆", answers: ["dau"] },
+  { hanzi: "頭", answers: ["tau"] },
+  { hanzi: "樓", answers: ["lau"] },
+  { hanzi: "流", answers: ["lau"] },
+  { hanzi: "有", answers: ["jau"] },
+  { hanzi: "牛", answers: ["ngau"] },
+  { hanzi: "醜", answers: ["cau"] },
+  { hanzi: "友", answers: ["jau"] },
+
+  // 韻尾 m · 韻腹 a
+  { hanzi: "心", answers: ["sam"] },
+  { hanzi: "金", answers: ["gam"] },
+  { hanzi: "含", answers: ["ham"] },
+  { hanzi: "針", answers: ["zam"] },
+  { hanzi: "沉", answers: ["cam"] },
+  { hanzi: "林", answers: ["lam"] },
+  { hanzi: "音", answers: ["jam"] },
+  { hanzi: "琴", answers: ["kam"] },
+  { hanzi: "深", answers: ["sam"] },
+  { hanzi: "感", answers: ["gam"] },
+  { hanzi: "陰", answers: ["jam"] },
+  { hanzi: "飲", answers: ["jam"] },
+
+  // 韻尾 n · 韻腹 a
+  { hanzi: "人", answers: ["jan"] },
+  { hanzi: "分", answers: ["fan"] },
+  { hanzi: "粉", answers: ["fan"] },
+  { hanzi: "文", answers: ["man"] },
+  { hanzi: "問", answers: ["man"] },
+  { hanzi: "本", answers: ["bun"] },
+  { hanzi: "根", answers: ["gan"] },
+  { hanzi: "很", answers: ["han"] },
+  { hanzi: "真", answers: ["zan"] },
+  { hanzi: "親", answers: ["can"] },
+  { hanzi: "陳", answers: ["can"] },
+  { hanzi: "新", answers: ["san"] },
+  { hanzi: "身", answers: ["san"] },
+  { hanzi: "神", answers: ["san"] },
+  { hanzi: "軍", answers: ["gwan"] },
+  { hanzi: "溫", answers: ["wan"] },
+  { hanzi: "雲", answers: ["wan"] },
+  { hanzi: "搵", answers: ["wan"] },
+  { hanzi: "群", answers: ["kwan"] },
+
+  // 韻尾 ng · 韻腹 a
+  { hanzi: "層", answers: ["cang"] },
+  { hanzi: "燈", answers: ["dang"] },
+  { hanzi: "等", answers: ["dang"] },
+  { hanzi: "朋", answers: ["pang"] },
+  { hanzi: "崩", answers: ["bang"] },
+  { hanzi: "宏", answers: ["wang"] },
+  { hanzi: "藤", answers: ["tang"] },
+
+  // 韻尾 p · 韻腹 a
+  { hanzi: "入", answers: ["jap"] },
+  { hanzi: "十", answers: ["sap"] },
+  { hanzi: "合", answers: ["hap"] },
+  { hanzi: "急", answers: ["gap"] },
+  { hanzi: "及", answers: ["kap"] },
+  { hanzi: "濕", answers: ["sap"] },
+  { hanzi: "執", answers: ["zap"] },
+  { hanzi: "級", answers: ["kap"] },
+  { hanzi: "盒", answers: ["hap"] },
+
+  // 韻尾 t · 韻腹 a
+  { hanzi: "日", answers: ["jat"] },
+  { hanzi: "一", answers: ["jat"] },
+  { hanzi: "不", answers: ["bat"] },
+  { hanzi: "佛", answers: ["fat"] },
+  { hanzi: "七", answers: ["cat"] },
+  { hanzi: "突", answers: ["dat"] },
+  { hanzi: "密", answers: ["mat"] },
+  { hanzi: "筆", answers: ["bat"] },
+  { hanzi: "質", answers: ["zat"] },
+  { hanzi: "實", answers: ["sat"] },
+  { hanzi: "吉", answers: ["gat"] },
+  { hanzi: "骨", answers: ["gwat"] },
+  { hanzi: "屈", answers: ["wat"] },
+
+  // 韻尾 k · 韻腹 a
+  { hanzi: "得", answers: ["dak"] },
+  { hanzi: "黑", answers: ["hak"] },
+  { hanzi: "北", answers: ["bak"] },
+  { hanzi: "墨", answers: ["mak"] },
+  { hanzi: "側", answers: ["zak"] },
+  { hanzi: "特", answers: ["dak"] },
+  { hanzi: "則", answers: ["zak"] },
+
+  // 韻尾 m · 韻腹 i
+  { hanzi: "點", answers: ["dim"] },
+  { hanzi: "店", answers: ["dim"] },
+  { hanzi: "甜", answers: ["tim"] },
+  { hanzi: "尖", answers: ["zim"] },
+  { hanzi: "佔", answers: ["zim"] },
+  { hanzi: "簽", answers: ["cim"] },
+  { hanzi: "劍", answers: ["gim"] },
+  { hanzi: "謙", answers: ["him"] },
+  { hanzi: "廉", answers: ["lim"] },
+  { hanzi: "鹽", answers: ["jim"] },
+  { hanzi: "檢", answers: ["gim"] },
+
+  // 韻尾 n · 韻腹 i
+  { hanzi: "天", answers: ["tin"] },
+  { hanzi: "田", answers: ["tin"] },
+  { hanzi: "電", answers: ["din"] },
+  { hanzi: "邊", answers: ["bin"] },
+  { hanzi: "變", answers: ["bin"] },
+  { hanzi: "片", answers: ["pin"] },
+  { hanzi: "面", answers: ["min"] },
+  { hanzi: "年", answers: ["nin"] },
+  { hanzi: "連", answers: ["lin"] },
+  { hanzi: "見", answers: ["gin"] },
+  { hanzi: "件", answers: ["gin"] },
+  { hanzi: "現", answers: ["jin"] },
+  { hanzi: "言", answers: ["jin"] },
+  { hanzi: "千", answers: ["cin"] },
+  { hanzi: "前", answers: ["cin"] },
+  { hanzi: "先", answers: ["sin"] },
+  { hanzi: "線", answers: ["sin"] },
+  { hanzi: "典", answers: ["din"] },
+  { hanzi: "便", answers: ["bin"] },
+  { hanzi: "念", answers: ["nim"] },
+  { hanzi: "練", answers: ["lin"] },
+  { hanzi: "然", answers: ["jin"] },
+  { hanzi: "錢", answers: ["cin"] },
+  { hanzi: "淺", answers: ["cin"] },
+  { hanzi: "戰", answers: ["zin"] },
+
+  // 韻尾 ng · 韻腹 i
+  { hanzi: "星", answers: ["sing"] },
+  { hanzi: "成", answers: ["sing"] },
+  { hanzi: "清", answers: ["cing"] },
+  { hanzi: "情", answers: ["cing"] },
+  { hanzi: "丁", answers: ["ding"] },
+  { hanzi: "定", answers: ["ding"] },
+  { hanzi: "停", answers: ["ting"] },
+  { hanzi: "零", answers: ["ling"] },
+  { hanzi: "經", answers: ["ging"] },
+  { hanzi: "輕", answers: ["hing"] },
+  { hanzi: "冰", answers: ["bing"] },
+  { hanzi: "明", answers: ["ming"] },
+  { hanzi: "名", answers: ["ming"] },
+  { hanzi: "英", answers: ["jing"] },
+  { hanzi: "影", answers: ["jing"] },
+  { hanzi: "靜", answers: ["zing"] },
+  { hanzi: "靈", answers: ["ling"] },
+  { hanzi: "敬", answers: ["ging"] },
+  { hanzi: "兵", answers: ["bing"] },
+  { hanzi: "評", answers: ["ping"] },
+  { hanzi: "永", answers: ["wing"] },
+  { hanzi: "應", answers: ["jing"] },
+  { hanzi: "認", answers: ["jing"] },
+  { hanzi: "傾", answers: ["king"] },
+
+  // 韻尾 p · 韻腹 i
+  { hanzi: "碟", answers: ["dip"] },
+  { hanzi: "貼", answers: ["tip"] },
+  { hanzi: "接", answers: ["zip"] },
+  { hanzi: "攝", answers: ["sip"] },
+  { hanzi: "劫", answers: ["gip"] },
+  { hanzi: "葉", answers: ["jip"] },
+  { hanzi: "摺", answers: ["zip"] },
+  { hanzi: "協", answers: ["hip"] },
+  { hanzi: "頁", answers: ["jip"] },
+  { hanzi: "業", answers: ["jip"] },
+
+  // 韻尾 t · 韻腹 i
+  { hanzi: "節", answers: ["zit"] },
+  { hanzi: "鐵", answers: ["tit"] },
+  { hanzi: "必", answers: ["bit"] },
+  { hanzi: "結", answers: ["git"] },
+  { hanzi: "潔", answers: ["git"] },
+  { hanzi: "熱", answers: ["jit"] },
+  { hanzi: "舌", answers: ["sit"] },
+  { hanzi: "設", answers: ["cit"] },
+  { hanzi: "折", answers: ["zit"] },
+  { hanzi: "跌", answers: ["dit"] },
+  { hanzi: "別", answers: ["bit"] },
+  { hanzi: "傑", answers: ["git"] },
+  { hanzi: "揭", answers: ["kit"] },
+
+  // 韻尾 k · 韻腹 i
+  { hanzi: "識", answers: ["sik"] },
+  { hanzi: "食", answers: ["sik"] },
+  { hanzi: "直", answers: ["zik"] },
+  { hanzi: "積", answers: ["zik"] },
+  { hanzi: "的", answers: ["dik"] },
+  { hanzi: "滴", answers: ["dik"] },
+  { hanzi: "力", answers: ["lik"] },
+  { hanzi: "極", answers: ["gik"] },
+  { hanzi: "激", answers: ["gik"] },
+  { hanzi: "迫", answers: ["bik"] },
+  { hanzi: "亦", answers: ["jik"] },
+  { hanzi: "色", answers: ["sik"] },
+  { hanzi: "式", answers: ["sik"] },
+  { hanzi: "敵", answers: ["dik"] },
+  { hanzi: "歷", answers: ["lik"] },
+  { hanzi: "擊", answers: ["gik"] },
+  { hanzi: "益", answers: ["jik"] },
+  { hanzi: "翼", answers: ["jik"] },
+  { hanzi: "域", answers: ["wik"] },
+  { hanzi: "適", answers: ["sik"] },
+  { hanzi: "席", answers: ["zik"] },
+
+  // 韻尾 i · 韻腹 e
+  { hanzi: "你", answers: ["nei"] },
+  { hanzi: "比", answers: ["bei"] },
+  { hanzi: "皮", answers: ["pei"] },
+  { hanzi: "飛", answers: ["fei"] },
+  { hanzi: "肥", answers: ["fei"] },
+  { hanzi: "四", answers: ["sei"] },
+  { hanzi: "死", answers: ["sei"] },
+  { hanzi: "幾", answers: ["gei"] },
+  { hanzi: "記", answers: ["gei"] },
+  { hanzi: "汽", answers: ["hei"] },
+  { hanzi: "起", answers: ["hei"] },
+  { hanzi: "美", answers: ["mei"] },
+  { hanzi: "味", answers: ["mei"] },
+  { hanzi: "地", answers: ["dei"] },
+  { hanzi: "哋", answers: ["dei"] },
+  { hanzi: "里", answers: ["lei"] },
+  { hanzi: "離", answers: ["lei"] },
+  { hanzi: "鼻", answers: ["bei"] },
+  { hanzi: "氣", answers: ["hei"] },
+  { hanzi: "奇", answers: ["kei"] },
+  { hanzi: "基", answers: ["gei"] },
+  { hanzi: "機", answers: ["gei"] },
+
+  // 韻尾 k · 韻腹 e
+  { hanzi: "笛", answers: ["dek"] },
+  { hanzi: "踢", answers: ["tek"] },
+  { hanzi: "隻", answers: ["zek"] },
+  { hanzi: "尺", answers: ["cek"] },
+];
+
+const BANK_C = [
+  // 韻尾 i · 韻腹 o
+  { hanzi: "開", answers: ["hoi"] },
+  { hanzi: "海", answers: ["hoi"] },
+  { hanzi: "代", answers: ["doi"] },
+  { hanzi: "內", answers: ["noi"] },
+  { hanzi: "改", answers: ["goi"] },
+  { hanzi: "再", answers: ["zoi"] },
+  { hanzi: "台", answers: ["toi"] },
+  { hanzi: "來", answers: ["loi"] },
+  { hanzi: "愛", answers: ["oi"] },
+  { hanzi: "菜", answers: ["coi"] },
+  { hanzi: "彩", answers: ["coi"] },
+  { hanzi: "才", answers: ["coi"] },
+  { hanzi: "在", answers: ["zoi"] },
+  { hanzi: "袋", answers: ["doi"] },
+
+  // 韻尾 u · 韻腹 o
+  { hanzi: "好", answers: ["hou"] },
+  { hanzi: "高", answers: ["gou"] },
+  { hanzi: "老", answers: ["lou"] },
+  { hanzi: "早", answers: ["zou"] },
+  { hanzi: "草", answers: ["cou"] },
+  { hanzi: "數", answers: ["sou"] },
+  { hanzi: "無", answers: ["mou"] },
+  { hanzi: "土", answers: ["tou"] },
+  { hanzi: "寶", answers: ["bou"] },
+  { hanzi: "到", answers: ["dou"] },
+  { hanzi: "路", answers: ["lou"] },
+  { hanzi: "冇", answers: ["mou"] },
+  { hanzi: "報", answers: ["bou"] },
+  { hanzi: "圖", answers: ["tou"] },
+  { hanzi: "毛", answers: ["mou"] },
+  { hanzi: "帽", answers: ["mou"] },
+  { hanzi: "祖", answers: ["zou"] },
+  { hanzi: "島", answers: ["dou"] },
+  { hanzi: "逃", answers: ["tou"] },
+  { hanzi: "補", answers: ["bou"] },
+  { hanzi: "稿", answers: ["gou"] },
+  { hanzi: "奧", answers: ["ou"] },
+
+  // 韻尾 n · 韻腹 o
+  { hanzi: "安", answers: ["on"] },
+  { hanzi: "看", answers: ["hon"] },
+  { hanzi: "寒", answers: ["hon"] },
+  { hanzi: "乾", answers: ["gon"] },
+  { hanzi: "趕", answers: ["gon"] },
+  { hanzi: "漢", answers: ["hon"] },
+  { hanzi: "汗", answers: ["hon"] },
+  { hanzi: "幹", answers: ["gon"] },
+  { hanzi: "肝", answers: ["gon"] },
+  { hanzi: "岸", answers: ["ngon"] },
+
+  // 韻尾 ng · 韻腹 o
+  { hanzi: "講", answers: ["gong"] },
+  { hanzi: "糖", answers: ["tong"] },
+  { hanzi: "當", answers: ["dong"] },
+  { hanzi: "浪", answers: ["long"] },
+  { hanzi: "裝", answers: ["zong"] },
+  { hanzi: "倉", answers: ["cong"] },
+  { hanzi: "忙", answers: ["mong"] },
+  { hanzi: "黃", answers: ["wong"] },
+  { hanzi: "廣", answers: ["gwong"] },
+  { hanzi: "光", answers: ["gwong"] },
+  { hanzi: "狂", answers: ["kwong"] },
+  { hanzi: "康", answers: ["hong"] },
+  { hanzi: "湯", answers: ["tong"] },
+  { hanzi: "躺", answers: ["tong"] },
+  { hanzi: "黨", answers: ["dong"] },
+  { hanzi: "郎", answers: ["long"] },
+  { hanzi: "床", answers: ["cong"] },
+  { hanzi: "望", answers: ["mong"] },
+  { hanzi: "網", answers: ["mong"] },
+  { hanzi: "王", answers: ["wong"] },
+  { hanzi: "況", answers: ["fong"] },
+  { hanzi: "擴", answers: ["kwong"] },
+
+  // 韻尾 t · 韻腹 o
+  { hanzi: "喝", answers: ["hot"] },
+  { hanzi: "割", answers: ["got"] },
+  { hanzi: "渴", answers: ["hot"] },
+
+  // 韻尾 k · 韻腹 o
+  { hanzi: "學", answers: ["hok"] },
+  { hanzi: "角", answers: ["gok"] },
+  { hanzi: "落", answers: ["lok"] },
+  { hanzi: "作", answers: ["zok"] },
+  { hanzi: "索", answers: ["sok"] },
+  { hanzi: "博", answers: ["bok"] },
+  { hanzi: "國", answers: ["gwok"] },
+  { hanzi: "獲", answers: ["wok"] },
+  { hanzi: "確", answers: ["kok"] },
+  { hanzi: "各", answers: ["gok"] },
+  { hanzi: "薄", answers: ["bok"] },
+  { hanzi: "托", answers: ["tok"] },
+  { hanzi: "昨", answers: ["zok"] },
+  { hanzi: "岳", answers: ["ngok"] },
+
+  // 韻尾 i · 韻腹 u
+  { hanzi: "杯", answers: ["bui"] },
+  { hanzi: "妹", answers: ["mui"] },
+  { hanzi: "每", answers: ["mui"] },
+  { hanzi: "灰", answers: ["fui"] },
+  { hanzi: "回", answers: ["wui"] },
+  { hanzi: "會", answers: ["wui"] },
+  { hanzi: "梅", answers: ["mui"] },
+  { hanzi: "配", answers: ["pui"] },
+  { hanzi: "陪", answers: ["pui"] },
+
+  // 韻尾 n · 韻腹 u
+  { hanzi: "官", answers: ["gun"] },
+  { hanzi: "寬", answers: ["fun"] },
+  { hanzi: "門", answers: ["mun"] },
+  { hanzi: "盆", answers: ["pun"] },
+  { hanzi: "碗", answers: ["wun"] },
+  { hanzi: "罐", answers: ["gun"] },
+  { hanzi: "管", answers: ["gun"] },
+  { hanzi: "滿", answers: ["mun"] },
+  { hanzi: "搬", answers: ["bun"] },
+  { hanzi: "半", answers: ["bun"] },
+  { hanzi: "換", answers: ["wun"] },
+  { hanzi: "歡", answers: ["fun"] },
+  { hanzi: "觀", answers: ["gun"] },
+
+  // 韻尾 ng · 韻腹 u
+  { hanzi: "公", answers: ["gung"] },
+  { hanzi: "紅", answers: ["hung"] },
+  { hanzi: "東", answers: ["dung"] },
+  { hanzi: "通", answers: ["tung"] },
+  { hanzi: "農", answers: ["nung"] },
+  { hanzi: "龍", answers: ["lung"] },
+  { hanzi: "中", answers: ["zung"] },
+  { hanzi: "沖", answers: ["cung"] },
+  { hanzi: "送", answers: ["sung"] },
+  { hanzi: "風", answers: ["fung"] },
+  { hanzi: "用", answers: ["jung"] },
+  { hanzi: "工", answers: ["gung"] },
+  { hanzi: "共", answers: ["gung"] },
+  { hanzi: "空", answers: ["hung"] },
+  { hanzi: "熊", answers: ["hung"] },
+  { hanzi: "冬", answers: ["dung"] },
+  { hanzi: "動", answers: ["dung"] },
+  { hanzi: "同", answers: ["tung"] },
+  { hanzi: "痛", answers: ["tung"] },
+  { hanzi: "種", answers: ["zung"] },
+  { hanzi: "從", answers: ["cung"] },
+  { hanzi: "蟲", answers: ["cung"] },
+  { hanzi: "鬆", answers: ["sung"] },
+  { hanzi: "豐", answers: ["fung"] },
+  { hanzi: "容", answers: ["jung"] },
+  { hanzi: "勇", answers: ["jung"] },
+  { hanzi: "融", answers: ["jung"] },
+
+  // 韻尾 k · 韻腹 u
+  { hanzi: "竹", answers: ["zuk"] },
+  { hanzi: "速", answers: ["cuk"] },
+  { hanzi: "叔", answers: ["suk"] },
+  { hanzi: "讀", answers: ["duk"] },
+  { hanzi: "六", answers: ["luk"] },
+  { hanzi: "谷", answers: ["guk"] },
+  { hanzi: "曲", answers: ["kuk"] },
+  { hanzi: "哭", answers: ["huk"] },
+  { hanzi: "木", answers: ["muk"] },
+  { hanzi: "福", answers: ["fuk"] },
+  { hanzi: "肉", answers: ["juk"] },
+  { hanzi: "足", answers: ["zuk"] },
+  { hanzi: "族", answers: ["zuk"] },
+  { hanzi: "熟", answers: ["suk"] },
+  { hanzi: "縮", answers: ["suk"] },
+  { hanzi: "獨", answers: ["duk"] },
+  { hanzi: "毒", answers: ["duk"] },
+  { hanzi: "綠", answers: ["luk"] },
+  { hanzi: "局", answers: ["guk"] },
+  { hanzi: "菊", answers: ["guk"] },
+  { hanzi: "目", answers: ["muk"] },
+  { hanzi: "服", answers: ["fuk"] },
+  { hanzi: "玉", answers: ["juk"] },
+  { hanzi: "育", answers: ["juk"] },
+
+  // 韻尾 t · 韻腹 u
+  { hanzi: "闊", answers: ["fut"] },
+  { hanzi: "活", answers: ["wut"] },
+  { hanzi: "末", answers: ["mut"] },
+  { hanzi: "撥", answers: ["but"] },
+
+  // 韻尾 i · 韻腹 eo
+  { hanzi: "去", answers: ["heoi"] },
+  { hanzi: "水", answers: ["seoi"] },
+  { hanzi: "誰", answers: ["seoi"] },
+  { hanzi: "對", answers: ["deoi"] },
+  { hanzi: "推", answers: ["teoi"] },
+  { hanzi: "女", answers: ["neoi"] },
+  { hanzi: "雷", answers: ["leoi"] },
+  { hanzi: "最", answers: ["zeoi"] },
+  { hanzi: "追", answers: ["zeoi"] },
+  { hanzi: "嘴", answers: ["zeoi"] },
+  { hanzi: "吹", answers: ["ceoi"] },
+  { hanzi: "趣", answers: ["ceoi"] },
+  { hanzi: "除", answers: ["ceoi"] },
+  { hanzi: "巨", answers: ["geoi"] },
+  { hanzi: "舉", answers: ["geoi"] },
+  { hanzi: "句", answers: ["geoi"] },
+  { hanzi: "區", answers: ["keoi"] },
+  { hanzi: "佢", answers: ["keoi"] },
+  { hanzi: "許", answers: ["heoi"] },
+  { hanzi: "睡", answers: ["seoi"] },
+  { hanzi: "隊", answers: ["deoi"] },
+  { hanzi: "退", answers: ["teoi"] },
+  { hanzi: "醉", answers: ["zeoi"] },
+  { hanzi: "隨", answers: ["ceoi"] },
+
+  // 韻尾 n · 韻腹 eo
+  { hanzi: "準", answers: ["zeon"] },
+  { hanzi: "春", answers: ["ceon"] },
+  { hanzi: "信", answers: ["seon"] },
+  { hanzi: "順", answers: ["seon"] },
+  { hanzi: "純", answers: ["seon"] },
+  { hanzi: "蠢", answers: ["ceon"] },
+  { hanzi: "論", answers: ["leon"] },
+  { hanzi: "倫", answers: ["leon"] },
+
+  // 韻尾 t · 韻腹 eo
+  { hanzi: "出", answers: ["ceot"] },
+  { hanzi: "術", answers: ["seot"] },
+  { hanzi: "述", answers: ["seot"] },
+  { hanzi: "律", answers: ["leot"] },
+
+  // 韻尾 n · 韻腹 yu
+  { hanzi: "遠", answers: ["jyun"] },
+  { hanzi: "元", answers: ["jyun"] },
+  { hanzi: "願", answers: ["jyun"] },
+  { hanzi: "孫", answers: ["syun"] },
+  { hanzi: "選", answers: ["syun"] },
+  { hanzi: "算", answers: ["syun"] },
+  { hanzi: "轉", answers: ["zyun"] },
+  { hanzi: "專", answers: ["zyun"] },
+  { hanzi: "全", answers: ["cyun"] },
+  { hanzi: "穿", answers: ["cyun"] },
+  { hanzi: "村", answers: ["cyun"] },
+  { hanzi: "存", answers: ["cyun"] },
+  { hanzi: "權", answers: ["kyun"] },
+  { hanzi: "捐", answers: ["gyun"] },
+  { hanzi: "尊", answers: ["zyun"] },
+  { hanzi: "寸", answers: ["cyun"] },
+
+  // 韻尾 t · 韻腹 yu
+  { hanzi: "月", answers: ["jyut"] },
+  { hanzi: "越", answers: ["jyut"] },
+  { hanzi: "粵", answers: ["jyut"] },
+  { hanzi: "雪", answers: ["syut"] },
+  { hanzi: "血", answers: ["hyut"] },
+  { hanzi: "缺", answers: ["kyut"] },
+  { hanzi: "決", answers: ["kyut"] },
+  { hanzi: "絕", answers: ["zyut"] },
+
+  // 韻尾 ng · 韻腹 oe
+  { hanzi: "想", answers: ["soeng"] },
+  { hanzi: "上", answers: ["soeng"] },
+  { hanzi: "香", answers: ["hoeng"] },
+  { hanzi: "響", answers: ["hoeng"] },
+  { hanzi: "鄉", answers: ["hoeng"] },
+  { hanzi: "向", answers: ["hoeng"] },
+  { hanzi: "張", answers: ["zoeng"] },
+  { hanzi: "章", answers: ["zoeng"] },
+  { hanzi: "唱", answers: ["coeng"] },
+  { hanzi: "場", answers: ["coeng"] },
+  { hanzi: "窗", answers: ["coeng"] },
+  { hanzi: "兩", answers: ["loeng"] },
+  { hanzi: "良", answers: ["loeng"] },
+  { hanzi: "羊", answers: ["joeng"] },
+  { hanzi: "陽", answers: ["joeng"] },
+  { hanzi: "樣", answers: ["joeng"] },
+  { hanzi: "讓", answers: ["joeng"] },
+  { hanzi: "商", answers: ["soeng"] },
+  { hanzi: "象", answers: ["zoeng"] },
+
+  // 韻尾 k · 韻腹 oe
+  { hanzi: "腳", answers: ["goek"] },
+  { hanzi: "雀", answers: ["zoek"] },
+  { hanzi: "略", answers: ["loek"] },
+];
+
+const RAW_BANK = [...BANK_A, ...BANK_B, ...BANK_C];
+
+export const BANK = RAW_BANK;
+
+export const BANK_WITH_COMPONENTS = RAW_BANK.map(entry => ({
+  ...entry,
+  ...splitJyutping(entry.answers[0]),
+}));
+
+export function validateBank(bank = BANK) {
+  const problems = [];
+  const seen = new Set();
+  for (const [index, entry] of bank.entries()) {
+    const label = `#${index + 1} ${entry?.hanzi ?? "（無漢字）"}`;
+    if (typeof entry?.hanzi !== "string" || !/^\p{Script=Han}$/u.test(entry.hanzi)) {
+      problems.push(`${label}：漢字必須係單一漢字`);
+    }
+    if (typeof entry?.hanzi === "string" && seen.has(entry.hanzi)) {
+      problems.push(`${label}：漢字重複`);
+    }
+    if (typeof entry?.hanzi === "string") seen.add(entry.hanzi);
+    if (!Array.isArray(entry?.answers) || entry.answers.length === 0) {
+      problems.push(`${label}：answers 唔可以空`);
+      continue;
+    }
+    for (const answer of entry.answers) {
+      if (typeof answer !== "string" || !/^[a-z]+$/.test(answer)) {
+        problems.push(`${label}：讀音「${answer}」必須係小寫、無聲調嘅粵拼`);
+        continue;
+      }
+      const { initial, nucleus, coda } = splitJyutping(answer);
+      // 零聲母（initial 係空字串）係合法，例如「呀 aa」「五 ng」。
+      if (initial !== "" && !COMPONENTS.initial.includes(initial)) {
+        problems.push(`${label}：聲母「${initial}」唔屬於 COMPONENTS`);
+      }
+      if (!COMPONENTS.nucleus.includes(nucleus)) {
+        problems.push(`${label}：韻腹「${nucleus}」唔屬於 COMPONENTS`);
+      }
+      if (coda !== "" && !COMPONENTS.coda.includes(coda)) {
+        problems.push(`${label}：韻尾「${coda}」唔屬於 COMPONENTS`);
+      }
+    }
+  }
+  return problems;
+}
+
+const problems = validateBank();
+if (problems.length > 0) {
+  throw new Error(`聲韻解鎖塔題庫校驗失敗：\n${problems.join("\n")}`);
+}
