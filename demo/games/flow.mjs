@@ -25,8 +25,21 @@
 //
 // 瀏覽器以外（node --test）冇 sessionStorage／localStorage：讀一律安全返回 null／[]，
 // 寫一律返回 false，唔會 throw。測試可以暫時掛一個假 storage 上 globalThis。
+import { registerStrings, t } from "../i18n.mjs";
 import { roundMetrics } from "./common.mjs";
 import { OFFICIAL_ROUND_ORDER, OFFICIAL_ROUNDS } from "./official.mjs";
+
+// 簡體粵文譯文：輪次名同流程標籤喺度登記，三個遊戲頁同成績卡共用同一個 namespace。
+registerStrings({
+  hans: {
+    "flow.round.single": "单字",
+    "flow.round.words": "词组",
+    "flow.round.passage": "篇章",
+    "flow.roundLabel": "官方流程第 {index} 轮：{label}",
+    "flow.nextRound": "前往第 {index} 轮：{label} →",
+    "flow.nextSummary": "查看三轮成绩 →",
+  },
+});
 
 export const FLOW_VERSION = 1;
 export const FLOW_STORAGE_KEY = "canclid-contest-official-flow";
@@ -73,10 +86,19 @@ export function flowRound(roundId) {
   return FLOW_ROUNDS.find(round => round.id === roundId) ?? null;
 }
 
+// 輪次名跟界面語言出（繁體單字／簡體单字），譯文缺咗就退回 official.mjs 嘅原文。
+function roundLabel(round) {
+  return t(`flow.round.${round.id}`, round.label);
+}
+
 // "官方流程第 2 輪：詞組"，遊戲頁鎖定官方模式時顯示。
 export function flowRoundLabel(roundId) {
   const round = flowRound(roundId);
-  return round ? `官方流程第 ${round.index + 1} 輪：${round.label}` : "";
+  if (!round) return "";
+  return t("flow.roundLabel", "官方流程第 {index} 輪：{label}", {
+    index: round.index + 1,
+    label: roundLabel(round),
+  });
 }
 
 // 下一輪係邊個；最後一輪之後係成績卡。
@@ -90,9 +112,12 @@ export function flowNextRound(roundId) {
 export function flowNextLabel(roundId) {
   const next = flowNextRound(roundId);
   if (next === null) return "";
-  if (next === "summary") return "查看三輪成績 →";
+  if (next === "summary") return t("flow.nextSummary", "查看三輪成績 →");
   const round = flowRound(next);
-  return `前往第 ${round.index + 1} 輪：${round.label} →`;
+  return t("flow.nextRound", "前往第 {index} 輪：{label} →", {
+    index: round.index + 1,
+    label: roundLabel(round),
+  });
 }
 
 export function flowNextHref(roundId) {

@@ -31,8 +31,13 @@ h2 { font-size: 22px; line-height: 1.4; margin: 0; }
 .nav { display: flex; gap: 28px; }
 .nav-link { border: 0; background: none; padding: 16px 0; color: var(--muted); font-size: 16px; text-decoration: none; }
 .nav-link:hover { color: var(--ink); text-decoration: underline; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
 .demo-badge { display: flex; align-items: center; gap: 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
 .demo-badge > span { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+/* i18n：包住 demo-badge 文字嘅 span 唔跟 .demo-badge > span 嘅圓點樣式。 */
+.demo-badge > .badge-text { width: auto; height: auto; border-radius: 0; background: none; }
+.locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; min-width: 44px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font-size: 14px; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+.locale-toggle:hover, .locale-toggle[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
 
 .hero { padding: 32px 0 24px; }
 .hero p { margin: 0; color: var(--muted); }

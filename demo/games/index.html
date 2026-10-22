@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="./games.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="lobby.skip">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="../index.html" aria-label="粵拼競速首頁">
@@ -18,64 +18,105 @@
         <span class="brand-type">粵拼競速</span>
       </a>
       <nav class="nav" aria-label="主要導覽">
-        <a class="nav-link" href="../index.html">‹ 試玩賽場</a>
+        <a class="nav-link" href="../index.html" data-i18n="lobby.navBack">‹ 試玩賽場</a>
       </nav>
-      <span class="demo-badge"><span></span>小遊戲大廳</span>
+      <div class="header-actions">
+        <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+        <span class="demo-badge"><span aria-hidden="true"></span><span class="badge-text" data-i18n="lobby.badge">小遊戲大廳</span></span>
+      </div>
     </header>
 
     <main id="main">
       <div class="hero">
-        <h1>粵拼小遊戲</h1>
-        <p>五個免登入練習模式：四個短打小遊戲加單篇打字，用嚟熱身同針對弱項練習，即開即玩。</p>
+        <h1 data-i18n="lobby.heroTitle">粵拼小遊戲</h1>
+        <p data-i18n="lobby.heroText">五個免登入練習模式：四個短打小遊戲加單篇打字，用嚟熱身同針對弱項練習，即開即玩。</p>
       </div>
 
-      <p class="flow-pointer">想行完整官方流程？<a href="../index.html">去試玩賽場開始官方三輪試玩（單字 90 秒 → 詞組 120 秒 → 篇章計時）↗</a></p>
+      <p class="flow-pointer"><span data-i18n="lobby.flowPointer">想行完整官方流程？</span><a href="../index.html" data-i18n="lobby.flowPointerLink">去試玩賽場開始官方三輪試玩（單字 90 秒 → 詞組 120 秒 → 篇章計時）↗</a></p>
 
       <ul class="game-grid">
         <li>
           <a class="game-card" href="./rocks/">
-            <span class="game-tag score">可計分 · 正式賽單字輪</span>
-            <h2>粵拼落石</h2>
-            <p>60 秒內喺石頭落地之前打出石上面嗰個字嘅粵拼；石頭落地就扣命，三條命或者時間到就結算。官方模式 90 秒無命，用正式賽規則。</p>
-            <span class="game-cta" aria-hidden="true">開始玩 ↗</span>
+            <span class="game-tag score" data-i18n="lobby.rocksTag">可計分 · 正式賽單字輪</span>
+            <h2 data-i18n="lobby.rocksTitle">粵拼落石</h2>
+            <p data-i18n="lobby.rocksText">60 秒內喺石頭落地之前打出石上面嗰個字嘅粵拼；石頭落地就扣命，三條命或者時間到就結算。官方模式 90 秒無命，用正式賽規則。</p>
+            <span class="game-cta" aria-hidden="true" data-i18n="lobby.ctaPlay">開始玩 ↗</span>
           </a>
         </li>
         <li>
           <a class="game-card" href="./chain/">
-            <span class="game-tag score">可計分 · 正式賽詞組輪</span>
-            <h2>粵拼詞鏈</h2>
-            <p>同一個 seed 抽出 20 個詞，順住逐個音節打；詞語全對就有連擊加成，倍率最高 ×1.5。官方模式 120 秒連續題流。</p>
-            <span class="game-cta" aria-hidden="true">開始玩 ↗</span>
+            <span class="game-tag score" data-i18n="lobby.chainTag">可計分 · 正式賽詞組輪</span>
+            <h2 data-i18n="lobby.chainTitle">粵拼詞鏈</h2>
+            <p data-i18n="lobby.chainText">同一個 seed 抽出 20 個詞，順住逐個音節打；詞語全對就有連擊加成，倍率最高 ×1.5。官方模式 120 秒連續題流。</p>
+            <span class="game-cta" aria-hidden="true" data-i18n="lobby.ctaPlay">開始玩 ↗</span>
           </a>
         </li>
         <li>
           <a class="game-card" href="./ghost/">
-            <span class="game-tag score">可計分 · 正式賽篇章輪</span>
-            <h2>幽靈競速</h2>
-            <p>同自己嘅最佳時間線，或者內建示範幽靈，鬥快打完全篇試玩文章；都可以揀「淨計時」唔設對手，純計時。</p>
-            <span class="game-cta" aria-hidden="true">開始玩 ↗</span>
+            <span class="game-tag score" data-i18n="lobby.ghostTag">可計分 · 正式賽篇章輪</span>
+            <h2 data-i18n="lobby.ghostTitle">幽靈競速</h2>
+            <p data-i18n="lobby.ghostText">同自己嘅最佳時間線，或者內建示範幽靈，鬥快打完全篇試玩文章；都可以揀「淨計時」唔設對手，純計時。</p>
+            <span class="game-cta" aria-hidden="true" data-i18n="lobby.ctaPlay">開始玩 ↗</span>
           </a>
         </li>
         <li>
           <a class="game-card" href="./tower/">
-            <span class="game-tag practice">練習</span>
-            <h2>聲韻解鎖塔</h2>
-            <p>由聲母開始，逐層解鎖全部粵拼元件嘅自適應練習；達標先上到下一層，唔設排名。</p>
-            <span class="game-cta" aria-hidden="true">開始玩 ↗</span>
+            <span class="game-tag practice" data-i18n="lobby.towerTag">練習</span>
+            <h2 data-i18n="lobby.towerTitle">聲韻解鎖塔</h2>
+            <p data-i18n="lobby.towerText">由聲母開始，逐層解鎖全部粵拼元件嘅自適應練習；達標先上到下一層，唔設排名。</p>
+            <span class="game-cta" aria-hidden="true" data-i18n="lobby.ctaPlay">開始玩 ↗</span>
           </a>
         </li>
         <li>
           <a class="game-card" href="../../index.html?practice=1">
-            <span class="game-tag practice">試玩賽場 · 單篇</span>
-            <h2>單篇練習</h2>
-            <p>返試玩賽場揀「單篇自由練習」，由頭打到尾同一篇示範粵文，可以開粵拼提示，成績存本機榜。</p>
-            <span class="game-cta" aria-hidden="true">去試玩賽場 ↗</span>
+            <span class="game-tag practice" data-i18n="lobby.practiceTag">試玩賽場 · 單篇</span>
+            <h2 data-i18n="lobby.practiceTitle">單篇練習</h2>
+            <p data-i18n="lobby.practiceText">返試玩賽場揀「單篇自由練習」，由頭打到尾同一篇示範粵文，可以開粵拼提示，成績存本機榜。</p>
+            <span class="game-cta" aria-hidden="true" data-i18n="lobby.ctaArena">去試玩賽場 ↗</span>
           </a>
         </li>
       </ul>
 
-      <p class="lobby-note">小遊戲同單篇練習嘅成績只存本機，正式賽制見<a href="../index.html">試玩賽場嘅玩法頁</a>。各遊戲嘅「官方」模式用正式賽規則（90 秒單字／120 秒詞組／篇章門檻 85%）。</p>
+      <p class="lobby-note"><span data-i18n="lobby.noteA">小遊戲同單篇練習嘅成績只存本機，正式賽制見</span><a href="../index.html" data-i18n="lobby.noteLink">試玩賽場嘅玩法頁</a><span data-i18n="lobby.noteB">。各遊戲嘅「官方」模式用正式賽規則（90 秒單字／120 秒詞組／篇章門檻 85%）。</span></p>
     </main>
   </div>
+
+  <script type="module">
+    import { initI18n, registerStrings } from "../i18n.mjs";
+
+    registerStrings({
+      hans: {
+        "lobby.skip": "跳去主要内容",
+        "lobby.navBack": "‹ 试玩赛场",
+        "lobby.badge": "小游戏大厅",
+        "lobby.heroTitle": "粤拼小游戏",
+        "lobby.heroText": "五个免登入练习模式：四个短打小游戏加单篇打字，用嚟热身同针对弱项练习，即开即玩。",
+        "lobby.flowPointer": "想行完整官方流程？",
+        "lobby.flowPointerLink": "去试玩赛场开始官方三轮试玩（单字 90 秒 → 词组 120 秒 → 篇章计时）↗",
+        "lobby.rocksTag": "可计分 · 正式赛单字轮",
+        "lobby.rocksTitle": "粤拼落石",
+        "lobby.rocksText": "60 秒内喺石头落地之前打出石上面嗰个字嘅粤拼；石头落地就扣命，三条命或者时间到就结算。官方模式 90 秒无命，用正式赛规则。",
+        "lobby.chainTag": "可计分 · 正式赛词组轮",
+        "lobby.chainTitle": "粤拼词链",
+        "lobby.chainText": "同一个 seed 抽出 20 个词，顺住逐个音节打；词语全对就有连击加成，倍率最高 ×1.5。官方模式 120 秒连续题流。",
+        "lobby.ghostTag": "可计分 · 正式赛篇章轮",
+        "lobby.ghostTitle": "幽灵竞速",
+        "lobby.ghostText": "同自己嘅最佳时间线，或者内建示范幽灵，斗快打完全篇试玩文章；都可以拣「净计时」唔设对手，纯计时。",
+        "lobby.towerTag": "练习",
+        "lobby.towerTitle": "声韵解锁塔",
+        "lobby.towerText": "由声母开始，逐层解锁全部粤拼元件嘅自适应练习；达标先上到下一层，不设排名。",
+        "lobby.practiceTag": "试玩赛场 · 单篇",
+        "lobby.practiceTitle": "单篇练习",
+        "lobby.practiceText": "返试玩赛场拣「单篇自由练习」，由头打到尾同一篇示范粤文，可以开粤拼提示，成绩存本机榜。",
+        "lobby.ctaPlay": "开始玩 ↗",
+        "lobby.ctaArena": "去试玩赛场 ↗",
+        "lobby.noteA": "小游戏同单篇练习嘅成绩只存本机，正式赛制见",
+        "lobby.noteLink": "试玩赛场嘅玩法页",
+        "lobby.noteB": "。各游戏嘅「官方」模式用正式赛规则（90 秒单字／120 秒词组／篇章门槛 85%）。",
+      },
+    });
+
+    initI18n();
+  </script>
 </body>
 </html>

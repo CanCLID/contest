@@ -14,6 +14,7 @@ import {
 import { CHAIN_BANK } from "../demo/games/chain/data.mjs";
 import { comboMultiplier, formatClock, hashSeed, mulberry32, normalizeAnswer, shuffled } from "../demo/games/common.mjs";
 import * as flowApi from "../demo/games/flow.mjs";
+import { getLocale, initI18n, registerStrings, setLocale, t } from "../demo/i18n.mjs";
 
 // Two-syllable words keep the hand-computed arithmetic readable.
 const bank = [
@@ -1008,5 +1009,274 @@ test("DOM 層：?flow=1 鎖定官方詞組輪、收埋 seed 輸入，到點寫�
     assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
     assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一場」");
     assert.equal(tab.get("#result-lobby").hidden, true);
+  });
+});
+
+// --- i18n：繁體粵語（預設）／簡體粵文（demo/i18n.mjs） ------------------------
+
+const CHAIN_HTML = readFileSync(new URL("../demo/games/chain/index.html", import.meta.url), "utf8");
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+
+// 由 index.html 直接抽 data-i18n 元素：key → 繁體原文（同頁面開場嗰陣一樣）。
+function i18nEntries(html, attribute = "data-i18n") {
+  const pattern = new RegExp(`${attribute}="([^"]+)"[^>]*>([^<]*)<`, "g");
+  return [...html.matchAll(pattern)].map(match => ({ key: match[1], hant: match[2] }));
+}
+
+// data-i18n-placeholder 嘅原文喺同一個 tag 嘅 placeholder 屬性度。
+function placeholderEntries(html) {
+  return [...html.matchAll(/<[^>]*data-i18n-placeholder="([^"]+)"[^>]*>/g)].map(match => ({
+    key: match[1],
+    hant: match[0].match(/placeholder="([^"]*)"/)?.[1] ?? "",
+  }));
+}
+
+// i18n 運行庫喺瀏覽器度讀全局 document／window／localStorage；node 冇，測試暫時掛
+// 假嘅上去，令真嘅 demo/i18n.mjs 同 vm 入面嘅頁面模組共用同一個假 DOM。
+function withI18nGlobals(values) {
+  const saved = new Map();
+  for (const [name, value] of Object.entries(values)) {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  }
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  };
+}
+
+// 同 chainModeTab 一樣嘅迷你 DOM，但補上 i18n 要用嘅嘢：dataset（靜態文案快取）、
+// document.querySelectorAll（data-i18n／data-i18n-placeholder／data-locale-toggle）、
+// 假 localStorage 同真嘅 i18n 運行庫。
+function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
+  let now = 0;
+  const elements = new Map();
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  let intervalCallback = null;
+
+  const makeElement = (tagName = "div", parent = null) => {
+    const classes = new Set();
+    const attributes = new Map();
+    const listeners = new Map();
+    const children = [];
+    let text = "";
+    const node = {
+      tagName, children, hidden: false, disabled: false, value: "", id: "", style: {}, dataset: {},
+      clientHeight: 300,
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      get className() { return [...classes].join(" "); },
+      set className(value) {
+        classes.clear();
+        String(value).split(/\s+/).filter(Boolean).forEach(name => classes.add(name));
+      },
+      get textContent() { return text + children.map(child => child.textContent).join(""); },
+      set textContent(value) { text = String(value); children.length = 0; },
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: name => attributes.get(name) ?? null,
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(listener);
+      },
+      fire(type, event = {}) {
+        event.target ??= node;
+        event.preventDefault ??= () => {};
+        (listeners.get(type) ?? []).forEach(listener => listener(event));
+        parent?.fire(type, event);
+      },
+      append: (...nodes) => { children.push(...nodes); },
+      replaceChildren(...nodes) { children.length = 0; children.push(...nodes); },
+      focus() {}, blur() {},
+    };
+    return node;
+  };
+
+  const parents = new Map([["#answer", "#typing-surface"], ["#word", "#typing-surface"]]);
+  const get = selector => {
+    if (!elements.has(selector)) {
+      const parent = parents.has(selector) ? get(parents.get(selector)) : null;
+      const element = makeElement(selector === "#answer" ? "input" : "div", parent);
+      if (selector.startsWith("#")) element.id = selector.slice(1);
+      elements.set(selector, element);
+    }
+    return elements.get(selector);
+  };
+  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
+  const views = ["#setup-view", "#play-view", "#result-view"].map(get);
+  const body = makeElement("body");
+
+  const staticNodes = i18nEntries(CHAIN_HTML).map(({ key, hant }) => {
+    const node = makeElement();
+    node.textContent = hant;
+    // 真 DOM 會將 data-i18n 屬性反映去 dataset；i18n 運行庫靠 el.dataset.i18n 攞 key。
+    node.dataset.i18n = key;
+    return { key, node };
+  });
+  const placeholderNodes = placeholderEntries(CHAIN_HTML).map(({ key, hant }) => {
+    const node = makeElement("input");
+    node.setAttribute("placeholder", hant);
+    node.dataset.i18nPlaceholder = key;
+    return { key, node };
+  });
+  const toggle = makeElement("button");
+
+  const document = {
+    documentElement: makeElement("html"),
+    body,
+    querySelector: get,
+    querySelectorAll(selector) {
+      if (selector === ".view") return views;
+      if (selector === "[data-i18n]") return staticNodes.map(entry => entry.node);
+      if (selector === "[data-i18n-placeholder]") return placeholderNodes.map(entry => entry.node);
+      if (selector === "[data-locale-toggle]") return [toggle];
+      return [];
+    },
+    createElement: makeElement,
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
+  };
+  const window = {
+    CustomEvent: class {
+      constructor(type, options) { this.type = type; this.detail = options?.detail; }
+    },
+    addEventListener(type, listener) {
+      if (!windowListeners.has(type)) windowListeners.set(type, []);
+      windowListeners.get(type).push(listener);
+    },
+    dispatchEvent(event) { for (const listener of windowListeners.get(event.type) ?? []) listener(event); },
+  };
+  const localStorage = {
+    getItem: key => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => { store.set(key, String(value)); },
+    removeItem: key => { store.delete(key); },
+  };
+  const restoreGlobals = withI18nGlobals({ document, window, localStorage, CustomEvent: window.CustomEvent });
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    Date: Clock,
+    OFFICIAL_CHAIN, CHAIN_BANK,
+    comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer, recallSyllable, typeSyllable,
+    ...flowApi,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
+    createChainGame,
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval: (callback) => { intervalCallback = callback; return 1; },
+    clearInterval: () => { intervalCallback = null; },
+    setTimeout: () => 1,
+    // 頁面模組 import { t as i18nT }：import 被剝走之後，i18nT 由呢度嚟。
+    i18nT: t, initI18n, registerStrings, setLocale, getLocale,
+    document, window, localStorage,
+  }), { filename: "demo/games/chain/chain-dom.mjs" });
+
+  return {
+    get,
+    static: key => staticNodes.find(entry => entry.key === key)?.node ?? null,
+    placeholder: key => placeholderNodes.find(entry => entry.key === key)?.node ?? null,
+    toggle,
+    setTime: value => { now = value; },
+    fireTick: () => intervalCallback?.(),
+    // 還原語言同清走呢個測試寫入嘅 storage，唔好影響其他測試。
+    cleanup() {
+      setLocale("hant");
+      store.clear();
+      restoreGlobals();
+    },
+  };
+}
+
+test("i18n：切去簡體粵文，靜態文案（連 placeholder）、動態文案同切換掣一齊變", () => {
+  const tab = chainI18nTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  try {
+    assert.equal(getLocale(), "hant", "node 冇 navigator，預設一定係繁體");
+    assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
+    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
+    assert.equal(tab.toggle.textContent, "简");
+    assert.equal(tab.get("#best-note").textContent, "本地最佳：未有紀錄。");
+
+    setLocale("hans");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hans");
+
+    // 靜態文案（index.html 嘅 data-i18n／data-i18n-placeholder）
+    assert.equal(tab.static("chain.title").textContent, "粤拼词链");
+    assert.equal(tab.static("chain.startTitle").textContent, "开始");
+    assert.equal(tab.static("chain.rule2").textContent, "一个词全部音节都打啱 → 连击 +1；个词有任何一个错 → 连击即刻归零。");
+    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝随机");
+    // 切換掣：簡體界面顯示「繁」
+    assert.equal(tab.toggle.textContent, "繁");
+    assert.equal(tab.toggle.getAttribute("aria-pressed"), "true");
+
+    // 動態文案（模組 t() 畫出嚟）
+    assert.equal(tab.get("#best-note").textContent, "本地最佳：未有纪录。");
+    tab.get("#seed").value = "chain-seed";
+    tab.get("#setup-form").fire("submit");
+    assert.equal(tab.get("#seed-label").textContent, "官方轮 · seed chain-seed");
+    assert.equal(tab.get("#progress-label").textContent, "第 1 个词 · 官方轮");
+    assert.equal(tab.get("#time-label").textContent, "剩余时间");
+    assert.equal(tab.get("#combo").textContent, "连击 0");
+    assert.equal(tab.get("#multiplier").textContent, "倍率 ×1.0");
+    assert.equal(tab.get("#feedback").textContent, "打粤拼，Space 或 Enter 确认；未输入时按 Backspace 改上一个音节。");
+
+    tab.setTime(120_000);
+    tab.fireTick();
+    assert.equal(tab.get("#result-title").textContent, "时间到，收卷！");
+    assert.equal(tab.get("#result-threshold").textContent, "未达 90% 门槛，正式赛不计排名");
+    assert.equal(tab.get("#window-note").textContent, "官方模式：固定 120 秒计分窗。");
+    assert.equal(tab.get("#result-detail").textContent, "连击 0 · 得分 0.0");
+    assert.match(tab.get("#result-summary").textContent, /^本场 seed chain-seed：/);
+    assert.match(tab.get("#result-summary").textContent, /用时 02:00\.0/);
+
+    // 切返繁體：靜態、動態同切換掣全部還原
+    setLocale("hant");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hant");
+    assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
+    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
+    assert.equal(tab.toggle.textContent, "简");
+    assert.match(tab.get("#best-note").textContent, /^本地最佳：正式分 0\.0（/);
+    assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
+    assert.equal(tab.get("#result-threshold").textContent, "未達 90% 門檻，正式賽不計排名");
+    assert.equal(tab.get("#result-detail").textContent, "連擊 0 · 得分 0.0");
+    assert.match(tab.get("#result-summary").textContent, /^本場 seed chain-seed：/);
+  } finally {
+    tab.cleanup();
+  }
+});
+
+test("i18n：?flow=1 流程橫額、seed 標籤同「前往第 N 輪」掣跟語言變", () => {
+  withFlowStorage(() => {
+    const tab = chainI18nTab({ flowMode: true });
+    try {
+      assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
+
+      setLocale("hans");
+      assert.equal(tab.get("#flow-banner").textContent,
+        "官方流程第 2 轮：词组 · 固定 120 秒连续题流 · 退出流程会丢弃三轮进度。");
+      assert.equal(tab.get("#mode-note").textContent,
+        "官方流程锁定官方规则：固定 120 秒连续题流，到点自动收卷；seed 每局随机，开局后显示。");
+
+      tab.get("#setup-form").fire("submit");
+      assert.match(tab.get("#seed-label").textContent, /^官方流程第 2 轮：词组 · seed \d{6}$/);
+      tab.setTime(120_000);
+      tab.fireTick();
+      assert.equal(tab.get("#flow-next").textContent, "前往第 3 轮：篇章 →");
+
+      setLocale("hant");
+      assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
+      assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
+    } finally {
+      tab.cleanup();
+    }
   });
 });

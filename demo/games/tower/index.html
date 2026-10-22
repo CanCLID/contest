@@ -11,68 +11,69 @@
   <script src="./tower-dom.mjs?v=1" type="module"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="tower.skipLink">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="../" aria-label="返遊戲大廳">
         <span class="brand-mark" aria-hidden="true">塔</span>
-        <span class="brand-type">粵拼小遊戲</span>
+        <span class="brand-type" data-i18n="tower.brand">粵拼小遊戲</span>
       </a>
       <nav class="nav" aria-label="主要導覽">
-        <a class="nav-link" href="../">‹ 遊戲大廳</a>
-        <a class="nav-link" href="../../index.html">試玩賽場</a>
+        <a class="nav-link" href="../" data-i18n="tower.navLobby">‹ 遊戲大廳</a>
+        <a class="nav-link" href="../../index.html" data-i18n="tower.navArena">試玩賽場</a>
       </nav>
-      <span class="demo-badge"><span></span>練習模式，唔設排名</span>
+      <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+      <span class="demo-badge"><span></span><span class="badge-text" data-i18n="tower.badge">練習模式，唔設排名</span></span>
     </header>
 
     <main id="main">
       <div class="hero">
-        <h1>聲韻解鎖塔</h1>
-        <p>由最簡單嘅聲母開始，一層一層解鎖粵拼嘅 19 個聲母、11 個韻腹同 8 個韻尾。</p>
+        <h1 data-i18n="tower.title">聲韻解鎖塔</h1>
+        <p data-i18n="tower.tagline">由最簡單嘅聲母開始，一層一層解鎖粵拼嘅 19 個聲母、11 個韻腹同 8 個韻尾。</p>
       </div>
 
       <section class="stage-card" aria-labelledby="stage-heading">
         <div class="stage-topline">
-          <h2 id="stage-heading">第 <span id="stage-number">1</span> 層 <span class="stage-total">／ 共 <span id="stage-total">8</span> 層</span></h2>
+          <h2 id="stage-heading"><span data-i18n="tower.stageOrdinal">第</span> <span id="stage-number">1</span> <span data-i18n="tower.stageUnit">層</span> <span class="stage-total">／ <span data-i18n="tower.stageTotalPrefix">共</span> <span id="stage-total">8</span> <span data-i18n="tower.stageUnit">層</span></span></h2>
           <span id="stage-note" class="pill">本層目標：準確度 ≥95%、速度 ≥20 音節／分</span>
         </div>
         <div id="stage-track" class="stage-track" role="progressbar" aria-label="已解鎖元件" aria-valuemin="0" aria-valuemax="38" aria-valuenow="0">
           <div id="stage-bar"></div>
         </div>
         <dl class="stage-facts">
-          <div><dt>已解鎖</dt><dd id="unlocked-count">7 / 38 個元件</dd></div>
-          <div><dt>本層字池</dt><dd id="pool-size">0 個字</dd></div>
-          <div><dt>層數目標</dt><dd id="goal-speed">20 音節／分</dd></div>
-          <div><dt>準確度要求</dt><dd id="goal-accuracy">≥95%（10 題要全中）</dd></div>
+          <div><dt data-i18n="tower.factUnlocked">已解鎖</dt><dd id="unlocked-count">7 / 38 個元件</dd></div>
+          <div><dt data-i18n="tower.factPool">本層字池</dt><dd id="pool-size">0 個字</dd></div>
+          <div><dt data-i18n="tower.factGoalSpeed">層數目標</dt><dd id="goal-speed">20 音節／分</dd></div>
+          <div><dt data-i18n="tower.factGoalAccuracy">準確度要求</dt><dd id="goal-accuracy">≥95%（10 題要全中）</dd></div>
         </dl>
       </section>
 
       <section class="components-card" aria-labelledby="components-heading">
         <div class="components-heading">
-          <h2 id="components-heading">元件解鎖圖</h2>
-          <span class="legend"><span class="legend-dot locked"></span>未解鎖<span class="legend-dot unlocked"></span>已解鎖<span class="legend-dot weak"></span>弱項</span>
+          <h2 id="components-heading" data-i18n="tower.componentsHeading">元件解鎖圖</h2>
+          <span class="legend"><span class="legend-dot locked"></span><span data-i18n="tower.legendLocked">未解鎖</span><span class="legend-dot unlocked"></span><span data-i18n="tower.legendUnlocked">已解鎖</span><span class="legend-dot weak"></span><span data-i18n="tower.legendWeak">弱項</span></span>
         </div>
-        <div class="component-row"><span class="component-label" id="initial-label">聲母</span><div id="component-initial" class="component-cells" role="list" aria-labelledby="initial-label"></div></div>
-        <div class="component-row"><span class="component-label" id="nucleus-label">韻腹</span><div id="component-nucleus" class="component-cells" role="list" aria-labelledby="nucleus-label"></div></div>
-        <div class="component-row"><span class="component-label" id="coda-label">韻尾</span><div id="component-coda" class="component-cells" role="list" aria-labelledby="coda-label"></div></div>
+        <div class="component-row"><span class="component-label" id="initial-label" data-i18n="tower.componentInitial">聲母</span><div id="component-initial" class="component-cells" role="list" aria-labelledby="initial-label"></div></div>
+        <div class="component-row"><span class="component-label" id="nucleus-label" data-i18n="tower.componentNucleus">韻腹</span><div id="component-nucleus" class="component-cells" role="list" aria-labelledby="nucleus-label"></div></div>
+        <div class="component-row"><span class="component-label" id="coda-label" data-i18n="tower.componentCoda">韻尾</span><div id="component-coda" class="component-cells" role="list" aria-labelledby="coda-label"></div></div>
         <p id="unlock-note" class="unlock-note" role="status"></p>
       </section>
 
       <section class="typing-card" aria-labelledby="typing-heading">
         <div class="card-topline">
-          <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="typing-heading">本層練習</span></div>
+          <div class="race-label"><span id="status-dot" class="status-dot"></span><span id="typing-heading" data-i18n="tower.practice">本層練習</span></div>
           <span id="round-progress" class="subtle-label">第 0 / 10 題</span>
         </div>
         <div class="metrics">
-          <div class="metric"><span class="metric-label">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit">由第一次提交開始計</span></div>
-          <div class="metric"><span class="metric-label">本輪速度</span><strong id="speed">0</strong><span class="metric-unit" id="speed-unit">目標 20 音節／分</span></div>
-          <div class="metric"><span class="metric-label">本輪準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+          <div class="metric"><span class="metric-label" data-i18n="tower.metricTime">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit" data-i18n="tower.metricTimeUnit">由第一次提交開始計</span></div>
+          <div class="metric"><span class="metric-label" data-i18n="tower.metricSpeed">本輪速度</span><strong id="speed">0</strong><span class="metric-unit" id="speed-unit">目標 20 音節／分</span></div>
+          <div class="metric"><span class="metric-label" data-i18n="tower.metricAccuracy">本輪準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
         </div>
         <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="feedback typing-hint">
           <p id="reading" class="reading" aria-hidden="true"></p>
           <p id="glyph" class="glyph">準備</p>
           <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" type="text" aria-label="輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled>
-          <span class="focus-hint">點一下呢度繼續輸入</span>
+          <span class="focus-hint" data-i18n="tower.focusHint">點一下呢度繼續輸入</span>
         </div>
         <div id="result" class="result" hidden>
           <span class="result-icon" aria-hidden="true">✳</span>
@@ -84,17 +85,17 @@
         </div>
         <div class="card-foot">
           <p id="feedback" class="feedback" role="status">打粵拼，唔使聲調，按空白鍵或者 Enter 確認。</p>
-          <span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> 確認、<kbd>Backspace</kbd> 刪一個字母</span>
+          <span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> <span data-i18n="tower.hintConfirm">確認</span>、<kbd>Backspace</kbd> <span data-i18n="tower.hintDelete">刪一個字母</span></span>
         </div>
       </section>
 
       <section class="foot-card">
         <div>
-          <h2>進度同紀錄</h2>
-          <p>進度自動存喺呢個瀏覽器（<code>canclid-contest-games-tower</code>），唔會有排名、亦唔會上傳。題庫未經人手校對，正式賽前須校對。</p>
+          <h2 data-i18n="tower.progressHeading">進度同紀錄</h2>
+          <p><span data-i18n="tower.progressNoteLead">進度自動存喺呢個瀏覽器（</span><code>canclid-contest-games-tower</code><span data-i18n="tower.progressNoteTail">），唔會有排名、亦唔會上傳。題庫未經人手校對，正式賽前須校對。</span></p>
           <p id="storage-note" class="storage-note"></p>
         </div>
-        <button id="reset" class="outline-button" type="button">重設進度</button>
+        <button id="reset" class="outline-button" type="button" data-i18n="tower.reset">重設進度</button>
       </section>
     </main>
   </div>

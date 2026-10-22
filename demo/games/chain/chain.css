@@ -31,7 +31,10 @@ kbd { font: inherit; font-size: 14px; border: 1px solid var(--line); border-radi
 .back-link { display: inline-flex; align-items: center; gap: 6px; padding: 10px 0; color: var(--muted); font-size: 16px; text-decoration: none; }
 .back-link:hover { color: var(--green); }
 .game-badge { display: flex; align-items: center; gap: 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
-.game-badge > span { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.game-badge > span:first-child { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+/* 繁體粵語／簡體粵文切換掣：色調跟頂欄嘅 game-badge。 */
+.locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.locale-toggle:hover { border-color: var(--green); color: var(--green); }
 
 .hero { padding: 32px 0 24px; }
 .hero-note { margin: 8px 0 0; color: var(--muted); }

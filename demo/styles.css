@@ -33,6 +33,11 @@ h2 { font-size: 22px; line-height: 1.4; }
 .demo-badge, .pill { font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
 .demo-badge { display: flex; align-items: center; gap: 8px; }
 .demo-badge > span, .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+/* i18n：包住 demo-badge 文字嘅 span 唔跟 .demo-badge > span 嘅圓點樣式。 */
+.demo-badge > .badge-text { width: auto; height: auto; border-radius: 0; background: none; }
+/* 右上角語言切換掣：pill 形，色調跟 demo-badge；樣式同遊戲頁一致。 */
+.locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; min-width: 44px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.locale-toggle:hover, .locale-toggle[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
 .hero { max-width: 1000px; margin-inline: auto; padding: 32px 0 24px; }
 .orange { color: var(--orange); }
 .arena-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 1000px; margin-inline: auto; gap: 20px; align-items: start; }
@@ -156,7 +161,7 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .start-note:empty { display: none; }
 .text-button { border: 0; padding: 0; background: transparent; font-size: 16px; font-weight: 600; }
 .text-button:hover { text-decoration: underline; }
-.text-button > span { margin-left: 8px; }
+.text-button > span[aria-hidden="true"] { margin-left: 8px; }
 .cancel-button { color: var(--muted); text-decoration: underline; }
 .demo-note { display: flex; gap: 8px; margin-top: 20px; color: var(--muted); }
 .demo-note p { margin: 0; font-size: 14px; }
@@ -232,6 +237,8 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   .nav { grid-column: 1 / -1; grid-row: 2; gap: 0; }
   .nav-link { flex: 1; padding: 12px 8px; }
   .demo-badge { font-size: 14px; padding: 4px 10px; }
+  /* 窄版 header 用 grid：切換掣放第一行右邊，demo badge 保持原本嘅第三行。 */
+  .locale-toggle { grid-row: 1; grid-column: 2; justify-self: end; }
   .hero { padding: 24px 0 20px; }
   h1, .page-heading h1 { font-size: 28px; }
   .round-summary { padding: 16px 18px; }

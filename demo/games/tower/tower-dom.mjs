@@ -6,11 +6,93 @@ import {
   TOTAL_STAGES, createTower, getTowerStats, getWeakComponents,
   nextRound, poolFor, submitAnswer, toSaved,
 } from "./tower.mjs";
+import { initI18n, registerStrings, t } from "../../i18n.mjs";
 
 const STORAGE_KEY = "canclid-contest-games-tower";
 const LABELS = { initial: "聲母", nucleus: "韻腹", coda: "韻尾" };
+const LABEL_KEYS = { initial: "tower.componentInitial", nucleus: "tower.componentNucleus", coda: "tower.componentCoda" };
 const TYPES = Object.keys(COMPONENTS);
 const $ = selector => document.querySelector(selector);
+
+function componentLabel(type) {
+  return t(LABEL_KEYS[type], LABELS[type]);
+}
+
+registerStrings({
+  hans: {
+    // index.html 嘅 data-i18n 靜態文案
+    "tower.skipLink": "跳去主要内容",
+    "tower.brand": "粤拼小游戏",
+    "tower.navLobby": "‹ 游戏大厅",
+    "tower.navArena": "试玩赛场",
+    "tower.badge": "练习模式，不设排名",
+    "tower.title": "声韵解锁塔",
+    "tower.tagline": "由最简单的声母开始，一层一层解锁粤拼嘅 19 个声母、11 个韵腹同 8 个韵尾。",
+    "tower.stageOrdinal": "第",
+    "tower.stageUnit": "层",
+    "tower.stageTotalPrefix": "共",
+    "tower.factUnlocked": "已解锁",
+    "tower.factPool": "本层字池",
+    "tower.factGoalSpeed": "层数目标",
+    "tower.factGoalAccuracy": "准确度要求",
+    "tower.componentsHeading": "元件解锁图",
+    "tower.legendLocked": "未解锁",
+    "tower.legendUnlocked": "已解锁",
+    "tower.legendWeak": "弱项",
+    "tower.componentInitial": "声母",
+    "tower.componentNucleus": "韵腹",
+    "tower.componentCoda": "韵尾",
+    "tower.practice": "本层练习",
+    "tower.metricTime": "已用时间",
+    "tower.metricTimeUnit": "由第一次提交开始计",
+    "tower.metricSpeed": "本轮速度",
+    "tower.metricAccuracy": "本轮准确度",
+    "tower.focusHint": "点一下呢度继续输入",
+    "tower.hintConfirm": "确认",
+    "tower.hintDelete": "删一个字母",
+    "tower.progressHeading": "进度同纪录",
+    "tower.progressNoteLead": "进度自动存喺呢个浏览器（",
+    "tower.progressNoteTail": "），唔会有排名、亦唔会上传。题库未经人手校对，正式赛前须校对。",
+    "tower.reset": "重设进度",
+    // -dom.mjs 動態文案
+    "tower.factUnlockedCount": "{unlocked} / {total} 个元件",
+    "tower.factPoolSize": "{count} 个字",
+    "tower.factGoalSpeedValue": "{cpm} 音节／分",
+    "tower.factGoalAccuracyValue": "≥{percent}%（10 题要全中）",
+    "tower.stageNoteGoal": "本层目标：准确度 ≥{percent}%、速度 ≥{cpm} 音节／分",
+    "tower.stageNoteDone": "全部元件已解锁",
+    "tower.speedUnit": "目标 {cpm} 音节／分",
+    "tower.attemptsCount": "{correct} 正确 / {errors} 错误",
+    "tower.attemptsNone": "未有提交",
+    "tower.roundProgress": "已答 {index} / {total} 题",
+    "tower.unlockNote": "新解锁：{parts}",
+    "tower.cellLocked": "未解锁",
+    "tower.cellTitleUnlocked": "{type} {value}：已解锁，{correct} / {total} 正确，准确率 {rate}",
+    "tower.cellTitleUntried": "{type} {value}：已解锁，未练过",
+    "tower.cellTitleLocked": "{type} {value}：未解锁",
+    "tower.resultTitle": "本轮结果",
+    "tower.resultSummary": "{correct} / {submitted} 题啱 · 准确度 {accuracy} · 速度 {cpm} 音节／分",
+    "tower.resultDoneTitle": "全部 {count} 个元件解锁完成！",
+    "tower.resultDoneSummary": "总共打咗 {rounds} 轮。想再玩就按下面「重设进度」。",
+    "tower.resultPassedTitle": "第 {stage} 层完成，上一层解锁咗！",
+    "tower.resultPassedContinue": "开始第 {stage} 层",
+    "tower.resultEmptyTitle": "呢一层冇可用嘅字",
+    "tower.resultEmptySummary": "字池夹唔到已解锁嘅元件，请按下面「重设进度」由第 1 层再开始。",
+    "tower.resultRetryTitle": "未达标，留返喺第 {stage} 层",
+    "tower.resultRetryContinue": "再嚟一轮",
+    "tower.feedbackCorrect": "啱！下一个字：{hanzi}",
+    "tower.feedbackWrong": "未啱，{hanzi} 应该係「{answers}」。下一个字：{next}",
+    "tower.feedbackIdle": "打粤拼，唔使声调，按空白键或者 Enter 确认。",
+    "tower.feedbackRoundEnd": "本轮完咗，睇下面嘅结果。",
+    "tower.feedbackDone": "全部元件都解锁晒，可以按下面「重设进度」再玩。",
+    "tower.storageUnavailable": "未能写入浏览器储存空间，进度净係喺呢一页有效。",
+    "tower.resetConfirm": "重设声韵解锁塔嘅进度？已解锁嘅元件会还原到第 1 层。",
+    "tower.announceDone": "全部 {count} 个元件解锁完成。",
+    "tower.announceRound": "{outcome}：准确度 {accuracy}、速度 {cpm} 音节／分。",
+    "tower.outcomePassed": "过关",
+    "tower.outcomeRetry": "未达标",
+  },
+});
 
 let state = createTower({ now: Date.now(), saved: readJson(STORAGE_KEY, null) });
 let draft = "";
@@ -26,7 +108,7 @@ function roundOpen() {
 function save() {
   const ok = writeJson(STORAGE_KEY, toSaved(state));
   $("#storage-note").textContent = ok
-    ? "" : "未能寫入瀏覽器儲存空間，進度淨係喺呢一頁有效。";
+    ? "" : t("tower.storageUnavailable", "未能寫入瀏覽器儲存空間，進度淨係喺呢一頁有效。");
 }
 
 function announce(message) {
@@ -48,8 +130,8 @@ function unlockedDiff(before, next) {
 function describeUnlock(diff) {
   const parts = TYPES
     .filter(type => diff[type].length > 0)
-    .map(type => `${LABELS[type]} ${diff[type].join("、")}`);
-  return parts.length > 0 ? `新解鎖：${parts.join("；")}` : "";
+    .map(type => `${componentLabel(type)} ${diff[type].join("、")}`);
+  return parts.length > 0 ? t("tower.unlockNote", "新解鎖：{parts}", { parts: parts.join("；") }) : "";
 }
 
 function setDraft(value) {
@@ -69,23 +151,31 @@ function setText(selector, value) {
 function updateMetrics(stats) {
   setText("#time", formatClock(stats.seconds));
   setText("#speed", String(Math.round(stats.round.correctPerMinute)));
-  setText("#speed-unit", `目標 ${stats.cpmTarget} 音節／分`);
+  setText("#speed-unit", t("tower.speedUnit", "目標 {cpm} 音節／分", { cpm: stats.cpmTarget }));
   setText("#accuracy", stats.submitted ? percent(stats.round.accuracy) : "—");
   setText("#attempts", stats.submitted
-    ? `${stats.correct} 正確 / ${stats.errors} 錯誤` : "未有提交");
-  setText("#round-progress", `已答 ${stats.index} / ${stats.total} 題`);
+    ? t("tower.attemptsCount", "{correct} 正確 / {errors} 錯誤", { correct: stats.correct, errors: stats.errors })
+    : t("tower.attemptsNone", "未有提交"));
+  setText("#round-progress", t("tower.roundProgress", "已答 {index} / {total} 題", { index: stats.index, total: stats.total }));
 }
 
 function renderStage(stats) {
+  const accuracyPercent = Math.round(stats.accuracyTarget * 100);
   $("#stage-number").textContent = String(stats.stage);
   $("#stage-total").textContent = String(TOTAL_STAGES);
-  $("#unlocked-count").textContent = `${stats.unlockedCount} / ${stats.componentCount} 個元件`;
-  $("#pool-size").textContent = `${poolFor(state).length} 個字`;
-  $("#goal-speed").textContent = `${stats.cpmTarget} 音節／分`;
-  $("#goal-accuracy").textContent = `≥${Math.round(stats.accuracyTarget * 100)}%（10 題要全中）`;
+  $("#unlocked-count").textContent = t("tower.factUnlockedCount", "{unlocked} / {total} 個元件", {
+    unlocked: stats.unlockedCount,
+    total: stats.componentCount,
+  });
+  $("#pool-size").textContent = t("tower.factPoolSize", "{count} 個字", { count: poolFor(state).length });
+  $("#goal-speed").textContent = t("tower.factGoalSpeedValue", "{cpm} 音節／分", { cpm: stats.cpmTarget });
+  $("#goal-accuracy").textContent = t("tower.factGoalAccuracyValue", "≥{percent}%（10 題要全中）", { percent: accuracyPercent });
   $("#stage-note").textContent = state.status === "completed"
-    ? "全部元件已解鎖"
-    : `本層目標：準確度 ≥${Math.round(stats.accuracyTarget * 100)}%、速度 ≥${stats.cpmTarget} 音節／分`;
+    ? t("tower.stageNoteDone", "全部元件已解鎖")
+    : t("tower.stageNoteGoal", "本層目標：準確度 ≥{percent}%、速度 ≥{cpm} 音節／分", {
+      percent: accuracyPercent,
+      cpm: stats.cpmTarget,
+    });
   const fraction = stats.unlockedCount / stats.componentCount;
   $("#stage-bar").style.width = `${fraction * 100}%`;
   $("#stage-track").setAttribute("aria-valuemax", String(stats.componentCount));
@@ -110,16 +200,19 @@ function renderComponents(stats, weak) {
       cell.setAttribute("role", "listitem");
       const rate = stat && stat.accuracy !== null && stat.total > 0 ? `${Math.round(stat.accuracy)}%` : "—";
       cell.title = isUnlocked
-        ? `${LABELS[type]} ${value}：已解鎖${stat && stat.total > 0
-          ? `，${stat.correct} / ${stat.total} 正確，準確率 ${rate}` : "，未練過"}`
-        : `${LABELS[type]} ${value}：未解鎖`;
+        ? stat && stat.total > 0
+          ? t("tower.cellTitleUnlocked", "{type} {value}：已解鎖，{correct} / {total} 正確，準確率 {rate}", {
+            type: componentLabel(type), value, correct: stat.correct, total: stat.total, rate,
+          })
+          : t("tower.cellTitleUntried", "{type} {value}：已解鎖，未練過", { type: componentLabel(type), value })
+        : t("tower.cellTitleLocked", "{type} {value}：未解鎖", { type: componentLabel(type), value });
       cell.setAttribute("aria-label", cell.title);
       const sound = document.createElement("span");
       sound.className = "component-sound";
       sound.textContent = value;
       const rateElement = document.createElement("span");
       rateElement.className = "component-rate";
-      rateElement.textContent = isUnlocked ? rate : "未解鎖";
+      rateElement.textContent = isUnlocked ? rate : t("tower.cellLocked", "未解鎖");
       cell.append(sound, rateElement);
       return cell;
     });
@@ -146,31 +239,48 @@ function renderResult(stats) {
     return;
   }
   result.hidden = false;
-  const summary = `${stats.correct} / ${stats.submitted} 題啱 · 準確度 ${percent(stats.round.accuracy)}`
-    + ` · 速度 ${Math.round(stats.round.correctPerMinute)} 音節／分`;
-  const goal = `本層目標：準確度 ≥${Math.round(stats.accuracyTarget * 100)}%、速度 ≥${stats.cpmTarget} 音節／分`;
+  const summary = t("tower.resultSummary", "{correct} / {submitted} 題啱 · 準確度 {accuracy} · 速度 {cpm} 音節／分", {
+    correct: stats.correct,
+    submitted: stats.submitted,
+    accuracy: percent(stats.round.accuracy),
+    cpm: Math.round(stats.round.correctPerMinute),
+  });
+  const goal = t("tower.stageNoteGoal", "本層目標：準確度 ≥{percent}%、速度 ≥{cpm} 音節／分", {
+    percent: Math.round(stats.accuracyTarget * 100),
+    cpm: stats.cpmTarget,
+  });
   $("#continue").hidden = false;
   if (state.status === "completed") {
-    $("#result-title").textContent = `全部 ${stats.componentCount} 個元件解鎖完成！`;
-    $("#result-summary").textContent = `總共打咗 ${stats.rounds} 輪。想再玩就按下面「重設進度」。`;
+    $("#result-title").textContent = t("tower.resultDoneTitle", "全部 {count} 個元件解鎖完成！", { count: stats.componentCount });
+    $("#result-summary").textContent = t("tower.resultDoneSummary", "總共打咗 {rounds} 輪。想再玩就按下面「重設進度」。", { rounds: stats.rounds });
     $("#continue").hidden = true;
     return;
   }
   if (state.round.outcome === "passed") {
-    $("#result-title").textContent = `第 ${state.stage - 1} 層完成，上一層解鎖咗！`;
+    $("#result-title").textContent = t("tower.resultPassedTitle", "第 {stage} 層完成，上一層解鎖咗！", { stage: state.stage - 1 });
     $("#result-summary").textContent = `${summary}。${goal}`;
-    $("#continue").textContent = `開始第 ${state.stage} 層`;
+    $("#continue").textContent = t("tower.resultPassedContinue", "開始第 {stage} 層", { stage: state.stage });
     return;
   }
   if (state.round.outcome === "empty") {
-    $("#result-title").textContent = "呢一層冇可用嘅字";
-    $("#result-summary").textContent = "字池夾唔到已解鎖嘅元件，請按下面「重設進度」由第 1 層再開始。";
+    $("#result-title").textContent = t("tower.resultEmptyTitle", "呢一層冇可用嘅字");
+    $("#result-summary").textContent = t("tower.resultEmptySummary", "字池夾唔到已解鎖嘅元件，請按下面「重設進度」由第 1 層再開始。");
     $("#continue").hidden = true;
     return;
   }
-  $("#result-title").textContent = `未達標，留返喺第 ${state.stage} 層`;
+  $("#result-title").textContent = t("tower.resultRetryTitle", "未達標，留返喺第 {stage} 層", { stage: state.stage });
   $("#result-summary").textContent = `${summary}。${goal}`;
-  $("#continue").textContent = "再嚟一輪";
+  $("#continue").textContent = t("tower.resultRetryContinue", "再嚟一輪");
+}
+
+// 未開局或者本輪完結時嘅提示；開局中唔應該蓋住「下一個字」。
+function renderFeedback() {
+  if (roundOpen()) return;
+  $("#feedback").textContent = state.status === "completed"
+    ? t("tower.feedbackDone", "全部元件都解鎖晒，可以按下面「重設進度」再玩。")
+    : state.round.outcome === null
+      ? t("tower.feedbackIdle", "打粵拼，唔使聲調，按空白鍵或者 Enter 確認。")
+      : t("tower.feedbackRoundEnd", "本輪完咗，睇下面嘅結果。");
 }
 
 function render() {
@@ -230,18 +340,29 @@ function submit() {
     const previous = state.round.questions[state.round.index - 1];
     const next = state.round.questions[state.round.index];
     $("#feedback").textContent = state.round.lastResult === "correct"
-      ? `啱！下一個字：${next.hanzi}`
-      : `未啱，${previous.hanzi} 應該係「${previous.answers.join(" 或 ")}」。下一個字：${next.hanzi}`;
+      ? t("tower.feedbackCorrect", "啱！下一個字：{hanzi}", { hanzi: next.hanzi })
+      : t("tower.feedbackWrong", "未啱，{hanzi} 應該係「{answers}」。下一個字：{next}", {
+        hanzi: previous.hanzi,
+        answers: previous.answers.join(" 或 "),
+        next: next.hanzi,
+      });
     announce($("#feedback").textContent);
     return;
   }
   const stats = getTowerStats(state, Date.now());
   $("#feedback").textContent = state.status === "completed"
-    ? "全部元件都解鎖晒，可以按下面「重設進度」再玩。"
-    : "本輪完咗，睇下面嘅結果。";
+    ? t("tower.feedbackDone", "全部元件都解鎖晒，可以按下面「重設進度」再玩。")
+    : t("tower.feedbackRoundEnd", "本輪完咗，睇下面嘅結果。");
+  const outcome = state.round.outcome === "passed"
+    ? t("tower.outcomePassed", "過關")
+    : t("tower.outcomeRetry", "未達標");
   announce(state.status === "completed"
-    ? `全部 ${stats.componentCount} 個元件解鎖完成。`
-    : `${state.round.outcome === "passed" ? "過關" : "未達標"}：準確度 ${percent(stats.round.accuracy)}、速度 ${Math.round(stats.round.correctPerMinute)} 音節／分。`);
+    ? t("tower.announceDone", "全部 {count} 個元件解鎖完成。", { count: stats.componentCount })
+    : t("tower.announceRound", "{outcome}：準確度 {accuracy}、速度 {cpm} 音節／分。", {
+      outcome,
+      accuracy: percent(stats.round.accuracy),
+      cpm: Math.round(stats.round.correctPerMinute),
+    }));
 }
 
 $("#typing-surface").addEventListener("click", focusAnswer);
@@ -294,7 +415,7 @@ $("#continue").addEventListener("click", () => {
   focusAnswer();
 });
 $("#reset").addEventListener("click", () => {
-  if (!confirm("重設聲韻解鎖塔嘅進度？已解鎖嘅元件會還原到第 1 層。")) return;
+  if (!confirm(t("tower.resetConfirm", "重設聲韻解鎖塔嘅進度？已解鎖嘅元件會還原到第 1 層。"))) return;
   state = createTower({ now: Date.now(), saved: null });
   justUnlocked = { initial: [], nucleus: [], coda: [] };
   save();
@@ -305,7 +426,15 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden && roundOpen()) renderLive();
 });
 
+initI18n();
+// 語言一轉就重畫動態介面（靜態文案由 i18n 運行庫自己換）。
+window.addEventListener("canclid-locale", () => {
+  render();
+  renderFeedback();
+});
 save();
 render();
+$("#result-title").textContent = t("tower.resultTitle", "本輪結果");
+$("#feedback").textContent = t("tower.feedbackIdle", "打粵拼，唔使聲調，按空白鍵或者 Enter 確認。");
 setDraft("");
 focusAnswer();

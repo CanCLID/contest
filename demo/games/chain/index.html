@@ -5,53 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f6f0">
   <meta name="description" content="粵拼詞鏈：順住詞語逐個音節打，連擊倍率最高 ×1.5。CanCLID 粵拼打字比賽小遊戲。">
-  <title>粵拼詞鏈 · CanCLID</title>
+  <title data-i18n="chain.docTitle">粵拼詞鏈 · CanCLID</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./chain.css">
   <script src="./chain-dom.mjs" type="module"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="chain.skipLink">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
-      <a id="lobby-link" class="back-link" href="../">‹ 遊戲大廳</a>
-      <span class="game-badge"><span aria-hidden="true"></span>小遊戲</span>
-      <a class="back-link" href="../../index.html">試玩賽場</a>
+      <a id="lobby-link" class="back-link" href="../" data-i18n="chain.lobbyLink">‹ 遊戲大廳</a>
+      <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+      <span class="game-badge"><span aria-hidden="true"></span><span data-i18n="chain.badge">小遊戲</span></span>
+      <a class="back-link" href="../../index.html" data-i18n="chain.arenaLink">試玩賽場</a>
     </header>
 
     <main id="main">
       <p id="flow-banner" class="flow-banner" hidden></p>
       <section id="setup-view" class="view">
         <div class="hero">
-          <h1>粵拼詞鏈</h1>
-          <p class="hero-note">順住詞語逐個音節打。詞語全對就連擊 +1，倍率最高 ×1.5。</p>
+          <h1 data-i18n="chain.title">粵拼詞鏈</h1>
+          <p class="hero-note" data-i18n="chain.heroNote">順住詞語逐個音節打。詞語全對就連擊 +1，倍率最高 ×1.5。</p>
         </div>
         <div class="panel-grid">
           <section class="panel">
-            <h2>玩法</h2>
+            <h2 data-i18n="chain.howTitle">玩法</h2>
             <ul class="rules">
-              <li>每次打一個音節，按 <kbd>Space</kbd> 或 <kbd>Enter</kbd> 確認；啱同錯都會去下一個音節。</li>
-              <li>一個詞全部音節都打啱 → 連擊 +1；個詞有任何一個錯 → 連擊即刻歸零。</li>
-              <li>每個打啱嘅音節得 1 分 × 當時倍率。倍率 = 1 + 0.1 × 連擊，最高 <strong>×1.5</strong>。</li>
-              <li>未輸入字母時按 <kbd>Backspace</kbd> 可以退回上一個已提交音節重打，分數同連擊一齊回滾。</li>
-              <li>練習模式打完 20 個詞即完場。成績用「正確音節／分鐘 × 準確度」，準確度未夠 90% 唔達標。</li>
-              <li>官方模式（正式詞組輪）：固定 120 秒連續題流，到點自動收卷，計分窗照 120 秒計。</li>
-              <li>成績只存喺呢個瀏覽器，唔會上傳。</li>
+              <li><span data-i18n="chain.rule1a">每次打一個音節，按</span> <kbd>Space</kbd> <span data-i18n="chain.rule1b">或</span> <kbd>Enter</kbd> <span data-i18n="chain.rule1c">確認；啱同錯都會去下一個音節。</span></li>
+              <li data-i18n="chain.rule2">一個詞全部音節都打啱 → 連擊 +1；個詞有任何一個錯 → 連擊即刻歸零。</li>
+              <li><span data-i18n="chain.rule3">每個打啱嘅音節得 1 分 × 當時倍率。倍率 = 1 + 0.1 × 連擊，最高</span> <strong>×1.5</strong>。</li>
+              <li><span data-i18n="chain.rule4a">未輸入字母時按</span> <kbd>Backspace</kbd> <span data-i18n="chain.rule4b">可以退回上一個已提交音節重打，分數同連擊一齊回滾。</span></li>
+              <li data-i18n="chain.rule5">練習模式打完 20 個詞即完場。成績用「正確音節／分鐘 × 準確度」，準確度未夠 90% 唔達標。</li>
+              <li data-i18n="chain.rule6">官方模式（正式詞組輪）：固定 120 秒連續題流，到點自動收卷，計分窗照 120 秒計。</li>
+              <li data-i18n="chain.rule7">成績只存喺呢個瀏覽器，唔會上傳。</li>
             </ul>
           </section>
           <aside class="panel setup-panel">
-            <h2>開始</h2>
+            <h2 data-i18n="chain.startTitle">開始</h2>
             <form id="setup-form" autocomplete="off">
-              <span class="field-label" id="mode-label">模式</span>
+              <span class="field-label" id="mode-label" data-i18n="chain.modeLabel">模式</span>
               <div id="mode-picker" class="segmented" role="group" aria-labelledby="mode-label">
-                <button id="mode-practice" class="selected" type="button" aria-pressed="true">練習</button>
-                <button id="mode-official" type="button" aria-pressed="false">官方</button>
+                <button id="mode-practice" class="selected" type="button" aria-pressed="true" data-i18n="chain.modePractice">練習</button>
+                <button id="mode-official" type="button" aria-pressed="false" data-i18n="chain.modeOfficial">官方</button>
               </div>
-              <p id="mode-note" class="field-note">練習模式：打完 20 個詞完場，成績只存本機。</p>
-              <label id="seed-field" class="field-label" for="seed">Seed（可以留空）</label>
-              <input id="seed" class="seed-input" name="seed" type="text" lang="en" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="留空＝隨機" maxlength="24" aria-describedby="seed-note">
-              <p id="seed-note" class="field-note">同一個 seed 會出同一串詞，可以同朋友用同一串詞對賽。</p>
-              <button id="start" class="start-button" type="submit">開始遊戲 <span aria-hidden="true">↗</span></button>
+              <p id="mode-note" class="field-note" data-i18n="chain.modeNote.practice">練習模式：打完 20 個詞完場，成績只存本機。</p>
+              <label id="seed-field" class="field-label" for="seed" data-i18n="chain.seedLabel">Seed（可以留空）</label>
+              <input id="seed" class="seed-input" name="seed" type="text" lang="en" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="留空＝隨機" maxlength="24" aria-describedby="seed-note" data-i18n-placeholder="chain.seedPlaceholder">
+              <p id="seed-note" class="field-note" data-i18n="chain.seedNote">同一個 seed 會出同一串詞，可以同朋友用同一串詞對賽。</p>
+              <button id="start" class="start-button" type="submit"><span data-i18n="chain.start">開始遊戲</span> <span aria-hidden="true">↗</span></button>
             </form>
             <p id="best-note" class="field-note"></p>
           </aside>
@@ -69,13 +70,13 @@
             <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="feedback">
               <ol id="word" class="word-row" aria-label="當前詞語"></ol>
               <input id="answer" class="typing-capture" type="text" lang="en" tabindex="-1" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="輸入當前音節嘅粵拼">
-              <p class="draft-line"><span class="draft-label">輸入</span><strong id="draft">—</strong></p>
+              <p class="draft-line"><span class="draft-label" data-i18n="chain.draftLabel">輸入</span><strong id="draft">—</strong></p>
             </div>
             <p class="combo-line"><span id="combo">連擊 0</span><span id="multiplier" class="multiplier">倍率 ×1.0</span></p>
             <div class="metrics">
-              <div class="metric"><span class="metric-label">得分</span><strong id="score">0.0</strong></div>
-              <div class="metric"><span class="metric-label">正確音節／分</span><strong id="cpm">0</strong></div>
-              <div class="metric"><span class="metric-label">準確度</span><strong id="accuracy">—</strong></div>
+              <div class="metric"><span class="metric-label" data-i18n="chain.metricScore">得分</span><strong id="score">0.0</strong></div>
+              <div class="metric"><span class="metric-label" data-i18n="chain.metricCpm">正確音節／分</span><strong id="cpm">0</strong></div>
+              <div class="metric"><span class="metric-label" data-i18n="chain.metricAccuracy">準確度</span><strong id="accuracy">—</strong></div>
               <div class="metric"><span class="metric-label" id="time-label">已用時間</span><strong id="time">00:00.0</strong></div>
             </div>
             <p id="feedback" class="feedback" role="status">打粵拼，<kbd>Space</kbd> 或 <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一個音節。</p>
@@ -87,19 +88,19 @@
         <div class="panel result-panel">
           <h2 id="result-title">完成喇！</h2>
           <dl class="result-grid">
-            <div><dt>正確音節／分鐘</dt><dd id="result-cpm"></dd></div>
-            <div><dt>準確度</dt><dd id="result-accuracy"></dd></div>
-            <div><dt>正式分</dt><dd id="result-score"></dd></div>
-            <div><dt>90% 門檻</dt><dd id="result-threshold"></dd></div>
-            <div><dt>本地最佳</dt><dd id="result-best"></dd></div>
-            <div><dt>連擊 · 得分</dt><dd id="result-detail"></dd></div>
+            <div><dt data-i18n="chain.resultCpmLabel">正確音節／分鐘</dt><dd id="result-cpm"></dd></div>
+            <div><dt data-i18n="chain.resultAccuracyLabel">準確度</dt><dd id="result-accuracy"></dd></div>
+            <div><dt data-i18n="chain.resultScoreLabel">正式分</dt><dd id="result-score"></dd></div>
+            <div><dt data-i18n="chain.resultThresholdLabel">90% 門檻</dt><dd id="result-threshold"></dd></div>
+            <div><dt data-i18n="chain.resultBestLabel">本地最佳</dt><dd id="result-best"></dd></div>
+            <div><dt data-i18n="chain.resultDetailLabel">連擊 · 得分</dt><dd id="result-detail"></dd></div>
           </dl>
           <p id="window-note" class="field-note" hidden></p>
           <p id="result-summary" class="field-note"></p>
           <div class="result-actions">
             <a id="flow-next" class="start-button flow-next" href="../ghost/?flow=1" hidden>前往第 3 輪：篇章 →</a>
-            <button id="play-again" class="start-button" type="button">再玩一場 <span aria-hidden="true">↗</span></button>
-            <a id="result-lobby" class="back-link" href="../">返去遊戲大廳</a>
+            <button id="play-again" class="start-button" type="button"><span data-i18n="chain.playAgain">再玩一場</span> <span aria-hidden="true">↗</span></button>
+            <a id="result-lobby" class="back-link" href="../" data-i18n="chain.resultLobby">返去遊戲大廳</a>
           </div>
         </div>
       </section>

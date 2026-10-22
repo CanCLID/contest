@@ -36,6 +36,11 @@ code { font: inherit; padding: 2px 5px; border-radius: 4px; color: var(--orange)
 .demo-badge, .pill { font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
 .demo-badge { display: flex; align-items: center; gap: 8px; background: var(--white); }
 .demo-badge > span, .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+/* i18n：語言切換掣，跟 .demo-badge 同一套 pill 色調。 */
+.locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; min-width: 44px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.locale-toggle:hover, .locale-toggle[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
+/* i18n：包住 demo-badge 文字嘅 span 唔跟 .demo-badge > span 嘅圓點樣式。 */
+.demo-badge > .badge-text { width: auto; height: auto; border-radius: 0; background: none; }
 .status-dot.live { background: var(--orange); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 
@@ -124,6 +129,8 @@ kbd { font: inherit; padding: 1px 5px; border: 1px solid var(--line); border-rad
   .site-header { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding-top: 20px; }
   .nav { grid-column: 1 / -1; grid-row: 2; gap: 20px; }
   .nav-link { padding: 12px 0; }
+  /* 窄版 header 用 grid：切換掣放第一行右邊，demo badge 跟主站排第三行。 */
+  .locale-toggle { grid-row: 1; grid-column: 2; justify-self: end; }
   h1 { font-size: 28px; }
   .stage-card, .components-card, .foot-card { padding: 20px; }
   .stage-facts { grid-template-columns: 1fr 1fr; gap: 12px 16px; }

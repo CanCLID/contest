@@ -27,6 +27,7 @@ import {
   startFlow,
 } from "../demo/games/flow.mjs";
 import { OFFICIAL_ROUND_ORDER, OFFICIAL_ROUNDS } from "../demo/games/official.mjs";
+import { getLocale, setLocale } from "../demo/i18n.mjs";
 
 function fakeStorage() {
   const map = new Map();
@@ -336,4 +337,52 @@ test("流程模組保持純邏輯：零 DOM、零 window／location、只用相�
   for (const banned of ["document", "window", "location"]) {
     assert.doesNotMatch(source, new RegExp(`\\b${banned}\\b`), `flow.mjs 唔應該用 ${banned}`);
   }
+});
+
+// --- i18n：流程標籤同遊戲大廳跟界面語言切換 ---------------------------------
+
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+
+// 每條 i18n 測試尾都要還原 locale，順手清走 localStorage 入面嘅語言紀錄。
+function restoreLocale() {
+  setLocale("hant");
+  try {
+    globalThis.localStorage?.removeItem?.(LOCALE_STORAGE_KEY);
+  } catch {}
+}
+
+test("流程標籤跟語言切換：hans 出簡體粵文，hant 還原繁體", () => {
+  assert.equal(getLocale(), "hant", "node 環境預設繁體");
+  assert.equal(flowRoundLabel("single"), "官方流程第 1 輪：單字");
+  try {
+    setLocale("hans");
+    assert.equal(flowRoundLabel("single"), "官方流程第 1 轮：单字");
+    assert.equal(flowRoundLabel("words"), "官方流程第 2 轮：词组");
+    assert.equal(flowRoundLabel("passage"), "官方流程第 3 轮：篇章");
+    assert.equal(flowNextLabel("single"), "前往第 2 轮：词组 →");
+    assert.equal(flowNextLabel("words"), "前往第 3 轮：篇章 →");
+    assert.equal(flowNextLabel("passage"), "查看三轮成绩 →");
+    assert.equal(flowRoundLabel("bogus"), "", "未知輪次照樣係空字串");
+    assert.equal(flowNextLabel("bogus"), "");
+  } finally {
+    restoreLocale();
+  }
+  assert.equal(getLocale(), "hant");
+  assert.equal(flowRoundLabel("words"), "官方流程第 2 輪：詞組", "還原繁體");
+  assert.equal(flowNextLabel("passage"), "查看三輪成績 →");
+});
+
+test("遊戲大廳：語言切換掣、data-i18n 覆蓋同 i18n 啟動腳本", () => {
+  const lobby = readFileSync(new URL("../demo/games/index.html", import.meta.url), "utf8");
+  assert.match(lobby,
+    /<button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简<\/button>/);
+  assert.match(lobby, /import \{ initI18n, registerStrings \} from "\.\.\/i18n\.mjs"/);
+  assert.match(lobby, /initI18n\(\);/);
+
+  const keys = [...lobby.matchAll(/data-i18n="(lobby\.[^"]+)"/g)].map(match => match[1]);
+  assert.ok(keys.length >= 25, `大廳只搵到 ${keys.length} 個 data-i18n`);
+  for (const key of new Set(keys)) {
+    assert.ok(lobby.includes(`"${key}":`), `大廳 inline script 冇登記 ${key} 嘅簡體譯文`);
+  }
+  assert.match(lobby, /<h2 data-i18n="lobby\.rocksTitle">粵拼落石<\/h2>/, "繁體原文要留喺 HTML 度做 fallback");
 });

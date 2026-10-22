@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 import { COMBO_CAP, OFFICIAL_THRESHOLDS, comboMultiplier, formatClock, roundMetrics } from "../demo/games/common.mjs";
 import * as flowApi from "../demo/games/flow.mjs";
+import { getLocale, initI18n, registerStrings, setLocale, t } from "../demo/i18n.mjs";
 import { ROCK_QUESTIONS, validateBank } from "../demo/games/rocks/data.mjs";
 import {
   DEFAULT_DURATION_SECONDS,
@@ -993,3 +994,236 @@ test("DOM 層：?flow=1 鎖定官方單字輪、顯示流程橫額，完場寫�
   });
 });
 
+
+// --- i18n：繁體粵語（預設）／簡體粵文（demo/i18n.mjs） ------------------------
+
+const ROCKS_HTML = readFileSync(new URL("../demo/games/rocks/index.html", import.meta.url), "utf8");
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+
+// 由 index.html 直接抽 data-i18n 元素：key → 繁體原文（同頁面開場嗰陣一樣）。
+function i18nEntries(html, attribute = "data-i18n") {
+  const pattern = new RegExp(`${attribute}="([^"]+)"[^>]*>([^<]*)<`, "g");
+  return [...html.matchAll(pattern)].map(match => ({ key: match[1], hant: match[2] }));
+}
+
+// i18n 運行庫喺瀏覽器度讀全局 document／window／localStorage；node 冇，測試暫時掛
+// 假嘅上去，令真嘅 demo/i18n.mjs 同 vm 入面嘅頁面模組共用同一個假 DOM。
+function withI18nGlobals(values) {
+  const saved = new Map();
+  for (const [name, value] of Object.entries(values)) {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  }
+  return () => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  };
+}
+
+// 同 rocksModeTab 一樣嘅迷你 DOM，但補上 i18n 要用嘅嘢：dataset（靜態文案快取）、
+// document.querySelectorAll（data-i18n／data-i18n-placeholder／data-locale-toggle）、
+// 假 localStorage，同埋真嘅 i18n 運行庫。
+function rocksI18nTab({ flowMode = false } = {}) {
+  let now = 0;
+  let frameId = 0;
+  const frames = new Map();
+  const elements = new Map();
+  const documentListeners = new Map();
+  const storage = new Map();
+  const windowListeners = new Map();
+
+  const makeElement = () => {
+    const classes = new Set();
+    const attributes = new Map();
+    const own = new Map();
+    const node = {
+      hidden: false, textContent: "", value: "", style: {}, dataset: {},
+      clientHeight: 300, offsetHeight: 100,
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: name => attributes.get(name) ?? null,
+      focus() {}, blur() {},
+      addEventListener(type, listener) {
+        if (!own.has(type)) own.set(type, []);
+        own.get(type).push(listener);
+      },
+      fire(type, event = {}) {
+        event.target ??= node;
+        event.preventDefault ??= () => {};
+        (own.get(type) ?? []).forEach(listener => listener(event));
+      },
+    };
+    return node;
+  };
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement());
+    return elements.get(selector);
+  };
+  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
+
+  const staticNodes = i18nEntries(ROCKS_HTML).map(({ key, hant }) => {
+    const node = makeElement();
+    node.textContent = hant;
+    // 真 DOM 會將 data-i18n 屬性反映去 dataset；i18n 運行庫靠 el.dataset.i18n 攞 key。
+    node.dataset.i18n = key;
+    return { key, node };
+  });
+  const toggle = makeElement();
+
+  const document = {
+    documentElement: makeElement(),
+    querySelector: get,
+    querySelectorAll(selector) {
+      if (selector === "[data-i18n]") return staticNodes.map(entry => entry.node);
+      if (selector === "[data-locale-toggle]") return [toggle];
+      return [];
+    },
+    addEventListener(type, listener) { documentListeners.set(type, listener); },
+  };
+  const window = {
+    CustomEvent: class {
+      constructor(type, options) { this.type = type; this.detail = options?.detail; }
+    },
+    addEventListener(type, listener) {
+      if (!windowListeners.has(type)) windowListeners.set(type, []);
+      windowListeners.get(type).push(listener);
+    },
+    dispatchEvent(event) { for (const listener of windowListeners.get(event.type) ?? []) listener(event); },
+  };
+  const localStorage = {
+    getItem: key => (storage.has(key) ? storage.get(key) : null),
+    setItem: (key, value) => { storage.set(key, String(value)); },
+    removeItem: key => { storage.delete(key); },
+  };
+  const restoreGlobals = withI18nGlobals({ document, window, localStorage, CustomEvent: window.CustomEvent });
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    Date: Clock,
+    OFFICIAL_THRESHOLDS, OFFICIAL_ROCKS, ROCK_QUESTIONS,
+    comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
+    ...flowApi,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
+    createRocksGame, getFallProgress, getRocksMetrics, tick, typeSyllable,
+    readJson: (key, fallback = null) => storage.has(key) ? JSON.parse(storage.get(key)) : fallback,
+    writeJson: (key, value) => { storage.set(key, JSON.stringify(value)); return true; },
+    // 頁面模組 import { t as i18nT }：import 被剝走之後，i18nT 由呢度嚟。
+    i18nT: t, initI18n, registerStrings, setLocale, getLocale,
+    document, window, localStorage,
+    requestAnimationFrame(callback) { frameId += 1; frames.set(frameId, callback); return frameId; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    setTimeout: () => 1,
+  }), { filename: "demo/games/rocks/rocks-dom.mjs" });
+
+  return {
+    get,
+    static: key => staticNodes.find(entry => entry.key === key)?.node ?? null,
+    toggle,
+    setTime: value => { now = value; },
+    flushFrames(limit = 8) {
+      for (let i = 0; i < limit && frames.size > 0; i++) {
+        const queued = [...frames.values()];
+        frames.clear();
+        queued.forEach(callback => callback());
+      }
+    },
+    // 還原語言同清走呢個測試寫入嘅 storage，唔好影響其他測試。
+    cleanup() {
+      setLocale("hant");
+      storage.clear();
+      restoreGlobals();
+    },
+  };
+}
+
+test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊變，切返繁體還原", () => {
+  const tab = rocksI18nTab();
+  try {
+    assert.equal(getLocale(), "hant", "node 冇 navigator，預設一定係繁體");
+    assert.equal(tab.static("rocks.title").textContent, "粵拼落石");
+    assert.equal(tab.static("rocks.how3").textContent, "漏接一次扣一條命。三條命用完，或者 60 秒倒數完，即刻結算。");
+    assert.equal(tab.toggle.textContent, "简");
+    assert.equal(tab.get("#mode-note").textContent, "練習模式：60 秒、三條命，成績只存本機。");
+
+    setLocale("hans");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hans");
+
+    // 靜態文案（index.html 嘅 data-i18n）
+    assert.equal(tab.static("rocks.title").textContent, "粤拼落石");
+    assert.equal(tab.static("rocks.how3").textContent, "漏接一次扣一条命。三条命用完，或者 60 秒倒数完，即刻结算。");
+    assert.equal(tab.static("rocks.modePractice").textContent, "练习");
+    assert.equal(tab.static("rocks.start").textContent, "开始游戏");
+    // 切換掣：簡體界面顯示「繁」
+    assert.equal(tab.toggle.textContent, "繁");
+    assert.equal(tab.toggle.getAttribute("aria-pressed"), "true");
+
+    // 動態文案（模組 t() 畫出嚟）
+    assert.equal(tab.get("#mode-note").textContent, "练习模式：60 秒、三条命，成绩只存本机。");
+    tab.get("#start-button").fire("click");
+    assert.equal(tab.get("#feedback").textContent, "打粤拼，按 Space 或 Enter 提交（准确度要达 90% 先计排名）");
+
+    tab.setTime(DEFAULT_DURATION_SECONDS * 1000);
+    tab.flushFrames();
+    assert.equal(tab.get("#result-title").textContent, "时间到，游戏结束");
+    assert.equal(tab.get("#threshold-note").textContent, "未达门槛，唔计排名。");
+    assert.equal(tab.get("#result-detail").textContent, "击破 0 个字 · 打错 0 次 · 漏接 0 次 · 最高连击 0");
+    assert.equal(tab.get("#best-note").textContent, "本地最佳：未有纪录（要达门槛先会记录）");
+
+    // 切返繁體：靜態、動態同切換掣全部還原
+    setLocale("hant");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hant");
+    assert.equal(tab.static("rocks.title").textContent, "粵拼落石");
+    assert.equal(tab.static("rocks.start").textContent, "開始遊戲");
+    assert.equal(tab.toggle.textContent, "简");
+    assert.equal(tab.toggle.getAttribute("aria-pressed"), "false");
+    assert.equal(tab.get("#mode-note").textContent, "練習模式：60 秒、三條命，成績只存本機。");
+    assert.equal(tab.get("#feedback").textContent, "打粵拼，按 Space 或 Enter 提交（準確度要達 90% 先計排名）");
+    assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
+    assert.equal(tab.get("#threshold-note").textContent, "未達門檻，唔計排名。");
+  } finally {
+    tab.cleanup();
+  }
+});
+
+test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣跟語言變", () => {
+  withFlowStorage(() => {
+    const tab = rocksI18nTab({ flowMode: true });
+    try {
+      assert.match(tab.get("#flow-banner").textContent, /官方流程第 1 輪：單字 · 固定 90 秒、無命/);
+      assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒");
+
+      setLocale("hans");
+      assert.equal(tab.get("#flow-banner").textContent,
+        "官方流程第 1 轮：单字 · 固定 90 秒、无命 · 退出流程会丢弃三轮进度。");
+      assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 单字轮 90 秒");
+      assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
+
+      // 開局之後橫額要帶 seed，完場之後「下一輪」掣都要跟語言。
+      tab.get("#start-button").fire("click");
+      assert.match(tab.get("#flow-banner").textContent, /^官方流程第 1 轮：单字 · seed rocks-0 · 固定 90 秒、无命。$/);
+      tab.setTime(90_000);
+      tab.flushFrames();
+      assert.equal(tab.get("#flow-next").textContent, "前往第 2 轮：词组 →");
+
+      setLocale("hant");
+      assert.equal(tab.get("#flow-next").textContent, "前往第 2 輪：詞組 →");
+      assert.match(tab.get("#flow-banner").textContent, /^官方流程第 1 輪：單字 · seed rocks-0 · 固定 90 秒、無命。$/);
+      assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒");
+      assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
+    } finally {
+      tab.cleanup();
+    }
+  });
+});

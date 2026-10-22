@@ -26,8 +26,10 @@ import {
   loadSummary,
   playerLine,
   roundRows,
+  summaryNote,
   totalsLine,
 } from "../demo/games/summary/summary.mjs";
+import { getLocale, setLocale } from "../demo/i18n.mjs";
 
 const html = readFileSync(new URL("../demo/games/summary/index.html", import.meta.url), "utf8");
 const domSource = readFileSync(new URL("../demo/games/summary/summary-dom.mjs", import.meta.url), "utf8");
@@ -355,4 +357,171 @@ test("成績卡 DOM：有歷史但冇流程（例如清咗流程之後）照樣�
     assert.equal(tab.get("#history-list").children[0].children[1].textContent,
       "單字 16.2 · 詞組 24.0 · 篇章 28.1");
   });
+});
+
+// --- i18n：成績卡靜態／動態文案跟界面語言切換 ---------------------------------
+
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+
+// 每條 i18n 測試尾都要還原 locale，順手清走 localStorage 入面嘅語言紀錄。
+function restoreLocale() {
+  setLocale("hant");
+  try {
+    globalThis.localStorage?.removeItem?.(LOCALE_STORAGE_KEY);
+  } catch {}
+}
+
+// 迷你 document：夠 i18n 嘅 applyStaticI18n／updateToggleButtons 用。
+function fakeDocument(nodes = []) {
+  const toggle = {
+    textContent: "",
+    attributes: new Map(),
+    setAttribute(name, value) { this.attributes.set(name, String(value)); },
+  };
+  const document = {
+    documentElement: { setAttribute() {} },
+    querySelectorAll(selector) {
+      if (selector === "[data-locale-toggle]") return [toggle];
+      if (selector === "[data-i18n]") return nodes.filter(node => node.dataset.i18n != null);
+      return [];
+    },
+  };
+  return { toggle, document };
+}
+
+function withFakeDocument(nodes, run) {
+  const fake = fakeDocument(nodes);
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
+  Object.defineProperty(globalThis, "document", { value: fake.document, configurable: true, writable: true });
+  try {
+    return run(fake);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous);
+    else delete globalThis.document;
+  }
+}
+
+test("成績卡靜態文案跟語言切換：data-i18n 元素出簡體，切換掣文字跟住變", () => {
+  const node = { dataset: { i18n: "summary.heroTitle" }, textContent: "官方三輪試玩 · 成績卡" };
+  try {
+    withFakeDocument([node], fake => {
+      setLocale("hans");
+      assert.equal(node.textContent, "官方三轮试玩 · 成绩卡");
+      assert.equal(fake.toggle.textContent, "繁", "hans 時切換掣顯示「繁」");
+      assert.equal(fake.toggle.attributes.get("aria-pressed"), "true");
+      setLocale("hant");
+      assert.equal(node.textContent, "官方三輪試玩 · 成績卡", "hant 還原繁體原文");
+      assert.equal(fake.toggle.textContent, "简", "hant 時切換掣顯示「简」");
+      assert.equal(fake.toggle.attributes.get("aria-pressed"), "false");
+    });
+  } finally {
+    restoreLocale();
+  }
+  assert.equal(getLocale(), "hant");
+});
+
+test("成績卡動態文案跟語言切換：總計句、格式化輸出、歷史旗標出簡體", () => {
+  try {
+    setLocale("hans");
+    assert.equal(summaryNote(), "三轮总分排名以组内中位数结算，正式比赛由服务器计算；呢度系本机流程试玩。");
+    assert.equal(totalsLine(flowTotals({})), "三轮都未开始。");
+    assert.equal(formatWindow({ done: true, timed: true, windowSeconds: 90 }), "固定 90 秒计分窗");
+    assert.equal(formatWindow({ done: true, timed: false, seconds: 240 }), "用时 04:00.0");
+    assert.equal(formatWindow({ done: false }), "未完成");
+    assert.equal(formatScore({ done: false }), "未完成");
+    assert.equal(formatThreshold({ done: true, threshold: 0.9, meetsThreshold: true }), "达标（90%）");
+    assert.equal(formatThreshold({ done: true, threshold: 0.9, meetsThreshold: false }), "未达 90%");
+    assert.equal(roundRows(null)[0].label, "第 1 轮 · 单字");
+    assert.equal(roundRows(null)[2].label, "第 3 轮 · 篇章");
+
+    const totals = flowTotals({ single: { correct: 27, submitted: 30, officialScore: 16.2, meetsThreshold: true } });
+    assert.match(totalsLine(totals), /本机合计：正式分 16\.2/);
+    assert.match(totalsLine(totals), /唔系正式结算/);
+    assert.match(totalsLine(totals), /仲有 2 轮未完成/);
+
+    const entry = { at: 1000, startedAt: 1, rounds: { single: { officialScore: 16.2 } }, totals: { complete: true } };
+    assert.equal(historyRows([entry])[0].flag, "三轮齐全");
+    assert.equal(historyRows([entry])[0].scores, "单字 16.2 · 词组 — · 篇章 —");
+    assert.equal(historyRows([{ ...entry, totals: { complete: false } }])[0].flag, "未完成");
+  } finally {
+    restoreLocale();
+  }
+  assert.equal(summaryNote(), SUMMARY_NOTE, "還原繁體原文");
+  assert.equal(roundRows(null)[0].label, "第 1 輪 · 單字");
+  assert.equal(historyRows([{ at: 1000, startedAt: 1, rounds: {}, totals: { complete: true } }])[0].flag, "三輪齊全");
+});
+
+// 同 summaryTab 一樣，但補一個 window，等 canclid-locale 監聽真係跑到。
+function summaryTabWithLocale() {
+  const elements = new Map();
+  const windowListeners = new Map();
+  const makeElement = (tagName = "div") => {
+    const classes = new Set();
+    const own = new Map();
+    const node = {
+      tagName, hidden: false, textContent: "", className: "", children: [],
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      setAttribute() {}, getAttribute: () => null,
+      append(...items) { node.children.push(...items); },
+      replaceChildren(...items) { node.children = items; },
+      addEventListener(type, listener) { if (!own.has(type)) own.set(type, []); own.get(type).push(listener); },
+      fire(type, event = {}) { event.target ??= node; (own.get(type) ?? []).forEach(listener => listener(event)); },
+    };
+    return node;
+  };
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement());
+    return elements.get(selector);
+  };
+  for (const id of ["#empty-card", "#summary-card", "#history-card"]) get(id).hidden = true;
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    ...summaryApi, clearFlow,
+    document: { querySelector: get, createElement: makeElement },
+    window: { addEventListener(type, listener) { windowListeners.set(type, listener); } },
+  }), { filename: "demo/games/summary/summary-dom.mjs" });
+
+  return { get, fire: type => windowListeners.get(type)?.({}) };
+}
+
+test("成績卡 DOM：收到 canclid-locale 會用新語言重畫", () => {
+  withStorages(() => {
+    completedFlow();
+    const tab = summaryTabWithLocale();
+    assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 輪 · 單字");
+    assert.match(tab.get("#totals-line").textContent, /三輪齊全/);
+    try {
+      setLocale("hans");
+      tab.fire("canclid-locale");
+      assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 轮 · 单字");
+      assert.match(tab.get("#totals-line").textContent, /三轮齐全/);
+      assert.match(tab.get("#player-line").textContent, /手机组/);
+      assert.equal(tab.get("#summary-note").textContent,
+        "三轮总分排名以组内中位数结算，正式比赛由服务器计算；呢度系本机流程试玩。");
+      setLocale("hant");
+      tab.fire("canclid-locale");
+      assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 輪 · 單字", "還原繁體");
+    } finally {
+      restoreLocale();
+    }
+  });
+});
+
+test("成績卡頁 i18n：切換掣、data-i18n key 全部有登記簡體譯文", () => {
+  assert.match(html,
+    /<button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简<\/button>/);
+  assert.match(html, /import \{ initI18n \} from "\.\.\/\.\.\/i18n\.mjs"/);
+  assert.match(html, /initI18n\(\);/);
+
+  const keys = [...html.matchAll(/data-i18n="(summary\.[^"]+)"/g)].map(match => match[1]);
+  assert.ok(keys.length >= 15, `成績卡只搵到 ${keys.length} 個 data-i18n`);
+  const source = readFileSync(new URL("../demo/games/summary/summary.mjs", import.meta.url), "utf8");
+  for (const key of new Set(keys)) {
+    assert.ok(source.includes(`"${key}":`), `summary.mjs 冇登記 ${key} 嘅簡體譯文`);
+  }
 });

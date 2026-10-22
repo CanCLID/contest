@@ -40,8 +40,13 @@
     .nav { display: flex; gap: 28px; }
     .nav-link { padding: 16px 0; color: var(--muted); font-size: 16px; text-decoration: none; }
     .nav-link:hover { color: var(--ink); text-decoration: underline; }
+    .header-actions { display: flex; align-items: center; gap: 12px; }
     .demo-badge { display: flex; align-items: center; gap: 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 24px; padding: 4px 12px; white-space: nowrap; }
     .demo-badge > span { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+    /* i18n：包住 demo-badge 文字嘅 span 唔跟 .demo-badge > span 嘅圓點樣式。 */
+    .demo-badge > .badge-text { width: auto; height: auto; border-radius: 0; background: none; }
+    .locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; min-width: 44px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font: inherit; font-size: 14px; line-height: 1.2; white-space: nowrap; cursor: pointer; }
+    .locale-toggle:hover, .locale-toggle[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
 
     .hero { padding: 32px 0 24px; }
     .hero p { margin: 0; color: var(--muted); }
@@ -81,7 +86,7 @@
   <script src="./summary-dom.mjs" type="module"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="summary.skip">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="../../index.html" aria-label="粵拼競速首頁">
@@ -89,55 +94,64 @@
         <span class="brand-type">粵拼競速</span>
       </a>
       <nav class="nav" aria-label="遊戲導覽">
-        <a class="nav-link" href="../../index.html">‹ 試玩賽場</a>
+        <a class="nav-link" href="../../index.html" data-i18n="summary.navBack">‹ 試玩賽場</a>
       </nav>
-      <span class="demo-badge"><span></span>三輪成績卡</span>
+      <div class="header-actions">
+        <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+        <span class="demo-badge"><span aria-hidden="true"></span><span class="badge-text" data-i18n="summary.badge">三輪成績卡</span></span>
+      </div>
     </header>
 
     <main id="main">
       <div class="hero">
-        <h1>官方三輪試玩 · 成績卡</h1>
-        <p>單字 90 秒 → 詞組 120 秒 → 篇章（示範幽靈陪跑）計時，三輪成績一次過睇。</p>
+        <h1 data-i18n="summary.heroTitle">官方三輪試玩 · 成績卡</h1>
+        <p data-i18n="summary.heroText">單字 90 秒 → 詞組 120 秒 → 篇章（示範幽靈陪跑）計時，三輪成績一次過睇。</p>
       </div>
 
       <section id="empty-card" class="card" hidden>
-        <h2>未有流程資料</h2>
-        <p>直接開成績卡係唔會有數據嘅。要先由試玩賽場開始「官方三輪試玩」，順住三輪打完，先會喺呢度見到成績。</p>
+        <h2 data-i18n="summary.emptyTitle">未有流程資料</h2>
+        <p data-i18n="summary.emptyText">直接開成績卡係唔會有數據嘅。要先由試玩賽場開始「官方三輪試玩」，順住三輪打完，先會喺呢度見到成績。</p>
         <div class="actions">
-          <a id="start-flow" class="button" href="../rocks/?flow=1">開始流程 ↗</a>
-          <a class="button ghost" href="../../index.html">返回試玩賽場</a>
+          <a id="start-flow" class="button" href="../rocks/?flow=1" data-i18n="summary.startFlow">開始流程 ↗</a>
+          <a class="button ghost" href="../../index.html" data-i18n="summary.backArena">返回試玩賽場</a>
         </div>
       </section>
 
       <section id="summary-card" class="card" hidden>
         <p id="player-line" class="player-line"></p>
         <table class="round-table">
-          <caption class="sr-only">官方三輪試玩成績</caption>
+          <caption class="sr-only" data-i18n="summary.tableCaption">官方三輪試玩成績</caption>
           <thead>
             <tr>
-              <th scope="col">輪次</th>
-              <th scope="col">計分窗／用時</th>
-              <th scope="col">正確／已交</th>
-              <th scope="col">準確度</th>
-              <th scope="col">正式分</th>
-              <th scope="col">門檻</th>
+              <th scope="col" data-i18n="summary.colRound">輪次</th>
+              <th scope="col" data-i18n="summary.colWindow">計分窗／用時</th>
+              <th scope="col" data-i18n="summary.colCounts">正確／已交</th>
+              <th scope="col" data-i18n="summary.colAccuracy">準確度</th>
+              <th scope="col" data-i18n="summary.colScore">正式分</th>
+              <th scope="col" data-i18n="summary.colThreshold">門檻</th>
             </tr>
           </thead>
           <tbody id="round-rows"></tbody>
         </table>
         <p id="totals-line" class="totals-line"></p>
         <div class="actions">
-          <a id="again" class="button" href="../rocks/?flow=1">再玩一次流程 ↗</a>
-          <a id="back" class="button ghost" href="../../index.html">返回試玩賽場</a>
+          <a id="again" class="button" href="../rocks/?flow=1" data-i18n="summary.again">再玩一次流程 ↗</a>
+          <a id="back" class="button ghost" href="../../index.html" data-i18n="summary.back">返回試玩賽場</a>
         </div>
         <p id="summary-note" class="note"></p>
       </section>
 
       <section id="history-card" class="card" hidden>
-        <h2>最近流程</h2>
+        <h2 data-i18n="summary.historyTitle">最近流程</h2>
         <ul id="history-list" class="history-list"></ul>
       </section>
     </main>
   </div>
+
+  <script type="module">
+    import { initI18n } from "../../i18n.mjs";
+
+    initI18n();
+  </script>
 </body>
 </html>

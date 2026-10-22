@@ -7,6 +7,8 @@ import * as questions from "../demo/questions.mjs";
 import * as common from "../demo/games/common.mjs";
 import * as flowApi from "../demo/games/flow.mjs";
 import * as ghost from "../demo/games/ghost/ghost.mjs";
+import * as i18nApi from "../demo/i18n.mjs";
+import { setLocale, t } from "../demo/i18n.mjs";
 import { createRun, submitAnswer, getMetrics } from "../demo/engine.mjs";
 import { flattenQuestions } from "../demo/questions.mjs";
 import { OFFICIAL_THRESHOLDS, roundMetrics } from "../demo/games/common.mjs";
@@ -656,4 +658,308 @@ test("renderRace 只喺數字有變先寫 DOM，唔會每個 tick 重寫同一�
   tab.tick();
   assert.equal(time.textWrites, writes + 1, "時間有變就寫一次");
   assert.equal(time.textContent, "00:00.6");
+});
+
+// --- i18n：繁體粵語（預設）／簡體粵文 -----------------------------------------
+
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+const I18N_ELEMENT = /<[a-z][a-z0-9]*\b[^>]*\sdata-i18n="([^"]+)"[^>]*>([^<]*)</g;
+
+// 迷你 DOM 節點：i18n 運行庫同 ghost-dom.mjs 只會用 dataset、textContent、
+// classList 同 title，唔使拉 jsdom 落嚟。
+function miniNode() {
+  const classes = new Set();
+  const attributes = new Map();
+  const listeners = new Map();
+  let text = "";
+  const node = {
+    hidden: false, disabled: false, value: "", style: {}, dataset: {},
+    className: "", selectionStart: 0, children: [], href: "", title: "",
+    get textContent() { return text; },
+    set textContent(next) { text = String(next); },
+    classList: {
+      add: (...names) => names.forEach(name => classes.add(name)),
+      remove: (...names) => names.forEach(name => classes.delete(name)),
+      contains: name => classes.has(name),
+      toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+    },
+    setAttribute: (name, value) => attributes.set(name, String(value)),
+    getAttribute: name => attributes.get(name) ?? null,
+    append(...items) { node.children.push(...items); },
+    replaceChildren(...items) { node.children = items; },
+    scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange() {},
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(listener);
+    },
+    fire(type, event = {}) {
+      event.target ??= node;
+      event.preventDefault ??= () => {};
+      (listeners.get(type) ?? []).forEach(listener => listener(event));
+    },
+  };
+  return node;
+}
+
+// index.html 入面每個 data-i18n 砌返一個迷你節點，畀 i18n 運行庫自己換字。
+function staticNodes(source) {
+  return [...source.matchAll(I18N_ELEMENT)].map(([, key, original]) => {
+    const node = miniNode();
+    node.dataset.i18n = key;
+    node.textContent = original;
+    return node;
+  });
+}
+
+// 真係跑 ghost-dom.mjs，但補齊 i18n、window 同 localStorage：靜態文案由 index.html
+// 嘅 data-i18n 換，動態文案由模組自己畫，切語言會派 canclid-locale 叫模組重繪。
+function ghostPage({ flowMode = false } = {}) {
+  let now = 0;
+  let tickerId = 0;
+  const store = new Map();
+  const elements = new Map();
+  const tickers = new Map();
+  const localeListeners = [];
+  const i18nNodes = staticNodes(html);
+  const toggle = miniNode();
+  toggle.dataset.localeToggle = "";
+  toggle.textContent = "简";
+
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, miniNode());
+    return elements.get(selector);
+  };
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
+
+  const document = {
+    querySelector: get,
+    querySelectorAll: selector => selector === "[data-i18n]" ? i18nNodes
+      : selector === "[data-locale-toggle]" ? [toggle]
+      : [],
+    createElement: miniNode,
+    addEventListener() {},
+    documentElement: { setAttribute() {} },
+    body: miniNode(),
+  };
+  const window = {
+    addEventListener(type, listener) { if (type === "canclid-locale") localeListeners.push(listener); },
+    dispatchEvent(event) { if (event.type === "canclid-locale") localeListeners.forEach(listener => listener(event)); },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+  };
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    ...engine, ...questions, ...common, ...ghost, ...flowApi, ...i18nApi,
+    Date: Clock,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
+    document,
+    window,
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval(callback) { tickerId += 1; tickers.set(tickerId, callback); return tickerId; },
+    clearInterval(id) { tickers.delete(id); },
+  }), { filename: "demo/games/ghost/ghost-dom.mjs" });
+
+  return {
+    document,
+    window,
+    i18nNodes,
+    toggle,
+    get,
+    setTime(value) { now = value; },
+    tick() { [...tickers.values()].forEach(callback => callback()); },
+    start() { get("#start").fire("click"); },
+    chooseSolo() {
+      get("#opponent-options").fire("change", { target: { closest: () => ({ value: "none", disabled: false }) } });
+    },
+    type(text, at) {
+      now = at;
+      const surface = get("#typing-surface");
+      for (const letter of text) surface.fire("keydown", { key: letter, code: `Key${letter.toUpperCase()}` });
+      surface.fire("keydown", { key: " ", code: "Space" });
+    },
+  };
+}
+
+function staticText(page, key) {
+  const node = page.i18nNodes.find(item => item.dataset.i18n === key);
+  assert.ok(node, `index.html 冇 data-i18n="${key}"`);
+  return node.textContent;
+}
+
+// setLocale() 讀 globalThis 上面嘅 document／window／localStorage；呢個 wrapper 幫每條
+// 測試裝好，跑完（就算 throw）還原 locale 同清走 canclid-contest-locale。
+function withLocale(page, run) {
+  const store = new Map();
+  const previous = new Map();
+  const install = (name, value) => {
+    previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  };
+  install("document", page.document);
+  install("window", page.window);
+  install("localStorage", {
+    getItem: key => (store.has(key) ? store.get(key) : null),
+    setItem(key, value) { store.set(key, String(value)); },
+    removeItem(key) { store.delete(key); },
+  });
+  try {
+    return run();
+  } finally {
+    setLocale("hant");
+    store.delete(LOCALE_STORAGE_KEY);
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+}
+
+function optionLabels(page) {
+  return page.get("#opponent-options").children.map(option => ({
+    label: option.children[1].children[0].textContent,
+    detail: option.children[1].children[1].textContent,
+  }));
+}
+
+test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant 還原", () => {
+  const page = ghostPage();
+  withLocale(page, () => {
+    // 切換掣嘅 markup 同位置（demo-badge 前）係 i18n 運行庫嘅契約
+    assert.match(html, /<button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简<\/button>\s*<span class="demo-badge">/);
+    const css = readFileSync(new URL("../demo/games/ghost/ghost.css", import.meta.url), "utf8");
+    assert.match(css, /\.locale-toggle \{[^}]*min-height: 32px[^}]*min-width: 44px[^}]*\}/);
+    assert.equal(staticText(page, "ghost.title"), "幽靈競速");
+    assert.equal(page.toggle.textContent, "简");
+
+    setLocale("hans");
+    assert.equal(staticText(page, "ghost.title"), "幽灵竞速");
+    assert.equal(staticText(page, "ghost.opponentHeading"), "拣对手");
+    assert.equal(staticText(page, "ghost.start"), "开始竞速");
+    assert.equal(staticText(page, "ghost.metricSpeedUnit"), "计啱嘅音节");
+    assert.equal(staticText(page, "ghost.hintConfirm"), "确认；未输入时按");
+    assert.equal(staticText(page, "ghost.giveUp"), "放弃本轮");
+    assert.equal(page.toggle.textContent, "繁", "切換掣要出返「繁」");
+    assert.equal(page.toggle.getAttribute("aria-pressed"), "true");
+    for (const node of page.i18nNodes) {
+      assert.notEqual(t(node.dataset.i18n, "\u0000冇譯文"), "\u0000冇譯文", `${node.dataset.i18n} 冇 hans 譯文`);
+    }
+
+    setLocale("hant");
+    assert.equal(staticText(page, "ghost.title"), "幽靈競速");
+    assert.equal(staticText(page, "ghost.start"), "開始競速");
+    assert.equal(staticText(page, "ghost.hintConfirm"), "確認；未輸入時按");
+    assert.equal(page.toggle.textContent, "简");
+    assert.equal(page.toggle.getAttribute("aria-pressed"), "false");
+  });
+});
+
+test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", () => {
+  const page = ghostPage();
+  const total = flattenQuestions().length;
+  withLocale(page, () => {
+    assert.deepEqual(optionLabels(page)[0], {
+      label: "淨計時（唔設對手）",
+      detail: "賽道只顯示自己，專心計自己嘅時間同分數",
+    });
+
+    setLocale("hans");
+    assert.deepEqual(optionLabels(page)[0], {
+      label: "净计时（唔设对手）",
+      detail: "赛道只显示自己，专心计自己嘅时间同分数",
+    });
+    assert.deepEqual(optionLabels(page)[1], { label: "自己最佳", detail: "未有纪录，完成一次竞速就会出现" });
+    assert.equal(optionLabels(page)[2].label, "示范幽灵 · 55 音节／分");
+    assert.match(optionLabels(page)[2].detail, new RegExp(`^目标时间 \\d+:\\d\\d\\.\\d · ${total} 音节$`));
+
+    page.chooseSolo();
+    page.start();
+    page.setTime(3000);
+    page.tick();
+    assert.equal(page.get("#player-value").textContent, `0 / ${total} 音节`);
+    assert.equal(page.get("#completed-count").textContent, `0 / ${total} 音节`);
+    assert.equal(page.get("#race-status").textContent, "竞速进行中");
+    assert.equal(page.get("#race-opponent").textContent, `净计时（唔设对手） · 全文 ${total} 音节`);
+
+    setLocale("hant");
+    assert.equal(page.get("#player-value").textContent, `0 / ${total} 音節`);
+    assert.equal(page.get("#race-status").textContent, "競速進行中");
+    assert.equal(page.get("#race-opponent").textContent, `淨計時（唔設對手） · 全文 ${total} 音節`);
+    assert.deepEqual(optionLabels(page)[0], {
+      label: "淨計時（唔設對手）",
+      detail: "賽道只顯示自己，專心計自己嘅時間同分數",
+    });
+  });
+});
+
+test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
+  const page = ghostPage();
+  withLocale(page, () => {
+    page.start();
+    page.setTime(3000);
+    page.tick();
+    let clock = 3000;
+    for (const token of flattenQuestions()) {
+      clock += 200;
+      page.type(token.answers[0], clock);
+    }
+    const rows = () => page.get("#result-details").children;
+    assert.equal(page.get("#result").hidden, false);
+    assert.equal(page.get("#result-title").textContent, "你贏咗幽靈");
+    assert.equal(rows()[0].children[0].textContent, "完成時間");
+    assert.match(rows()[4].children[1].textContent, /^幽靈完成咗 \d+%，你領先 \d+ 個音節$/);
+    assert.match(page.get("#result-best").textContent, /^已更新本機最佳：/);
+
+    setLocale("hans");
+    assert.equal(page.get("#result-title").textContent, "你赢咗幽灵");
+    assert.equal(rows()[0].children[0].textContent, "完成时间");
+    assert.equal(rows()[1].children[0].textContent, "正确音节／分钟");
+    assert.equal(rows()[3].children[0].textContent, "正式分");
+    assert.match(rows()[3].children[1].textContent, /（准确度门槛 \d+%，(达标|未达标)）$/);
+    assert.match(rows()[4].children[1].textContent, /^幽灵完成咗 \d+%，你领先 \d+ 个音节$/);
+    assert.match(page.get("#result-summary").textContent, /^示范幽灵 · 55 音节／分 · 全文 \d+ 音节$/);
+    assert.match(page.get("#result-best").textContent, /^已更新本机最佳：/);
+
+    setLocale("hant");
+    assert.equal(page.get("#result-title").textContent, "你贏咗幽靈");
+    assert.equal(rows()[0].children[0].textContent, "完成時間");
+    assert.match(page.get("#result-best").textContent, /^已更新本機最佳：/);
+  });
+});
+
+test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，hant 還原", () => {
+  withFlowStorage(() => {
+    const page = ghostPage({ flowMode: true });
+    withLocale(page, () => {
+      assert.match(page.get("#flow-banner").textContent, /^官方流程第 3 輪：篇章/);
+
+      setLocale("hans");
+      assert.equal(page.get("#flow-banner").textContent,
+        "官方流程第 3 轮：篇章 · 示范幽灵陪跑，不影响计分 · 退出流程会丢弃三轮进度。");
+      assert.equal(page.get("#lobby-link").textContent, "‹ 退出流程");
+      assert.equal(page.get("#lobby-link").title, "退出会丢弃三轮流程进度");
+      assert.match(page.get("#tagline").textContent, /^官方流程第 3 轮：篇章有内建 55 音节／分示范幽灵陪跑/);
+      assert.match(page.get("#start-note").textContent, /^官方流程第 3 轮：篇章 · 内建 55 音节／分示范幽灵陪跑，不影响计分，倒数 3 秒开始。$/);
+
+      page.start();
+      page.setTime(3000);
+      page.tick();
+      let clock = 3000;
+      for (const token of flattenQuestions()) {
+        clock += 200;
+        page.type(token.answers[0], clock);
+      }
+      assert.equal(page.get("#flow-next").hidden, false);
+      assert.equal(page.get("#flow-next").textContent, "查看三轮成绩 →");
+
+      setLocale("hant");
+      assert.match(page.get("#flow-banner").textContent, /^官方流程第 3 輪：篇章/);
+      assert.match(page.get("#tagline").textContent, /^官方流程第 3 輪：篇章有內建 55 音節／分示範幽靈陪跑/);
+      assert.equal(page.get("#flow-next").textContent, "查看三輪成績 →");
+      assert.equal(page.get("#lobby-link").textContent, "‹ 退出流程");
+    });
+  });
 });

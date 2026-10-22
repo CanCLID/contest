@@ -3,6 +3,13 @@
 #setup-view .hero, #setup-view .arena-grid { max-width: 720px; margin-inline: auto; }
 #race-view .race-card, #race-view .round-actions { max-width: 1000px; margin-inline: auto; }
 .nav-link { text-decoration: none; }
+/* i18n：語言切換掣，跟 .demo-badge 同一套 pill 色調。 */
+.locale-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; min-width: 44px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 24px; background: var(--white); color: var(--muted); font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.locale-toggle:hover, .locale-toggle[aria-pressed="true"] { border-color: var(--green); color: var(--green); }
+/* i18n：包住 demo-badge 文字嘅 span 唔跟 .demo-badge > span 嘅圓點樣式。 */
+.demo-badge > .badge-text { width: auto; height: auto; border-radius: 0; background: none; }
+/* i18n：開始掣文字包咗 span，要蓋返 .start-button > span 嘅箭嘴大細。 */
+.start-button > .start-label { font-size: 18px; line-height: 1.6; }
 .ghost-tagline { margin: 12px 0 0; color: var(--muted); font-size: 16px; }
 /* 官方三輪流程：頁頂橫額同完場嘅下一輪掣（?flow=1 專用，平時收埋）。 */
 .flow-banner { margin: 24px 0 0; padding: 12px 16px; border: 1px solid #cfddc8; border-left: 4px solid var(--green); border-radius: 8px; background: #eaf1e5; font-size: 15px; }

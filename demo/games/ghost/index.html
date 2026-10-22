@@ -12,45 +12,46 @@
   <script src="./ghost-dom.mjs" type="module"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="ghost.skipLink">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="../../index.html" aria-label="粵拼競速首頁">
         <span class="brand-mark" aria-hidden="true">拼<span>↗</span></span>
-        <span class="brand-type">粵拼競速</span>
+        <span class="brand-type" data-i18n="ghost.brand">粵拼競速</span>
       </a>
       <nav class="nav" aria-label="遊戲導覽">
         <a id="lobby-link" class="nav-link" href="../">‹ 遊戲大廳</a>
-        <a class="nav-link" href="../../index.html">試玩賽場</a>
+        <a class="nav-link" href="../../index.html" data-i18n="ghost.navArena">試玩賽場</a>
       </nav>
-      <span class="demo-badge"><span></span>幽靈競速</span>
+      <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+      <span class="demo-badge"><span></span><span class="badge-text" data-i18n="ghost.badge">幽靈競速</span></span>
     </header>
 
     <main id="main">
       <p id="flow-banner" class="flow-banner" hidden></p>
       <section id="setup-view" class="view">
         <div class="hero">
-          <h1>幽靈競速</h1>
+          <h1 data-i18n="ghost.title">幽靈競速</h1>
           <p id="tagline" class="ghost-tagline">揀一個幽靈對手，同佢鬥快打完全篇粵文。幽靈照住固定節奏跑，你嘅成績會即時同佢比較。</p>
         </div>
         <div class="arena-grid">
           <section class="setup-card">
-            <div id="opponent-heading" class="setup-heading"><h2>揀對手</h2></div>
+            <div id="opponent-heading" class="setup-heading"><h2 data-i18n="ghost.opponentHeading">揀對手</h2></div>
             <div id="opponent-options" class="ghost-picker" role="radiogroup" aria-label="幽靈對手"></div>
             <div class="article-info">
-              <span class="field-label">今次嘅文章</span>
+              <span class="field-label" data-i18n="ghost.articleLabel">今次嘅文章</span>
               <strong id="article-title"></strong>
               <p id="article-detail"></p>
             </div>
-            <button id="start" class="start-button">開始競速 <span aria-hidden="true">↗</span></button>
+            <button id="start" class="start-button"><span class="start-label" data-i18n="ghost.start">開始競速</span> <span aria-hidden="true">↗</span></button>
             <p id="start-note" class="start-note">倒數 3 秒開始，輸入方式同試玩賽場一樣。</p>
-            <div class="demo-note"><p>本機試玩，幽靈時間線只存喺呢個瀏覽器。</p></div>
+            <div class="demo-note"><p data-i18n="ghost.demoNote">本機試玩，幽靈時間線只存喺呢個瀏覽器。</p></div>
           </section>
           <aside id="best-card" class="round-summary" hidden aria-label="本機最佳紀錄">
             <dl class="round-details">
-              <div><dt>本機最佳時間</dt><dd id="best-time">—</dd></div>
-              <div><dt>速度</dt><dd id="best-speed">—</dd></div>
-              <div class="round-article"><dt>紀錄時間</dt><dd><span id="best-date">—</span><span id="best-note" class="round-length"></span></dd></div>
+              <div><dt data-i18n="ghost.bestTime">本機最佳時間</dt><dd id="best-time">—</dd></div>
+              <div><dt data-i18n="ghost.bestSpeed">速度</dt><dd id="best-speed">—</dd></div>
+              <div class="round-article"><dt data-i18n="ghost.bestDate">紀錄時間</dt><dd><span id="best-date">—</span><span id="best-note" class="round-length"></span></dd></div>
             </dl>
           </aside>
         </div>
@@ -65,35 +66,35 @@
 
           <div class="track" aria-label="賽道進度">
             <div class="lane">
-              <span class="lane-label">你</span>
+              <span class="lane-label" data-i18n="ghost.laneYou">你</span>
               <div id="player-track" class="lane-track" role="progressbar" aria-label="你嘅進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="player-bar" class="lane-fill"></div></div>
               <span id="player-value" class="lane-value">0 / 0 音節</span>
             </div>
             <div id="ghost-lane" class="lane ghost-lane">
-              <span class="lane-label">幽靈</span>
+              <span class="lane-label" data-i18n="ghost.laneGhost">幽靈</span>
               <div id="ghost-track" class="lane-track" role="progressbar" aria-label="幽靈進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="ghost-bar" class="lane-fill"></div></div>
               <span id="ghost-value" class="lane-value">0%</span>
             </div>
           </div>
 
           <div class="metrics">
-            <div class="metric"><span class="metric-label">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit">打完全文即結算</span></div>
-            <div class="metric"><span class="metric-label">正確音節／分鐘</span><strong id="speed">0</strong><span class="metric-unit">計啱嘅音節</span></div>
-            <div class="metric"><span class="metric-label">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+            <div class="metric"><span class="metric-label" data-i18n="ghost.metricTime">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit" data-i18n="ghost.metricTimeUnit">打完全文即結算</span></div>
+            <div class="metric"><span class="metric-label" data-i18n="ghost.metricSpeed">正確音節／分鐘</span><strong id="speed">0</strong><span class="metric-unit" data-i18n="ghost.metricSpeedUnit">計啱嘅音節</span></div>
+            <div class="metric"><span class="metric-label" data-i18n="ghost.metricAccuracy">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
           </div>
 
           <div class="typing-area">
             <div class="passage-meta">
               <span id="sentence-label">第 01 句</span>
-              <span class="subtle-label">全文一次過打完，唔會分句停頓</span>
+              <span class="subtle-label" data-i18n="ghost.passageNote">全文一次過打完，唔會分句停頓</span>
             </div>
             <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="input-feedback typing-hint">
               <p id="passage" class="passage" aria-label="打字題目"></p>
               <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" form="typing-form" type="text" aria-label="直接輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
-              <span class="focus-hint">點一下文字繼續輸入</span>
+              <span class="focus-hint" data-i18n="ghost.focusHint">點一下文字繼續輸入</span>
             </div>
             <form id="typing-form" class="typing-form" autocomplete="off">
-              <div class="input-bottom"><p id="input-feedback" role="status">揀好對手，按「開始競速」。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一字</span></div>
+              <div class="input-bottom"><p id="input-feedback" role="status">揀好對手，按「開始競速」。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> <span data-i18n="ghost.hintConfirm">確認；未輸入時按</span> <kbd>Backspace</kbd> <span data-i18n="ghost.hintUndo">改上一字</span></span></div>
             </form>
             <div id="result" class="result" hidden>
               <span class="result-icon" aria-hidden="true">✳</span>
@@ -102,22 +103,22 @@
                 <p id="result-summary"></p>
                 <dl id="result-details" class="result-details"></dl>
                 <p id="result-best" class="result-best"></p>
-                <p id="storage-note" class="storage-note" hidden>未能保存本機最佳，關頁後新紀錄會遺失。</p>
+                <p id="storage-note" class="storage-note" hidden data-i18n="ghost.storageNote">未能保存本機最佳，關頁後新紀錄會遺失。</p>
               </div>
             </div>
-            <div id="countdown-overlay" class="countdown-overlay" hidden><span>準備起跑</span><strong id="countdown-number">3</strong></div>
+            <div id="countdown-overlay" class="countdown-overlay" hidden><span data-i18n="ghost.countdownLabel">準備起跑</span><strong id="countdown-number">3</strong></div>
           </div>
 
           <div class="card-foot">
-            <button id="give-up" class="text-button cancel-button" type="button">放棄本輪</button>
+            <button id="give-up" class="text-button cancel-button" type="button" data-i18n="ghost.giveUp">放棄本輪</button>
             <span id="completed-count">0 / 0 音節</span>
           </div>
         </section>
 
         <div class="round-actions">
           <a id="flow-next" class="outline-button flow-next" href="../summary/" hidden>查看三輪成績 →</a>
-          <button id="play-again" class="outline-button" hidden>再玩一場 <span aria-hidden="true">↗</span></button>
-          <button id="edit-settings" class="text-button" hidden>揀過對手</button>
+          <button id="play-again" class="outline-button" hidden><span data-i18n="ghost.playAgain">再玩一場</span> <span aria-hidden="true">↗</span></button>
+          <button id="edit-settings" class="text-button" hidden data-i18n="ghost.editSettings">揀過對手</button>
         </div>
       </section>
     </main>

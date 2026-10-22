@@ -5,40 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f6f0">
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
-  <title>粵拼競速 · CanCLID</title>
+  <title data-i18n="site.page.title">粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=17">
-  <script src="./app.mjs?v=17" type="module"></script>
+  <link rel="stylesheet" href="./styles.css?v=18">
+  <script src="./app.mjs?v=18" type="module"></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳去主要內容</a>
+  <a class="skip-link" href="#main" data-i18n="site.skipLink">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="./" aria-label="粵拼競速首頁">
         <span class="brand-mark" aria-hidden="true">拼<span>↗</span></span>
-        <span class="brand-type">粵拼競速</span>
+        <span class="brand-type" data-i18n="site.brand">粵拼競速</span>
       </a>
       <nav class="nav" aria-label="主要導覽">
-        <button class="nav-link active" data-view="arena" aria-current="page">試玩賽場</button>
-        <button class="nav-link" data-view="leaderboard">排行榜</button>
-        <button class="nav-link" data-view="rules">玩法</button>
-        <a class="nav-link" href="./games/">小遊戲</a>
+        <button class="nav-link active" data-view="arena" aria-current="page" data-i18n="site.nav.arena">試玩賽場</button>
+        <button class="nav-link" data-view="leaderboard" data-i18n="site.nav.leaderboard">排行榜</button>
+        <button class="nav-link" data-view="rules" data-i18n="site.nav.rules">玩法</button>
+        <a class="nav-link" href="./games/" data-i18n="site.nav.games">小遊戲</a>
       </nav>
-      <span class="demo-badge"><span></span>試玩模式</span>
+      <button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简</button>
+      <span class="demo-badge"><span aria-hidden="true"></span><span class="badge-text" data-i18n="site.demoBadge">試玩模式</span></span>
     </header>
 
     <main id="main">
       <section id="arena-view" class="view">
         <div class="hero">
-          <h1>粵拼打字比賽</h1>
+          <h1 data-i18n="site.hero.title">粵拼打字比賽</h1>
         </div>
 
         <div class="arena-grid">
           <aside id="round-summary" class="round-summary" hidden aria-label="本輪設定">
             <dl class="round-details">
-              <div><dt>參賽者</dt><dd id="round-name"></dd></div>
-              <div><dt>參賽組別</dt><dd id="round-group"></dd></div>
-              <div class="round-article"><dt>文章</dt><dd><span id="round-article"></span><span id="round-length" class="round-length"></span></dd></div>
+              <div><dt data-i18n="site.round.name">參賽者</dt><dd id="round-name"></dd></div>
+              <div><dt data-i18n="site.round.group">參賽組別</dt><dd id="round-group"></dd></div>
+              <div class="round-article"><dt data-i18n="site.round.article">文章</dt><dd><span id="round-article"></span><span id="round-length" class="round-length"></span></dd></div>
             </dl>
           </aside>
           <section id="race-card" class="race-card" hidden aria-label="打字賽場">
@@ -48,115 +49,115 @@
             </div>
             <div class="race-overview">
               <div class="metrics">
-              <div class="metric"><span class="metric-label">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit">打完全文即結算</span></div>
-              <div class="metric"><span class="metric-label">輸入速度</span><strong id="speed">0</strong><span class="metric-unit">音節 / 分鐘</span></div>
-              <div class="metric"><span class="metric-label">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+              <div class="metric"><span class="metric-label" data-i18n="site.metric.elapsed">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit" data-i18n="site.metric.elapsedNote">打完全文即結算</span></div>
+              <div class="metric"><span class="metric-label" data-i18n="site.metric.speed">輸入速度</span><strong id="speed">0</strong><span class="metric-unit" data-i18n="site.metric.speedUnit">音節 / 分鐘</span></div>
+              <div class="metric"><span class="metric-label" data-i18n="site.metric.accuracy">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
               </div>
               <section class="component-stats" aria-labelledby="component-heading">
-                <div class="component-heading"><h2 id="component-heading">分項準確度</h2><span>— 未輸入</span></div>
-                <div class="component-row"><span class="component-label" id="initial-label">聲母</span><div id="component-initial" class="component-cells" role="list" aria-labelledby="initial-label"></div></div>
-                <div class="component-row"><span class="component-label" id="nucleus-label">韻腹</span><div id="component-nucleus" class="component-cells" role="list" aria-labelledby="nucleus-label"></div></div>
-                <div class="component-row"><span class="component-label" id="coda-label">韻尾</span><div id="component-coda" class="component-cells" role="list" aria-labelledby="coda-label"></div></div>
+                <div class="component-heading"><h2 id="component-heading" data-i18n="site.component.heading">分項準確度</h2><span data-i18n="site.component.none">— 未輸入</span></div>
+                <div class="component-row"><span class="component-label" id="initial-label" data-i18n="site.component.initial">聲母</span><div id="component-initial" class="component-cells" role="list" aria-labelledby="initial-label"></div></div>
+                <div class="component-row"><span class="component-label" id="nucleus-label" data-i18n="site.component.nucleus">韻腹</span><div id="component-nucleus" class="component-cells" role="list" aria-labelledby="nucleus-label"></div></div>
+                <div class="component-row"><span class="component-label" id="coda-label" data-i18n="site.component.coda">韻尾</span><div id="component-coda" class="component-cells" role="list" aria-labelledby="coda-label"></div></div>
               </section>
             </div>
             <div class="time-track" role="progressbar" aria-label="文章完成比例" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="time-bar"></div></div>
             <div class="typing-area">
               <div class="passage-meta">
                 <span id="sentence-label">第 01 句</span>
-                <button id="hint-toggle" class="hint-toggle" type="button" aria-pressed="false" aria-controls="passage next-sentence" disabled>粵拼提示</button>
+                <button id="hint-toggle" class="hint-toggle" type="button" aria-pressed="false" aria-controls="passage next-sentence" disabled data-i18n="site.hint.toggle">粵拼提示</button>
               </div>
               <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="input-feedback typing-hint">
                 <p id="passage" class="passage" aria-label="打字題目"></p>
                 <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" form="typing-form" type="text" aria-label="直接輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
-                <span class="focus-hint">點一下文字繼續輸入</span>
+                <span class="focus-hint" data-i18n="site.typing.focusHint">點一下文字繼續輸入</span>
               </div>
-              <div class="up-next"><span>下一句</span><p id="next-sentence"></p></div>
+              <div class="up-next"><span data-i18n="site.upNext">下一句</span><p id="next-sentence"></p></div>
               <div class="result-slot">
                 <form id="typing-form" class="typing-form" autocomplete="off">
-                  <div class="input-bottom"><p id="input-feedback" role="status">按「開始試玩」，直接打高亮字嘅粵拼。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一字</span></div>
+                  <div class="input-bottom"><p id="input-feedback" role="status">按「開始試玩」，直接打高亮字嘅粵拼。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd><span data-i18n="site.keyHint.confirm"> 確認；未輸入時按 </span><kbd>Backspace</kbd><span data-i18n="site.keyHint.edit"> 改上一字</span></span></div>
                 </form>
                 <div id="result" class="result" hidden>
                   <span class="result-icon" aria-hidden="true">✳</span>
-                  <div><h2 id="result-title">完成喇！</h2><p id="result-summary"></p><button class="text-button" id="view-result-board">睇本機成績 <span aria-hidden="true">↗</span></button></div>
+                  <div><h2 id="result-title">完成喇！</h2><p id="result-summary"></p><button class="text-button" id="view-result-board"><span data-i18n="site.result.board">睇本機成績</span> <span aria-hidden="true">↗</span></button></div>
                 </div>
               </div>
-              <div id="countdown-overlay" class="countdown-overlay" hidden><span>準備起跑</span><strong id="countdown-number">3</strong></div>
+              <div id="countdown-overlay" class="countdown-overlay" hidden><span data-i18n="site.countdown.ready">準備起跑</span><strong id="countdown-number">3</strong></div>
             </div>
-            <div class="card-foot"><span id="hint-used" class="hint-used" hidden>用過提示</span><span id="completed-count">0 個音節</span></div>
+            <div class="card-foot"><span id="hint-used" class="hint-used" hidden data-i18n="site.hint.used">用過提示</span><span id="completed-count">0 個音節</span></div>
           </section>
 
           <div id="round-actions" class="round-actions" hidden>
-            <button id="play-again" class="outline-button" hidden>再玩一場 <span aria-hidden="true">↗</span></button>
-            <button id="edit-settings" class="text-button" hidden>更改設定</button>
-            <button id="cancel-run" class="text-button cancel-button" hidden>放棄本輪，重新設定</button>
+            <button id="play-again" class="outline-button" hidden><span data-i18n="site.playAgain">再玩一場</span> <span aria-hidden="true">↗</span></button>
+            <button id="edit-settings" class="text-button" hidden data-i18n="site.editSettings">更改設定</button>
+            <button id="cancel-run" class="text-button cancel-button" hidden data-i18n="site.cancelRun">放棄本輪，重新設定</button>
           </div>
 
           <aside id="setup-card" class="setup-card">
-            <div class="setup-heading"><h2>試玩設定</h2></div>
+            <div class="setup-heading"><h2 data-i18n="site.setup.title">試玩設定</h2></div>
             <fieldset id="setup-fields">
               <div class="path-field">
-                <span class="field-label" id="flow-label">玩法</span>
+                <span class="field-label" id="flow-label" data-i18n="site.flow.label">玩法</span>
                 <div id="path-options" class="path-options" role="group" aria-labelledby="flow-label">
                   <button id="flow-official" class="path-option selected" type="button" aria-pressed="true">
-                    <span class="path-option-title">官方三輪試玩<span class="path-badge">推薦 · 約 4 分鐘</span></span>
-                    <span class="path-option-desc">單字 90 秒 → 詞組 120 秒 → 篇章計時</span>
+                    <span class="path-option-title"><span data-i18n="site.flow.official">官方三輪試玩</span><span class="path-badge" data-i18n="site.flow.officialBadge">推薦 · 約 4 分鐘</span></span>
+                    <span class="path-option-desc" data-i18n="site.flow.officialDesc">單字 90 秒 → 詞組 120 秒 → 篇章計時</span>
                   </button>
                   <button id="flow-practice" class="path-option" type="button" aria-pressed="false">
-                    <span class="path-option-title">自由練習</span>
-                    <span class="path-option-desc">單篇＋四個小遊戲 · 可開粵拼提示</span>
+                    <span class="path-option-title" data-i18n="site.flow.practice">自由練習</span>
+                    <span class="path-option-desc" data-i18n="site.flow.practiceDesc">單篇＋四個小遊戲 · 可開粵拼提示</span>
                   </button>
                 </div>
                 <p id="flow-note" class="flow-note">官方三輪：單字 90 秒 → 詞組 120 秒 → 篇章計時 → 三輪成績卡</p>
               </div>
               <div id="practice-panel" class="practice-panel" hidden>
-                <p class="practice-panel-lead">喺呢頁開始：單篇自由練習（可開粵拼提示）</p>
-                <p class="practice-panel-label">去小遊戲玩（會離開試玩賽場）：</p>
+                <p class="practice-panel-lead" data-i18n="site.practice.lead">喺呢頁開始：單篇自由練習（可開粵拼提示）</p>
+                <p class="practice-panel-label" data-i18n="site.practice.label">去小遊戲玩（會離開試玩賽場）：</p>
                 <div class="practice-links">
-                  <a class="practice-chip" href="./games/rocks/">單字 · 落石 <span aria-hidden="true">↗</span></a>
-                  <a class="practice-chip" href="./games/chain/">詞組 · 詞鏈 <span aria-hidden="true">↗</span></a>
-                  <a class="practice-chip" href="./games/ghost/">篇章 · 幽靈 <span aria-hidden="true">↗</span></a>
-                  <a class="practice-chip" href="./games/tower/">解鎖塔 <span aria-hidden="true">↗</span></a>
+                  <a class="practice-chip" href="./games/rocks/"><span data-i18n="site.practice.rocks">單字 · 落石</span> <span aria-hidden="true">↗</span></a>
+                  <a class="practice-chip" href="./games/chain/"><span data-i18n="site.practice.chain">詞組 · 詞鏈</span> <span aria-hidden="true">↗</span></a>
+                  <a class="practice-chip" href="./games/ghost/"><span data-i18n="site.practice.ghost">篇章 · 幽靈</span> <span aria-hidden="true">↗</span></a>
+                  <a class="practice-chip" href="./games/tower/"><span data-i18n="site.practice.tower">解鎖塔</span> <span aria-hidden="true">↗</span></a>
                 </div>
-                <a class="practice-lobby-link" href="./games/">睇大廳全部介紹 <span aria-hidden="true">↗</span></a>
+                <a class="practice-lobby-link" href="./games/"><span data-i18n="site.practice.lobby">睇大廳全部介紹</span> <span aria-hidden="true">↗</span></a>
               </div>
-              <label class="field-label group-heading" for="nickname">暱稱</label>
-              <input id="nickname" class="nickname-input" maxlength="16" placeholder="粵拼新星" lang="en" autocapitalize="off" spellcheck="false" autocomplete="off">
-              <legend class="sr-only">本輪試玩設定</legend>
-              <div class="field-label group-heading" id="group-label">參賽組別</div>
+              <label class="field-label group-heading" for="nickname" data-i18n="site.nickname.label">暱稱</label>
+              <input id="nickname" class="nickname-input" maxlength="16" placeholder="粵拼新星" data-i18n-placeholder="site.nickname.default" lang="en" autocapitalize="off" spellcheck="false" autocomplete="off">
+              <legend class="sr-only" data-i18n="site.setup.legend">本輪試玩設定</legend>
+              <div class="field-label group-heading" id="group-label" data-i18n="site.round.group">參賽組別</div>
               <div class="group-options" role="group" aria-labelledby="group-label">
-                <button type="button" class="group-option selected" data-group="desktop" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>電腦組<small>實體鍵盤</small></span><span class="choice-dot"></span></button>
-                <button type="button" class="group-option" data-group="mobile" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg><span>手機組<small>螢幕鍵盤</small></span><span class="choice-dot"></span></button>
+                <button type="button" class="group-option selected" data-group="desktop" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span><span data-i18n="site.group.desktop">電腦組</span><small data-i18n="site.group.desktopNote">實體鍵盤</small></span><span class="choice-dot"></span></button>
+                <button type="button" class="group-option" data-group="mobile" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M10 18h4"/></svg><span><span data-i18n="site.group.mobile">手機組</span><small data-i18n="site.group.mobileNote">螢幕鍵盤</small></span><span class="choice-dot"></span></button>
               </div>
-              <div class="article-info"><span class="field-label">今次嘅文章</span><strong id="article-title"></strong><p id="article-detail"></p></div>
+              <div class="article-info"><span class="field-label" data-i18n="site.article.label">今次嘅文章</span><strong id="article-title"></strong><p id="article-detail"></p></div>
             </fieldset>
             <button id="start" class="start-button">開始試玩 <span aria-hidden="true">↗</span></button>
             <p id="start-note" class="start-note">倒數 3 秒開始</p>
-            <div class="demo-note"><p>本機試玩，成績只存喺呢個瀏覽器。</p></div>
+            <div class="demo-note"><p data-i18n="site.demoNote">本機試玩，成績只存喺呢個瀏覽器。</p></div>
           </aside>
         </div>
       </section>
 
       <section id="leaderboard-view" class="view secondary-view" hidden aria-labelledby="leaderboard-heading">
-        <div class="page-heading"><h1 id="leaderboard-heading">排行榜</h1><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
+        <div class="page-heading"><h1 id="leaderboard-heading" data-i18n="site.leaderboard.title">排行榜</h1><button class="outline-button" data-view="arena" data-i18n="site.backToArena">返去試玩 ↗</button></div>
         <div class="board-filters">
-          <div class="segmented" aria-label="排行榜組別" role="group"><button data-board-group="desktop" class="selected" aria-pressed="true">電腦組</button><button data-board-group="mobile" aria-pressed="false">手機組</button></div>
+          <div class="segmented" aria-label="排行榜組別" role="group"><button data-board-group="desktop" class="selected" aria-pressed="true" data-i18n="site.group.desktop">電腦組</button><button data-board-group="mobile" aria-pressed="false" data-i18n="site.group.mobile">手機組</button></div>
           <span id="board-article" class="board-article"></span>
         </div>
-        <section class="board-card"><div class="board-heading"><div><h2>無提示成績</h2><p>同組別、文章同規則比較，按正式分排名。有提示同無提示合共保存最近 20 輪。</p></div><span class="pill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores">清除本機紀錄</button></section>
-        <section id="hinted-board-card" class="board-card" hidden><div class="board-heading"><div><h2>用過提示嘅紀錄</h2><p>按最近完成排列，只供練習參考，唔參與排名。</p></div><span class="pill">用過提示</span></div><div id="hinted-board"></div></section>
-        <section class="board-card sample-board"><div class="board-heading"><div><h2>排行榜效果預覽</h2><p>以下全部係虛構示範數據（包括正式分欄），唔係真人參賽成績。</p></div><span class="pill">示範數據</span></div><div id="sample-board"></div></section>
-        <p class="board-rule">正式分 R ＝ 正確音節／分鐘 × 準確度；篇章準確度門檻 85%，未達門檻會標示「未達 85% 門檻」兼唔入正式排名。本機榜先按正式分、再按準確度、最後按用時排序，三項相同就並列。綜合分（速度 × 準確度²）係舊 demo 試算，只作新舊紀錄比較。正式賽三輪（單字 0.3／詞組 0.3／篇章 0.4）以組內中位數標準化合成，由伺服器計算，詳見<button class="inline-link" type="button" data-view="rules">玩法頁</button>；三輪流程成績唔入呢個本機單篇榜。</p>
+        <section class="board-card"><div class="board-heading"><div><h2 data-i18n="site.board.title">無提示成績</h2><p data-i18n="site.board.intro">同組別、文章同規則比較，按正式分排名。有提示同無提示合共保存最近 20 輪。</p></div><span class="pill" data-i18n="site.board.localPill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores" data-i18n="site.board.clear">清除本機紀錄</button></section>
+        <section id="hinted-board-card" class="board-card" hidden><div class="board-heading"><div><h2 data-i18n="site.board.hintedTitle">用過提示嘅紀錄</h2><p data-i18n="site.board.hintedIntro">按最近完成排列，只供練習參考，唔參與排名。</p></div><span class="pill" data-i18n="site.hint.used">用過提示</span></div><div id="hinted-board"></div></section>
+        <section class="board-card sample-board"><div class="board-heading"><div><h2 data-i18n="site.board.sampleTitle">排行榜效果預覽</h2><p data-i18n="site.board.sampleIntro">以下全部係虛構示範數據（包括正式分欄），唔係真人參賽成績。</p></div><span class="pill" data-i18n="site.board.samplePill">示範數據</span></div><div id="sample-board"></div></section>
+        <p class="board-rule"><span data-i18n="site.board.ruleLead">正式分 R ＝ 正確音節／分鐘 × 準確度；篇章準確度門檻 85%，未達門檻會標示「未達 85% 門檻」兼唔入正式排名。本機榜先按正式分、再按準確度、最後按用時排序，三項相同就並列。綜合分（速度 × 準確度²）係舊 demo 試算，只作新舊紀錄比較。正式賽三輪（單字 0.3／詞組 0.3／篇章 0.4）以組內中位數標準化合成，由伺服器計算，詳見</span><button class="inline-link" type="button" data-view="rules">玩法頁</button><span data-i18n="site.board.ruleTail">；三輪流程成績唔入呢個本機單篇榜。</span></p>
       </section>
 
       <section id="rules-view" class="view secondary-view" hidden aria-labelledby="rules-heading">
-        <div class="page-heading"><h1 id="rules-heading">玩法</h1><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
+        <div class="page-heading"><h1 id="rules-heading" data-i18n="site.rules.title">玩法</h1><button class="outline-button" data-view="arena" data-i18n="site.backToArena">返去試玩 ↗</button></div>
         <div class="rules-grid">
-          <article class="rule-card"><h2>官方三輪試玩</h2><p>流程：單字（落石）90 秒 → 詞組（詞鏈）120 秒 → 篇章（幽靈）計時，三輪順住連打，最後出三輪成績卡。</p><p>每輪完場自動寫入流程狀態再跳去下一輪；成績卡逐輪顯示計分窗／用時、正確／已交、準確度、正式分同門檻。門檻：單字 90%、詞組 90%、篇章 85%，未達門檻嘅一輪正式賽唔計排名。</p><p>三輪總分由正式賽伺服器以組內中位數標準化（單字 0.3／詞組 0.3／篇章 0.4）合成；demo 只存本機，唔係正式結算。第 3 輪有內建 55 音節／分示範幽靈陪跑，純粹氣氛，唔影響計分。</p></article>
-          <article class="rule-card"><h2>計分方法</h2><p>正式分 <code>R ＝ 正確音節／分鐘 × 準確度</code>；準確度＝正確 ÷ 已提交，門檻為定時輪（單字／詞組）90%、篇章 85%。準確度按最後保留答案計：撤回改錯唔會永久扣分，但修正時間照計入用時。</p><p>本機榜同時列正式分同舊 demo 試算綜合分 <code>速度 × 準確度²</code>，後者只作新舊紀錄比較。同分次序：正式分 → 準確度 → 用時，三項相同就並列；正式賽三輪同分次序係三輪合計準確度 → 篇章準確度 → 篇章用時。</p><p>輸入：直接打高亮字嘅無聲調粵拼，字母顯示喺漢字上方；<kbd>Space</kbd>／<kbd>Enter</kbd> 確認，錯字照樣前進；未輸入字母時按 <kbd>Backspace</kbd> 退回上一字或上一句。</p></article>
-          <article class="rule-card"><h2>三個計分遊戲</h2><p>粵拼落石（單字）：60 秒內喺石頭落地前打出石上單字，落地扣命，三條命或時間到就結算；官方模式固定 90 秒、無命，石頭落地未擊破當一次提交錯誤。</p><p>粵拼詞鏈（詞組）：同一 seed 抽出 20 個詞順住逐個音節打，詞語全對連擊 +1，倍率最高 ×1.5；官方模式 120 秒連續題流，到點自動收卷。</p><p>幽靈競速（篇章）：同自己最佳時間線或內建示範幽靈鬥快打完全篇，另有「淨計時」唔設對手；官方流程用 55 音節／分示範幽靈陪跑，唔影響計分。三個遊戲都有練習／官方模式切換。</p></article>
-          <article class="rule-card"><h2>練習工具</h2><p>單篇自由練習：同一篇示範粵文由頭打到尾，可以開「粵拼提示」，成績存本機榜；用過提示嘅紀錄另列，唔參與排名。</p><p>聲韻解鎖塔：由聲母開始逐層解鎖韻腹、韻尾，自適應出題，達標先上到下一層；純練習，唔設排名。</p><p>遊戲大廳有齊四個小遊戲加單篇練習入口；試玩賽場設定卡揀「自由練習」就會展開同一批入口（單篇喺本頁開始，其餘連去對應小遊戲）。</p></article>
-          <article class="rule-card"><h2>手機組同電腦組</h2><p>螢幕鍵盤揀手機組，實體鍵盤揀電腦組，平板亦按鍵盤分類。手機點一下題目，就可以用系統鍵盤輸入。</p><p>請自行確認組別，開賽後鎖定。網站無法可靠核實裝置或外接鍵盤。</p></article>
-          <article class="rule-card rule-highlight"><h2>本機示範</h2><p>目前用原創示範文章，正式文章稍後提供。冇帳戶或同步對賽，紀錄只存喺呢個瀏覽器。</p><p>排行榜示範人物同成績均為虛構；未驗證防作弊或 2,000 人比賽容量。</p></article>
+          <article class="rule-card"><h2>官方三輪試玩</h2><p data-i18n="site.rules.official.p1">流程：單字（落石）90 秒 → 詞組（詞鏈）120 秒 → 篇章（幽靈）計時，三輪順住連打，最後出三輪成績卡。</p><p data-i18n="site.rules.official.p2">每輪完場自動寫入流程狀態再跳去下一輪；成績卡逐輪顯示計分窗／用時、正確／已交、準確度、正式分同門檻。門檻：單字 90%、詞組 90%、篇章 85%，未達門檻嘅一輪正式賽唔計排名。</p><p data-i18n="site.rules.official.p3">三輪總分由正式賽伺服器以組內中位數標準化（單字 0.3／詞組 0.3／篇章 0.4）合成；demo 只存本機，唔係正式結算。第 3 輪有內建 55 音節／分示範幽靈陪跑，純粹氣氛，唔影響計分。</p></article>
+          <article class="rule-card"><h2>計分方法</h2><p><span data-i18n="site.rules.scoring.p1a">正式分 </span><code>R ＝ 正確音節／分鐘 × 準確度</code><span data-i18n="site.rules.scoring.p1b">；準確度＝正確 ÷ 已提交，門檻為定時輪（單字／詞組）90%、篇章 85%。準確度按最後保留答案計：撤回改錯唔會永久扣分，但修正時間照計入用時。</span></p><p><span data-i18n="site.rules.scoring.p2a">本機榜同時列正式分同舊 demo 試算綜合分 </span><code>速度 × 準確度²</code><span data-i18n="site.rules.scoring.p2b">，後者只作新舊紀錄比較。同分次序：正式分 → 準確度 → 用時，三項相同就並列；正式賽三輪同分次序係三輪合計準確度 → 篇章準確度 → 篇章用時。</span></p><p><span data-i18n="site.rules.scoring.p3a">輸入：直接打高亮字嘅無聲調粵拼，字母顯示喺漢字上方；</span><kbd>Space</kbd>／<kbd>Enter</kbd><span data-i18n="site.rules.scoring.p3b"> 確認，錯字照樣前進；未輸入字母時按 </span><kbd>Backspace</kbd><span data-i18n="site.rules.scoring.p3c"> 退回上一字或上一句。</span></p></article>
+          <article class="rule-card"><h2>三個計分遊戲</h2><p data-i18n="site.rules.games.p1">粵拼落石（單字）：60 秒內喺石頭落地前打出石上單字，落地扣命，三條命或時間到就結算；官方模式固定 90 秒、無命，石頭落地未擊破當一次提交錯誤。</p><p data-i18n="site.rules.games.p2">粵拼詞鏈（詞組）：同一 seed 抽出 20 個詞順住逐個音節打，詞語全對連擊 +1，倍率最高 ×1.5；官方模式 120 秒連續題流，到點自動收卷。</p><p data-i18n="site.rules.games.p3">幽靈競速（篇章）：同自己最佳時間線或內建示範幽靈鬥快打完全篇，另有「淨計時」唔設對手；官方流程用 55 音節／分示範幽靈陪跑，唔影響計分。三個遊戲都有練習／官方模式切換。</p></article>
+          <article class="rule-card"><h2>練習工具</h2><p data-i18n="site.rules.tools.p1">單篇自由練習：同一篇示範粵文由頭打到尾，可以開「粵拼提示」，成績存本機榜；用過提示嘅紀錄另列，唔參與排名。</p><p data-i18n="site.rules.tools.p2">聲韻解鎖塔：由聲母開始逐層解鎖韻腹、韻尾，自適應出題，達標先上到下一層；純練習，唔設排名。</p><p data-i18n="site.rules.tools.p3">遊戲大廳有齊四個小遊戲加單篇練習入口；試玩賽場設定卡揀「自由練習」就會展開同一批入口（單篇喺本頁開始，其餘連去對應小遊戲）。</p></article>
+          <article class="rule-card"><h2>手機組同電腦組</h2><p data-i18n="site.rules.groups.p1">螢幕鍵盤揀手機組，實體鍵盤揀電腦組，平板亦按鍵盤分類。手機點一下題目，就可以用系統鍵盤輸入。</p><p data-i18n="site.rules.groups.p2">請自行確認組別，開賽後鎖定。網站無法可靠核實裝置或外接鍵盤。</p></article>
+          <article class="rule-card rule-highlight"><h2>本機示範</h2><p data-i18n="site.rules.local.p1">目前用原創示範文章，正式文章稍後提供。冇帳戶或同步對賽，紀錄只存喺呢個瀏覽器。</p><p data-i18n="site.rules.local.p2">排行榜示範人物同成績均為虛構；未驗證防作弊或 2,000 人比賽容量。</p></article>
         </div>
       </section>
     </main>

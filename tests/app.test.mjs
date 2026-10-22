@@ -6,6 +6,7 @@ import vm from "node:vm";
 import * as engine from "../demo/engine.mjs";
 import * as common from "../demo/games/common.mjs";
 import * as flow from "../demo/games/flow.mjs";
+import * as i18n from "../demo/i18n.mjs";
 import * as questions from "../demo/questions.mjs";
 
 const storageKey = "canclid-contest-demo-v2";
@@ -90,7 +91,9 @@ function textOf(node) {
     (node.children || []).map(textOf).join("");
 }
 
-function openTab(store = new Map(), failures = {}, { search = "" } = {}) {
+// i18n 實例可以換：語言偵測只喺模組第一次 call 之前讀 localStorage，
+// 「記住咗簡體」嘅測試要用 query 參數拎一個全新實例。
+function openTab(store = new Map(), failures = {}, { search = "", i18n: i18nModule = i18n } = {}) {
   let now = 0;
   const timeouts = [];
   const elements = new Map();
@@ -115,7 +118,7 @@ function openTab(store = new Map(), failures = {}, { search = "" } = {}) {
     static now() { return now; }
   }
   const context = vm.createContext({
-    ...engine, ...questions, ...common, ...flow, crypto: webcrypto, Date: Clock, window, location, URLSearchParams,
+    ...engine, ...questions, ...common, ...flow, ...i18nModule, crypto: webcrypto, Date: Clock, window, location, URLSearchParams,
     document: {
       querySelector: get,
       querySelectorAll: selector => selector === ".view" ? views : [],
@@ -147,7 +150,7 @@ function openTab(store = new Map(), failures = {}, { search = "" } = {}) {
   vm.runInContext(source, context, { filename: "demo/app.mjs" });
   const evaluate = expression => vm.runInContext(expression, context);
   return {
-    get, evaluate, location,
+    get, evaluate, location, window,
     setTime(value) { now = value; },
     flushTimeouts() { timeouts.splice(0).forEach(callback => callback()); },
     records: () => JSON.parse(evaluate("JSON.stringify(records)")),
@@ -1201,4 +1204,150 @@ test("高頻 tick 只喺數字有變先寫 DOM，唔會重複改同一節點", (
   tab.setTime(5000);
   tab.evaluate("renderMetrics()");
   assert.equal(speed.textWrites, speedWrites, "速度冇變就唔寫");
+});
+
+// ── 雙語界面：locale 掣、data-i18n 靜態文案、動態重繪 ──────────────────────
+// i18n 運行庫（test realm）讀 globalThis 嘅 document／window／localStorage，
+// 所以測試要暫時掛假 DOM；app.mjs 個 vm 注入返同一個 i18n 實例。
+const localeStorageKey = "canclid-contest-locale";
+
+function localeStorage(store = new Map()) {
+  return {
+    getItem: key => (store.has(key) ? store.get(key) : null),
+    setItem(key, value) { store.set(key, String(value)); },
+    removeItem(key) { store.delete(key); },
+  };
+}
+
+function withGlobals(globals, run) {
+  const previous = new Map(Object.keys(globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  for (const [key, value] of Object.entries(globals)) {
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+  }
+  try {
+    return run();
+  } finally {
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  }
+}
+
+// 迷你 DOM：運行庫只需要 querySelectorAll、documentElement 同 click 委派。
+function localeNode(dataset = {}, textContent = "", placeholder = null) {
+  const attributes = new Map();
+  if (placeholder !== null) attributes.set("placeholder", placeholder);
+  return {
+    dataset,
+    textContent,
+    setAttribute(name, value) { attributes.set(name, String(value)); },
+    getAttribute(name) { return attributes.get(name) ?? null; },
+    closest(selector) { return selector === "[data-locale-toggle]" && "localeToggle" in dataset ? this : null; },
+  };
+}
+
+function localeDom() {
+  const toggle = localeNode({ localeToggle: "" }, "简");
+  const nav = localeNode({ i18n: "site.nav.arena" }, "試玩賽場");
+  const rulesNav = localeNode({ i18n: "site.nav.rules" }, "玩法");
+  const nickname = localeNode({ i18nPlaceholder: "site.nickname.default" }, "", "粵拼新星");
+  const nodes = [toggle, nav, rulesNav, nickname];
+  const listeners = new Map();
+  const documentElement = {
+    lang: null,
+    setAttribute(name, value) { if (name === "lang") this.lang = value; },
+    getAttribute(name) { return name === "lang" ? this.lang : null; },
+  };
+  return {
+    documentElement, toggle, nav, rulesNav, nickname,
+    document: {
+      documentElement,
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(listener);
+      },
+      querySelectorAll(selector) {
+        if (selector === "[data-i18n]") return nodes.filter(node => node.dataset.i18n);
+        if (selector === "[data-i18n-placeholder]") return nodes.filter(node => node.dataset.i18nPlaceholder);
+        if (selector === "[data-locale-toggle]") return nodes.filter(node => "localeToggle" in node.dataset);
+        return [];
+      },
+    },
+    click(target) { for (const listener of listeners.get("click") ?? []) listener({ target }); },
+  };
+}
+
+// 開一個掛咗假 DOM 嘅 tab：i18n 用假 document／storage，app 個 vm 用注入嘅 i18n 實例，
+// 而 window 係 app 自己嗰個，令 setLocale 派嘅 canclid-locale 真係傳到 app 嘅監聽器。
+function withLocaleEnv({ store = new Map(), i18n: i18nModule = i18n } = {}, run) {
+  const dom = localeDom();
+  return withGlobals({ document: dom.document, localStorage: localeStorage(store) }, () => {
+    const tab = openTab(new Map(), {}, { i18n: i18nModule });
+    tab.window.CustomEvent = class CustomEvent {
+      constructor(type, init) { this.type = type; Object.assign(this, init ?? {}); }
+    };
+    tab.window.dispatchEvent = event => { tab.window.fire(event.type, event); return true; };
+    return withGlobals({ window: tab.window }, () => {
+      try {
+        return run(tab, dom);
+      } finally {
+        i18nModule.setLocale("hant");
+      }
+    });
+  });
+}
+
+test("雙語界面：未設定過嘅話預設繁體，lang、靜態文案同切換掣都係繁體", () => {
+  withLocaleEnv({}, (tab, dom) => {
+    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    assert.equal(dom.nav.textContent, "試玩賽場");
+    assert.equal(dom.rulesNav.textContent, "玩法");
+    assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
+    assert.equal(dom.toggle.textContent, "简");
+    assert.equal(dom.toggle.getAttribute("aria-pressed"), "false");
+    assert.equal(dom.toggle.getAttribute("aria-label"), "切換简体粤文界面");
+    assert.match(tab.get("#flow-note").textContent, /官方三輪/);
+    assert.match(tab.get("#start").innerHTML, /開始三輪試玩/);
+    assert.match(tab.get("#board-article").textContent, /同篇比較/);
+  });
+});
+
+test("雙語界面：撳 locale-toggle 轉簡體（靜態＋動態），再撳還原繁體", () => {
+  withLocaleEnv({}, (tab, dom) => {
+    dom.click(dom.toggle);
+    assert.equal(dom.documentElement.lang, "zh-Hans");
+    assert.equal(dom.nav.textContent, "试玩赛场");
+    assert.equal(dom.rulesNav.textContent, "玩法", "同形字保持原樣");
+    assert.equal(dom.nickname.getAttribute("placeholder"), "粤拼新星");
+    assert.equal(dom.toggle.textContent, "繁");
+    assert.equal(dom.toggle.getAttribute("aria-pressed"), "true");
+    assert.equal(dom.toggle.getAttribute("aria-label"), "切換繁體粤語界面");
+    // 動態文案：app.mjs 收到 canclid-locale 之後用新語言重畫
+    assert.match(tab.get("#flow-note").textContent, /官方三轮/);
+    assert.match(tab.get("#start").innerHTML, /开始三轮试玩/);
+    assert.match(tab.get("#article-detail").textContent, /示范粤文/);
+    assert.match(tab.get("#completed-count").textContent, /音节/);
+    assert.match(tab.get("#board-article").textContent, /同篇比较/);
+
+    dom.click(dom.toggle);
+    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    assert.equal(dom.nav.textContent, "試玩賽場");
+    assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
+    assert.equal(dom.toggle.textContent, "简");
+    assert.match(tab.get("#flow-note").textContent, /官方三輪/);
+    assert.match(tab.get("#start").innerHTML, /開始三輪試玩/);
+    assert.match(tab.get("#article-detail").textContent, /示範粵文/);
+  });
+});
+
+test("雙語界面：localStorage 記住咗簡體，下次開站直接出簡體", async () => {
+  const fresh = await import("../demo/i18n.mjs?case=app-stored-hans");
+  withLocaleEnv({ store: new Map([[localeStorageKey, "hans"]]), i18n: fresh }, (tab, dom) => {
+    assert.equal(dom.documentElement.lang, "zh-Hans");
+    assert.equal(dom.nav.textContent, "试玩赛场");
+    assert.equal(dom.toggle.textContent, "繁");
+    assert.match(tab.get("#flow-note").textContent, /官方三轮/);
+    assert.equal(tab.records().length, 0, "語言設定唔會影響本機紀錄");
+  });
 });

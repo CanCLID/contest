@@ -1,8 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import { COMPONENTS, splitJyutping } from "../demo/engine.mjs";
 import { hashSeed } from "../demo/games/common.mjs";
 import { BANK, BANK_WITH_COMPONENTS, validateBank } from "../demo/games/tower/data.mjs";
+import * as engineApi from "../demo/engine.mjs";
+import * as commonApi from "../demo/games/common.mjs";
+import * as towerApi from "../demo/games/tower/tower.mjs";
+import * as i18nApi from "../demo/i18n.mjs";
+import { setLocale, t } from "../demo/i18n.mjs";
 import {
   ACCURACY_TARGET, ROUND_LENGTH, TOTAL_STAGES, UNLOCK_STAGES,
   createTower, cpmTargetFor, getTowerStats, getWeakComponents,
@@ -343,4 +350,265 @@ test("字池夾唔到字嘅時候唔會出題，亦唔會爆", () => {
   const thin = createTower({ now: 0, bank: startingBank().slice(0, 3), seed: 1 });
   assert.equal(thin.round.questions.length, 3);
   assert.equal(thin.round.outcome, null);
+});
+
+// --- i18n：繁體粵語（預設）／簡體粵文 -----------------------------------------
+
+const LOCALE_STORAGE_KEY = "canclid-contest-locale";
+const TOWER_DOM_SOURCE = readFileSync(new URL("../demo/games/tower/tower-dom.mjs", import.meta.url), "utf8")
+  .replace(/^import[\s\S]*?from\s+"[^"]+";\n/gm, "")
+  .replace(/^export \{[^}]*\};\n/gm, "");
+const towerHtml = readFileSync(new URL("../demo/games/tower/index.html", import.meta.url), "utf8");
+const I18N_ELEMENT = /<[a-z][a-z0-9]*\b[^>]*\sdata-i18n="([^"]+)"[^>]*>([^<]*)</g;
+
+// 迷你 DOM 節點：i18n 運行庫同 tower-dom.mjs 只會用 dataset、textContent、
+// classList 同 title，唔使拉 jsdom 落嚟。
+function miniNode() {
+  const classes = new Set();
+  const attributes = new Map();
+  const listeners = new Map();
+  let text = "";
+  const node = {
+    hidden: false, disabled: false, value: "", style: {}, dataset: {},
+    className: "", children: [], title: "",
+    get textContent() { return text; },
+    set textContent(next) { text = String(next); },
+    classList: {
+      add: (...names) => names.forEach(name => classes.add(name)),
+      remove: (...names) => names.forEach(name => classes.delete(name)),
+      contains: name => classes.has(name),
+      toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+    },
+    setAttribute: (name, value) => attributes.set(name, String(value)),
+    getAttribute: name => attributes.get(name) ?? null,
+    append(...items) { node.children.push(...items); },
+    replaceChildren(...items) { node.children = items; },
+    focus() {}, blur() {},
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(listener);
+    },
+    fire(type, event = {}) {
+      event.target ??= node;
+      event.preventDefault ??= () => {};
+      (listeners.get(type) ?? []).forEach(listener => listener(event));
+    },
+  };
+  return node;
+}
+
+// index.html 入面每個 data-i18n 砌返一個迷你節點，畀 i18n 運行庫自己換字。
+function staticNodes(source) {
+  return [...source.matchAll(I18N_ELEMENT)].map(([, key, original]) => {
+    const node = miniNode();
+    node.dataset.i18n = key;
+    node.textContent = original;
+    return node;
+  });
+}
+
+// 真係跑 tower-dom.mjs，但補齊 i18n、window 同 localStorage：靜態文案由 index.html
+// 嘅 data-i18n 換，動態文案由模組自己畫，切語言會派 canclid-locale 叫模組重繪。
+function towerPage() {
+  let now = 0;
+  let tickerId = 0;
+  const store = new Map();
+  const elements = new Map();
+  const tickers = new Map();
+  const localeListeners = [];
+  const i18nNodes = staticNodes(towerHtml);
+  const toggle = miniNode();
+  toggle.dataset.localeToggle = "";
+  toggle.textContent = "简";
+
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, miniNode());
+    return elements.get(selector);
+  };
+  const document = {
+    querySelector: get,
+    querySelectorAll: selector => selector === "[data-i18n]" ? i18nNodes
+      : selector === "[data-locale-toggle]" ? [toggle]
+      : [],
+    createElement: miniNode,
+    addEventListener() {},
+    documentElement: { setAttribute() {} },
+  };
+  const window = {
+    addEventListener(type, listener) { if (type === "canclid-locale") localeListeners.push(listener); },
+    dispatchEvent(event) { if (event.type === "canclid-locale") localeListeners.forEach(listener => listener(event)); },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+  };
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+  vm.runInContext(TOWER_DOM_SOURCE, vm.createContext({
+    ...engineApi, ...commonApi, ...towerApi, ...i18nApi,
+    Date: Clock,
+    document,
+    window,
+    confirm: () => true,
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval(callback) { tickerId += 1; tickers.set(tickerId, callback); return tickerId; },
+    clearInterval(id) { tickers.delete(id); },
+  }), { filename: "demo/games/tower/tower-dom.mjs" });
+
+  const page = {
+    document,
+    window,
+    i18nNodes,
+    toggle,
+    get,
+    setTime(value) { now = value; },
+    tick() { [...tickers.values()].forEach(callback => callback()); },
+    type(text, at) {
+      now = at;
+      const surface = get("#typing-surface");
+      for (const letter of text) surface.fire("keydown", { key: letter, code: `Key${letter.toUpperCase()}` });
+      surface.fire("keydown", { key: " ", code: "Space" });
+    },
+    // 由 #glyph 讀返而家出緊邊個字，再打佢嘅正確答案。
+    answerCurrent(at) {
+      const hanzi = get("#glyph").textContent;
+      const entry = BANK_WITH_COMPONENTS.find(item => item.hanzi === hanzi);
+      assert.ok(entry, `題庫冇「${hanzi}」`);
+      page.type(entry.answers[0], at);
+    },
+  };
+  return page;
+}
+
+function staticText(page, key) {
+  const node = page.i18nNodes.find(item => item.dataset.i18n === key);
+  assert.ok(node, `index.html 冇 data-i18n="${key}"`);
+  return node.textContent;
+}
+
+// setLocale() 讀 globalThis 上面嘅 document／window／localStorage；呢個 wrapper 幫每條
+// 測試裝好，跑完（就算 throw）還原 locale 同清走 canclid-contest-locale。
+function withLocale(page, run) {
+  const store = new Map();
+  const previous = new Map();
+  const install = (name, value) => {
+    previous.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+  };
+  install("document", page.document);
+  install("window", page.window);
+  install("localStorage", {
+    getItem: key => (store.has(key) ? store.get(key) : null),
+    setItem(key, value) { store.set(key, String(value)); },
+    removeItem(key) { store.delete(key); },
+  });
+  try {
+    return run();
+  } finally {
+    setLocale("hant");
+    store.delete(LOCALE_STORAGE_KEY);
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else delete globalThis[name];
+    }
+  }
+}
+
+function playTowerRound(page, { wrongFirst = false, startAt = 1000, seconds = 1.5 } = {}) {
+  let clock = startAt;
+  if (wrongFirst) page.type("zzz", clock);
+  for (let index = 0; index < ROUND_LENGTH - (wrongFirst ? 1 : 0); index++) {
+    clock += seconds * 1000;
+    page.answerCurrent(clock);
+  }
+  return clock;
+}
+
+test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant 還原", () => {
+  const page = towerPage();
+  withLocale(page, () => {
+    // 切換掣嘅 markup 同位置（demo-badge 前）係 i18n 運行庫嘅契約
+    assert.match(towerHtml, /<button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简<\/button>\s*<span class="demo-badge">/);
+    const css = readFileSync(new URL("../demo/games/tower/tower.css", import.meta.url), "utf8");
+    assert.match(css, /\.locale-toggle \{[^}]*min-height: 32px[^}]*min-width: 44px[^}]*\}/);
+    assert.equal(staticText(page, "tower.title"), "聲韻解鎖塔");
+    assert.equal(page.toggle.textContent, "简");
+
+    setLocale("hans");
+    assert.equal(staticText(page, "tower.title"), "声韵解锁塔");
+    assert.equal(staticText(page, "tower.tagline"), "由最简单的声母开始，一层一层解锁粤拼嘅 19 个声母、11 个韵腹同 8 个韵尾。");
+    assert.equal(staticText(page, "tower.badge"), "练习模式，不设排名");
+    assert.equal(staticText(page, "tower.stageUnit"), "层");
+    assert.equal(staticText(page, "tower.componentInitial"), "声母");
+    assert.equal(staticText(page, "tower.componentNucleus"), "韵腹");
+    assert.equal(staticText(page, "tower.componentCoda"), "韵尾");
+    assert.equal(staticText(page, "tower.reset"), "重设进度");
+    assert.equal(page.toggle.textContent, "繁", "切換掣要出返「繁」");
+    assert.equal(page.toggle.getAttribute("aria-pressed"), "true");
+    for (const node of page.i18nNodes) {
+      assert.notEqual(t(node.dataset.i18n, "\u0000冇譯文"), "\u0000冇譯文", `${node.dataset.i18n} 冇 hans 譯文`);
+    }
+
+    setLocale("hant");
+    assert.equal(staticText(page, "tower.title"), "聲韻解鎖塔");
+    assert.equal(staticText(page, "tower.componentInitial"), "聲母");
+    assert.equal(page.toggle.textContent, "简");
+    assert.equal(page.toggle.getAttribute("aria-pressed"), "false");
+  });
+});
+
+test("i18n：本層文案、元件格仔同結果卡跟 locale 轉，hant 還原", () => {
+  const page = towerPage();
+  withLocale(page, () => {
+    assert.equal(page.get("#stage-note").textContent, "本層目標：準確度 ≥95%、速度 ≥20 音節／分");
+    assert.equal(page.get("#round-progress").textContent, "已答 0 / 10 題");
+
+    setLocale("hans");
+    assert.equal(page.get("#stage-note").textContent, "本层目标：准确度 ≥95%、速度 ≥20 音节／分");
+    assert.equal(page.get("#goal-accuracy").textContent, "≥95%（10 题要全中）");
+    assert.equal(page.get("#unlocked-count").textContent, "7 / 38 个元件");
+    assert.equal(page.get("#round-progress").textContent, "已答 0 / 10 题");
+    assert.equal(page.get("#speed-unit").textContent, "目标 20 音节／分");
+    const cells = page.get("#component-initial").children;
+    assert.equal(cells.find(cell => cell.dataset.value === "d").children[1].textContent, "未解锁");
+    assert.match(cells.find(cell => cell.dataset.value === "b").title, /^声母 b：已解锁，未练过$/);
+
+    // 10 題錯 1 題：未達標，留返第 1 層。
+    playTowerRound(page, { wrongFirst: true });
+    assert.equal(page.get("#result").hidden, false);
+    assert.equal(page.get("#result-title").textContent, "未达标，留返喺第 1 层");
+    assert.equal(page.get("#continue").textContent, "再嚟一轮");
+    assert.match(page.get("#result-summary").textContent, /^9 \/ 10 题啱 · 准确度 90% · 速度 /);
+    assert.equal(page.get("#feedback").textContent, "本轮完咗，睇下面嘅结果。");
+
+    setLocale("hant");
+    assert.equal(page.get("#stage-note").textContent, "本層目標：準確度 ≥95%、速度 ≥20 音節／分");
+    assert.equal(page.get("#result-title").textContent, "未達標，留返喺第 1 層");
+    assert.equal(page.get("#continue").textContent, "再嚟一輪");
+    assert.equal(page.get("#feedback").textContent, "本輪完咗，睇下面嘅結果。");
+    assert.equal(page.get("#round-progress").textContent, "已答 10 / 10 題");
+  });
+});
+
+test("i18n：過關解鎖同層數文案跟 locale 轉，hant 還原", () => {
+  const page = towerPage();
+  withLocale(page, () => {
+    playTowerRound(page, { wrongFirst: true });
+    page.get("#continue").fire("click");
+    playTowerRound(page, { startAt: 30000 });
+    assert.equal(page.get("#result-title").textContent, "第 1 層完成，上一層解鎖咗！");
+    assert.equal(page.get("#continue").textContent, "開始第 2 層");
+
+    setLocale("hans");
+    assert.equal(page.get("#result-title").textContent, "第 1 层完成，上一层解锁咗！");
+    assert.equal(page.get("#continue").textContent, "开始第 2 层");
+    assert.equal(page.get("#unlock-note").textContent, "新解锁：声母 d、t、n、l；韵腹 a");
+    assert.equal(page.get("#stage-number").textContent, "2");
+    const cells = page.get("#component-initial").children;
+    assert.equal(cells.find(cell => cell.dataset.value === "d").children[1].textContent, "—");
+
+    setLocale("hant");
+    assert.equal(page.get("#result-title").textContent, "第 1 層完成，上一層解鎖咗！");
+    assert.equal(page.get("#unlock-note").textContent, "新解鎖：聲母 d、t、n、l；韻腹 a");
+  });
 });
