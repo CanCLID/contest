@@ -2,8 +2,9 @@
 // Renders the track (two lanes, or just the player's own lane in 「淨計時」
 // mode), drives the shared engine (createRun / submitAnswer / undoAnswer /
 // getMetrics) with the same input rules as demo/app.mjs, and keeps the
-// player's best timeline in localStorage. With ?flow=1 it locks 淨計時 and
-// writes the passage round into the official three-round flow store.
+// player's best timeline in localStorage. With ?flow=1 it locks the built-in
+// 55 syllables-per-minute demo ghost as company (atmosphere only, never part
+// of the score) and writes the passage round into the official flow store.
 import { createRun, getMetrics, splitJyutping, submitAnswer, undoAnswer } from "../../engine.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "../../questions.mjs";
 import { OFFICIAL_THRESHOLDS, formatClock, readJson, roundMetrics, writeJson } from "../common.mjs";
@@ -16,7 +17,7 @@ import {
   saveRoundResult,
   startFlow,
 } from "../flow.mjs";
-import { GHOST_STORAGE_KEY, builtInGhosts, createGhostRace, ghostProgressAt, raceResult, recordTimelineFromTimes } from "./ghost.mjs";
+import { GHOST_CPM_PRESETS, GHOST_STORAGE_KEY, builtInGhosts, createGhostRace, ghostProgressAt, raceResult, recordTimelineFromTimes } from "./ghost.mjs";
 
 export { GHOST_STORAGE_KEY };
 
@@ -48,7 +49,8 @@ let best = readBest();
 // a syllable drops its entry, so the saved best replays what really happened.
 const submitTimes = [];
 
-// 官方三輪流程（?flow=1）：鎖定「淨計時」（唔設對手），完場寫入 flow store 再接去成績卡。
+// 官方三輪流程（?flow=1）：鎖定內建 55 音節／分示範幽靈陪跑（純氣氛，唔影響計分），
+// 完場寫入 flow store 再接去成績卡。
 const flowMode = (() => {
   try {
     return new URLSearchParams(location.search).get("flow") === "1";
@@ -57,7 +59,9 @@ const flowMode = (() => {
   }
 })();
 let flow = flowMode ? readFlow() ?? startFlow() : null;
-if (flowMode) selectedOpponentId = "none";
+if (flowMode) {
+  selectedOpponentId = ghosts.find(ghost => ghost.correctPerMinute === GHOST_CPM_PRESETS[0])?.id ?? ghosts[0].id;
+}
 
 // 「淨計時」：冇幽靈時間線，賽道只顯示自己嗰條進度條。
 function soloOpponent() {
@@ -67,15 +71,15 @@ function soloOpponent() {
 function renderFlow() {
   if (!flowMode) return;
   $("#flow-banner").hidden = false;
-  $("#flow-banner").textContent = `${flowRoundLabel("passage")} · 淨計時（唔設對手）· 退出流程會丟棄三輪進度。`;
+  $("#flow-banner").textContent = `${flowRoundLabel("passage")} · 示範幽靈陪跑，唔影響計分 · 退出流程會丟棄三輪進度。`;
   $("#lobby-link").textContent = "‹ 退出流程";
   $("#lobby-link").href = "../../index.html";
   $("#lobby-link").title = "退出會丟棄三輪流程進度";
   $("#opponent-heading").hidden = true;
   $("#opponent-options").hidden = true;
   $("#best-card").hidden = true;
-  $("#start-note").textContent = "官方流程第 3 輪：篇章 · 淨計時（唔設對手），倒數 3 秒開始。";
-  $("#tagline").textContent = "官方流程第 3 輪：篇章淨計時，唔設幽靈對手，打完全篇就有本輪成績。";
+  $("#start-note").textContent = "官方流程第 3 輪：篇章 · 內建 55 音節／分示範幽靈陪跑，唔影響計分，倒數 3 秒開始。";
+  $("#tagline").textContent = "官方流程第 3 輪：篇章有內建 55 音節／分示範幽靈陪跑，純粹氣氛，成績同對手無關。";
 }
 
 function showFlowNext() {
@@ -303,27 +307,38 @@ function renderPassage() {
   currentGlyph?.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
+// 高頻更新（100ms tick）只喺值有變先寫 DOM，避免重複寫入觸發無謂重排。
+function setText(selector, value) {
+  const node = $(selector);
+  if (node.textContent !== value) node.textContent = value;
+}
+
 function setBar(barSelector, trackSelector, value) {
   const percent = Math.round(Math.min(1, Math.max(0, value)) * 100);
-  $(barSelector).style.width = `${percent}%`;
-  $(trackSelector).setAttribute("aria-valuenow", String(percent));
+  const bar = $(barSelector);
+  const width = `${percent}%`;
+  if (bar.style.width !== width) bar.style.width = width;
+  const track = $(trackSelector);
+  const label = String(percent);
+  if (track.getAttribute("aria-valuenow") !== label) track.setAttribute("aria-valuenow", label);
 }
 
 function renderRace(now = Date.now()) {
   if (!run) return;
   const metrics = getMetrics(run, now);
   const ghost = race ? ghostProgressAt(race, now) : 0;
+  const solo = opponent?.id === "none";
   setBar("#player-bar", "#player-track", metrics.progress);
   setBar("#ghost-bar", "#ghost-track", ghost);
-  $("#ghost-lane").hidden = opponent?.id === "none";
-  $("#player-value").textContent = `${metrics.submitted} / ${total} 音節`;
-  $("#ghost-value").textContent = `${Math.round(ghost * 100)}%`;
-  $("#time").textContent = formatClock(metrics.elapsedSeconds);
-  $("#speed").textContent = String(Math.round(metrics.correctPerMinute));
-  $("#accuracy").textContent = metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`;
-  $("#attempts").textContent = metrics.correct + metrics.errors
-    ? `${metrics.correct} 正確 / ${metrics.errors} 錯誤` : "未有提交";
-  $("#completed-count").textContent = `${metrics.submitted} / ${total} 音節`;
+  if ($("#ghost-lane").hidden !== solo) $("#ghost-lane").hidden = solo;
+  setText("#player-value", `${metrics.submitted} / ${total} 音節`);
+  setText("#ghost-value", `${Math.round(ghost * 100)}%`);
+  setText("#time", formatClock(metrics.elapsedSeconds));
+  setText("#speed", String(Math.round(metrics.correctPerMinute)));
+  setText("#accuracy", metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`);
+  setText("#attempts", metrics.correct + metrics.errors
+    ? `${metrics.correct} 正確 / ${metrics.errors} 錯誤` : "未有提交");
+  setText("#completed-count", `${metrics.submitted} / ${total} 音節`);
 }
 
 function focusAnswer() {
@@ -404,7 +419,7 @@ function ghostLine(summary) {
 function renderResult(summary, improved) {
   const solo = opponent?.id === "none";
   $("#result-title").textContent = solo ? "完成喇！" : summary.verdict;
-  $("#result-summary").textContent = `${opponent.label} · 全文 ${total} 音節`;
+  $("#result-summary").textContent = `${opponent.label}${flowMode ? "（示範陪跑，唔影響計分）" : ""} · 全文 ${total} 音節`;
   const rows = [
     ["完成時間", formatClock(summary.elapsedSeconds)],
     ["正確音節／分鐘", String(Math.round(summary.correctPerMinute))],
@@ -543,7 +558,9 @@ function tick() {
   if (countdownEnds !== null) {
     const remaining = Math.ceil((countdownEnds - now) / 1000);
     if (remaining > 0) {
-      $("#countdown-number").textContent = String(remaining);
+      if ($("#countdown-number").textContent !== String(remaining)) {
+        $("#countdown-number").textContent = String(remaining);
+      }
       return;
     }
     run = createRun({ now: countdownEnds, questionSet: tokens });

@@ -120,6 +120,25 @@ function selectMode(next) {
   renderMode();
 }
 
+// 每個 rAF frame 都會行 render()，所以只喺值有變先寫 DOM，避免無謂重排。
+function setText(selector, value) {
+  const node = $(selector);
+  if (node.textContent !== value) node.textContent = value;
+}
+
+function setAttr(selector, name, value) {
+  const node = $(selector);
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+}
+
+function setWidth(selector, percent) {
+  const node = $(selector);
+  const width = `${percent}%`;
+  if (node.style.width !== width) node.style.width = width;
+}
+
+let lastTransform = "";
+
 function render() {
   const time = Date.now();
   const metrics = getRocksMetrics(state, time);
@@ -127,30 +146,35 @@ function render() {
 
   const official = state.mode === "official";
   $("#hud").classList.toggle("official", official);
-  $("#lives-item").hidden = official;
-  $("#lives").textContent = official
+  if ($("#lives-item").hidden !== official) $("#lives-item").hidden = official;
+  setText("#lives", official
     ? ""
-    : `${"♥".repeat(metrics.livesLeft)}${"♡".repeat(metrics.lives - metrics.livesLeft)}`;
-  $("#lives").setAttribute("aria-label", official ? "官方模式：無命" : `剩 ${metrics.livesLeft} 條命`);
-  $("#clock").textContent = formatClock(metrics.remainingSeconds);
-  $("#cpm").textContent = String(Math.round(metrics.correctPerMinute));
-  $("#accuracy").textContent = metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—";
-  $("#combo").textContent = `×${comboMultiplier(state.combo).toFixed(1)}`;
+    : `${"♥".repeat(metrics.livesLeft)}${"♡".repeat(metrics.lives - metrics.livesLeft)}`);
+  setAttr("#lives", "aria-label", official ? "官方模式：無命" : `剩 ${metrics.livesLeft} 條命`);
+  setText("#clock", formatClock(metrics.remainingSeconds));
+  setText("#cpm", String(Math.round(metrics.correctPerMinute)));
+  setText("#accuracy", metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—");
+  setText("#combo", `×${comboMultiplier(state.combo).toFixed(1)}`);
   $("#combo").classList.toggle("hot", state.combo >= 5);
-  $("#combo-count").textContent = `${state.combo} 連擊`;
-  $("#cleared").textContent = `擊破 ${metrics.correct} · 打錯 ${metrics.errors} · 漏接 ${metrics.missed}`;
-  $("#time-bar").style.width = `${metrics.progress * 100}%`;
+  setText("#combo-count", `${state.combo} 連擊`);
+  setText("#cleared", `擊破 ${metrics.correct} · 打錯 ${metrics.errors} · 漏接 ${metrics.missed}`);
+  setWidth("#time-bar", metrics.progress * 100);
 
   const rock = $("#rock");
-  rock.style.transform = `translate(-50%, ${progress * fallSpan}px)`;
+  // 石頭用 transform 移動（唔影響排版）；像素值四捨五入到 0.1px 減少多餘寫入。
+  const transform = `translate(-50%, ${Math.round(progress * fallSpan * 10) / 10}px)`;
+  if (transform !== lastTransform) {
+    rock.style.transform = transform;
+    lastTransform = transform;
+  }
   rock.classList.toggle("urgent", progress > 0.7 && state.status === "running");
   rock.classList.toggle("landed", state.status !== "running");
-  $("#rock-hanzi").textContent = state.target?.hanzi ?? "";
-  $("#field").setAttribute("aria-label", state.target ? `落石區，目前目標：${state.target.hanzi}` : "落石區");
+  setText("#rock-hanzi", state.target?.hanzi ?? "");
+  setAttr("#field", "aria-label", state.target ? `落石區，目前目標：${state.target.hanzi}` : "落石區");
 
-  $("#draft").textContent = draft;
+  setText("#draft", draft);
   $("#draft").classList.toggle("empty", draft === "");
-  $("#feedback").textContent = feedbackText(metrics);
+  setText("#feedback", feedbackText(metrics));
   if (!composing && capture.value !== draft) capture.value = draft;
 }
 

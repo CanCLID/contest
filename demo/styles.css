@@ -275,3 +275,29 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *:before, *:after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* 設定卡「自由練習」捷徑列：單篇留喺本頁，其餘連去遊戲大廳各模式。 */
+.practice-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
+.practice-links-label { font-size: 14px; color: var(--muted); }
+.practice-chip { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 12px; border: 1px solid #cbd3c3; border-radius: 24px; background: var(--white); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+.practice-chip:hover { border-color: var(--green); color: var(--green); }
+
+/* 完場區：輸入提示同完場卡疊喺同一格，預留高度令完場時卡片高度唔跳。 */
+.result-slot { display: grid; min-height: 152px; }
+.result-slot > * { grid-area: 1 / 1; }
+.result-slot .result { margin-top: 0; }
+.round-actions { min-height: 46px; }
+/* 「下一句」預覽喺粵拼提示開／關時高度唔同，預留高度免得切換時推低輸入區。 */
+.up-next { min-height: 48px; }
+
+/* 高頻更新嘅數字容器用等寬數字，內容改變時闊度唔變。 */
+.card-foot { font-variant-numeric: tabular-nums; }
+.countdown-overlay strong { font-variant-numeric: tabular-nums; }
+
+/* 排行榜正式分欄：排名表右對齊，未達篇章門檻標灰兼加註。 */
+.score-table.ranked th:nth-last-child(-n+3), .score-table.ranked td:nth-last-child(-n+3) { text-align: right; }
+.score-official strong { font-size: 24px; font-weight: 600; }
+.score-official small { display: block; margin-top: 4px; color: #ad3323; font-size: 14px; font-weight: 400; }
+.score-official.below-threshold strong { color: var(--muted); }
+/* 內文用嘅連結式撳掣（例如排行榜規則指向玩法頁）。 */
+.inline-link { border: 0; padding: 0; background: none; color: var(--green); font: inherit; text-decoration: underline; }

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import vm from "node:vm";
 import * as engine from "../demo/engine.mjs";
+import * as common from "../demo/games/common.mjs";
 import * as flow from "../demo/games/flow.mjs";
 import * as questions from "../demo/questions.mjs";
 
@@ -44,11 +45,16 @@ function element(tagName = "div") {
   const classes = new Set();
   const attributes = new Map();
   let value = "";
+  let text = "";
+  let textWrites = 0;
   return {
     tagName: tagName.toUpperCase(),
     get value() { return value; },
     set value(next) { value = next; this.selectionStart = this.selectionEnd = value.length; },
-    textContent: "", innerHTML: "", hidden: false, selectionStart: 0, selectionEnd: 0,
+    get textContent() { return text; },
+    set textContent(next) { textWrites += 1; text = String(next); },
+    get textWrites() { return textWrites; },
+    innerHTML: "", hidden: false, selectionStart: 0, selectionEnd: 0,
     children: [], dataset: {}, style: {}, scrollLeft: 0, scrollTop: 0,
     focusCalls: 0, scrollCalls: 0, measureCalls: 0,
     get className() { return [...classes].join(" "); },
@@ -84,7 +90,7 @@ function textOf(node) {
     (node.children || []).map(textOf).join("");
 }
 
-function openTab(store = new Map(), failures = {}) {
+function openTab(store = new Map(), failures = {}, { search = "" } = {}) {
   let now = 0;
   const timeouts = [];
   const elements = new Map();
@@ -104,12 +110,12 @@ function openTab(store = new Map(), failures = {}) {
     return view;
   });
   const window = element();
-  const location = { href: "" };
+  const location = { href: "", search };
   class Clock extends Date {
     static now() { return now; }
   }
   const context = vm.createContext({
-    ...engine, ...questions, ...flow, crypto: webcrypto, Date: Clock, window, location,
+    ...engine, ...questions, ...common, ...flow, crypto: webcrypto, Date: Clock, window, location, URLSearchParams,
     document: {
       querySelector: get,
       querySelectorAll: selector => selector === ".view" ? views : [],
@@ -1067,4 +1073,115 @@ test("主入口預設官方三輪試玩：撳開始會開流程再跳去第 1 �
     assert.equal(practice.get("#round-name").textContent, "粵拼新星");
     assert.equal(storage.map.size, 1, "單篇練習唔會寫流程");
   });
+});
+
+test("arena 支援 ?practice=1：預設揀單篇自由練習，唔會開三輪流程", () => {
+  withSessionStorage(storage => {
+    const tab = openTab(new Map(), {}, { search: "?practice=1" });
+    assert.equal(tab.evaluate("flowChoice"), "practice");
+    assert.equal(tab.get("#flow-practice").getAttribute("aria-pressed"), "true");
+    assert.equal(tab.get("#flow-official").getAttribute("aria-pressed"), "false");
+    assert.ok(tab.get("#flow-practice").classList.contains("selected"));
+    assert.match(tab.get("#flow-note").textContent, /單篇練習/);
+
+    tab.get("#start").fire("click");
+    tab.setTime(3000);
+    tab.evaluate("tick()");
+    assert.equal(tab.evaluate("run.status"), "running");
+    assert.equal(tab.get("#setup-card").hidden, true);
+    assert.equal(tab.location.href, "", "唔會跳去遊戲頁");
+    assert.equal(storage.map.size, 0, "單篇練習唔會寫流程");
+  });
+});
+
+test("設定卡「自由練習」捷徑：單篇留喺本頁，其餘連去遊戲大廳各模式", () => {
+  const tab = openTab();
+  tab.get("#practice-here").fire("click");
+  assert.equal(tab.evaluate("flowChoice"), "practice");
+  assert.equal(tab.get("#flow-practice").getAttribute("aria-pressed"), "true");
+  assert.match(tab.get("#flow-note").textContent, /單篇練習/);
+
+  const arena = readFileSync(new URL("../demo/index.html", import.meta.url), "utf8");
+  for (const href of ["./games/rocks/", "./games/chain/", "./games/ghost/", "./games/tower/"]) {
+    assert.ok(arena.includes(`class="practice-chip" href="${href}"`), `設定卡要有 ${href} 捷徑`);
+  }
+  assert.doesNotMatch(arena, /practice-chip[^>]*flow=1/, "自由練習捷徑唔帶 flow=1");
+
+  const lobby = readFileSync(new URL("../demo/games/index.html", import.meta.url), "utf8");
+  assert.match(lobby, /href="\.\.\/\.\.\/index\.html\?practice=1"/, "大廳要有單篇練習卡");
+  assert.equal((lobby.match(/class="game-card"/g) ?? []).length, 6, "大廳共 6 張卡");
+  assert.match(lobby, /單篇練習/);
+});
+
+test("玩法頁六張卡：官方流程、計分方法、三個遊戲、練習工具、組別、本機示範", () => {
+  const html = readFileSync(new URL("../demo/index.html", import.meta.url), "utf8");
+  const rules = html.slice(html.indexOf('id="rules-view"'));
+  assert.equal((rules.match(/class="rule-card/g) ?? []).length, 6, "玩法頁要有六張卡");
+  for (const heading of ["官方三輪試玩", "計分方法", "三個計分遊戲", "練習工具", "手機組同電腦組", "本機示範"]) {
+    assert.ok(rules.includes(`<h2>${heading}</h2>`), `玩法頁要有「${heading}」卡`);
+  }
+  assert.match(rules, /單字（落石）90 秒/);
+  assert.match(rules, /詞組（詞鏈）120 秒/);
+  assert.match(rules, /85%/);
+  assert.match(rules, /正確音節／分鐘 × 準確度/);
+  assert.match(rules, /中位數標準化/);
+  assert.match(rules, /示範幽靈陪跑/);
+  assert.match(rules, /解鎖塔/);
+});
+
+test("排行榜：正式分欄、85% 門檻標示、示範榜同步，排序以正式分為先", () => {
+  const valid = { rules: 2, articleId: questions.ARTICLE.id, group: "desktop" };
+  const slowCorrect = Math.round(tokens.length * 0.6);
+  const store = new Map([[storageKey, JSON.stringify([
+    { ...valid, name: "快而準", correct: tokens.length, errors: 0, elapsedSeconds: 60, at: 1000 },
+    { ...valid, name: "亂打", correct: slowCorrect, errors: tokens.length - slowCorrect, elapsedSeconds: 30, at: 2000 },
+  ])]]);
+  const tab = openTab(store);
+  tab.evaluate('showView("leaderboard")');
+  const rows = selector => tab.get(selector).children[0].children[0].children;
+  // 正式分 R ＝ 正確音節／分鐘 × 準確度（SPEC §5.5）。
+  const official = (correct, elapsedSeconds) =>
+    (correct / elapsedSeconds * 60 * (correct / tokens.length)).toFixed(1);
+
+  const local = rows("#local-board");
+  assert.equal(local.length, 2);
+  assert.equal(local[0].children.length, 5, "本機榜要有名次、名、正式分、綜合分、準確度");
+  assert.equal(local[0].children[1].children[0].textContent, "快而準", "正式分高嗰個排第一");
+  assert.equal(local[0].children[2].children[0].textContent, official(tokens.length, 60));
+  assert.equal(local[0].children[2].classList.contains("below-threshold"), false);
+  assert.equal(local[1].children[1].children[0].textContent, "亂打");
+  assert.equal(local[1].children[2].children[0].textContent, official(slowCorrect, 30));
+  assert.equal(local[1].children[2].classList.contains("below-threshold"), true, "未達 85% 標灰");
+  assert.match(local[1].children[2].children[1].textContent, /85%/);
+  assert.equal(local[1].children[4].textContent, `${Math.round(slowCorrect / tokens.length * 100)}%`);
+
+  const sample = rows("#sample-board");
+  assert.equal(sample.length, 4);
+  assert.equal(sample[0].children.length, 5, "示範榜同步加正式分欄");
+  assert.ok(sample.some(row => row.children[2].classList.contains("below-threshold")), "示範數據包含未達門檻例子");
+
+  const html = readFileSync(new URL("../demo/index.html", import.meta.url), "utf8");
+  assert.match(html, /正式分 R ＝ 正確音節／分鐘 × 準確度/);
+  assert.match(html, /85% 門檻/);
+  assert.match(html, /玩法頁/);
+});
+
+test("高頻 tick 只喺數字有變先寫 DOM，唔會重複改同一節點", () => {
+  const tab = openTab();
+  choosePractice(tab);
+  readyRound(tab, "Alpha");
+  const time = tab.get("#time");
+  const writes = time.textWrites;
+  assert.ok(writes > 0, "開局之後要寫過時間");
+  tab.evaluate("renderMetrics()");
+  assert.equal(time.textWrites, writes, "同一時刻重複 render 唔應該再寫 #time");
+  tab.setTime(4500);
+  tab.evaluate("renderMetrics()");
+  assert.equal(time.textWrites, writes + 1, "時間有變就寫一次");
+  assert.equal(time.textContent, "00:01.5");
+  const speed = tab.get("#speed");
+  const speedWrites = speed.textWrites;
+  tab.setTime(5000);
+  tab.evaluate("renderMetrics()");
+  assert.equal(speed.textWrites, speedWrites, "速度冇變就唔寫");
 });

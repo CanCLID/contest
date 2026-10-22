@@ -60,14 +60,20 @@ function setDraft(value) {
   $("#typing-surface").classList.toggle("typing", draft !== "");
 }
 
+// 200ms tick 會重複行 updateMetrics，只喺值有變先寫 DOM。
+function setText(selector, value) {
+  const node = $(selector);
+  if (node.textContent !== value) node.textContent = value;
+}
+
 function updateMetrics(stats) {
-  $("#time").textContent = formatClock(stats.seconds);
-  $("#speed").textContent = String(Math.round(stats.round.correctPerMinute));
-  $("#speed-unit").textContent = `目標 ${stats.cpmTarget} 音節／分`;
-  $("#accuracy").textContent = stats.submitted ? percent(stats.round.accuracy) : "—";
-  $("#attempts").textContent = stats.submitted
-    ? `${stats.correct} 正確 / ${stats.errors} 錯誤` : "未有提交";
-  $("#round-progress").textContent = `已答 ${stats.index} / ${stats.total} 題`;
+  setText("#time", formatClock(stats.seconds));
+  setText("#speed", String(Math.round(stats.round.correctPerMinute)));
+  setText("#speed-unit", `目標 ${stats.cpmTarget} 音節／分`);
+  setText("#accuracy", stats.submitted ? percent(stats.round.accuracy) : "—");
+  setText("#attempts", stats.submitted
+    ? `${stats.correct} 正確 / ${stats.errors} 錯誤` : "未有提交");
+  setText("#round-progress", `已答 ${stats.index} / ${stats.total} 題`);
 }
 
 function renderStage(stats) {

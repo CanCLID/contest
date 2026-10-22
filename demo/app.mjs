@@ -1,4 +1,5 @@
 import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats, splitJyutping } from "./engine.mjs?v=9";
+import { OFFICIAL_THRESHOLDS } from "./games/common.mjs";
 import { flowHref, startFlow } from "./games/flow.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs?v=10";
 
@@ -8,11 +9,19 @@ const tokens = flattenQuestions();
 const storageKey = "canclid-contest-demo-v2";
 const groupNames = { desktop: "電腦組", mobile: "手機組" };
 // 主入口預設「官方三輪試玩」（單字 → 詞組 → 篇章 → 成績卡）；單篇自由練習保留原本玩法。
+// 遊戲大廳「單篇練習」卡會帶 ?practice=1 過嚟，預設揀返單篇自由練習。
 const flowNotes = {
-  official: "官方三輪＝單字 90 秒＋詞組 120 秒＋篇章計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。",
+  official: "官方三輪＝單字 90 秒＋詞組 120 秒＋篇章（示範幽靈陪跑）計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。",
   practice: "單篇練習＝現有玩法：同一篇示範粵文由頭打到尾，可以開粵拼提示，成績只存本機，唔入三輪流程。",
 };
-let flowChoice = "official";
+const practiceRequested = (() => {
+  try {
+    return new URLSearchParams(location.search).get("practice") === "1";
+  } catch {
+    return false;
+  }
+})();
+let flowChoice = practiceRequested ? "practice" : "official";
 let group = matchMedia("(max-width: 760px)").matches ? "mobile" : "desktop";
 let boardGroup = group;
 let run = null;
@@ -80,6 +89,23 @@ function setPressed(selector, attribute, value) {
 
 function announce(message) {
   $("#announcer").textContent = message;
+}
+
+// 高頻更新（100ms tick／rAF）只喺值有變先寫 DOM，避免重複寫入觸發無謂重排。
+function setText(selector, value) {
+  const node = $(selector);
+  if (node.textContent !== value) node.textContent = value;
+}
+
+function setAttr(selector, name, value) {
+  const node = $(selector);
+  if (node.getAttribute(name) !== value) node.setAttribute(name, value);
+}
+
+function setWidth(selector, percent) {
+  const node = $(selector);
+  const width = `${percent}%`;
+  if (node.style.width !== width) node.style.width = width;
 }
 
 function showView(view) {
@@ -341,15 +367,15 @@ function renderMetrics(now = Date.now()) {
   const metrics = run ? getMetrics(run, now) : {
     elapsedSeconds: 0, syllablesPerMinute: 0, accuracy: null, correct: 0, errors: 0, submitted: 0, progress: 0,
   };
-  $("#time").textContent = formatTime(metrics.elapsedSeconds);
-  $("#speed").textContent = String(Math.round(metrics.syllablesPerMinute));
-  $("#accuracy").textContent = metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`;
-  $("#attempts").textContent = metrics.correct + metrics.errors
-    ? `${metrics.correct} 正確 / ${metrics.errors} 錯誤` : "未有提交";
-  $("#completed-count").textContent = `${metrics.submitted} / ${tokens.length} 音節`;
+  setText("#time", formatTime(metrics.elapsedSeconds));
+  setText("#speed", String(Math.round(metrics.syllablesPerMinute)));
+  setText("#accuracy", metrics.accuracy === null ? "—" : `${Math.round(metrics.accuracy)}%`);
+  setText("#attempts", metrics.correct + metrics.errors
+    ? `${metrics.correct} 正確 / ${metrics.errors} 錯誤` : "未有提交");
+  setText("#completed-count", `${metrics.submitted} / ${tokens.length} 音節`);
   const fraction = metrics.progress * 100;
-  $("#time-bar").style.width = `${fraction}%`;
-  $(".time-track").setAttribute("aria-valuenow", String(Math.round(fraction)));
+  setWidth("#time-bar", fraction);
+  setAttr(".time-track", "aria-valuenow", String(Math.round(fraction)));
 }
 
 function playerName() {
@@ -427,8 +453,10 @@ function tick() {
   if (countdownEnds !== null) {
     const remaining = Math.ceil((countdownEnds - now) / 1000);
     if (remaining > 0) {
-      if ($("#countdown-number").textContent !== String(remaining)) announce(`倒數 ${remaining}`);
-      $("#countdown-number").textContent = String(remaining);
+      if ($("#countdown-number").textContent !== String(remaining)) {
+        announce(`倒數 ${remaining}`);
+        $("#countdown-number").textContent = String(remaining);
+      }
       return;
     }
     run = createRun({ now: countdownEnds, questionSet: tokens });
@@ -569,13 +597,23 @@ function resetRound() {
   $("#start").focus({ preventScroll: true });
 }
 
+// 正式分 R ＝ 正確音節／分鐘 × 準確度（SPEC §5.5），本機榜以此排名；
+// demo 試算綜合分（速度 × 準確度²）保留嚟同舊紀錄比較。
 function rankRecords(items) {
   return items.map(item => {
     const submitted = item.correct + item.errors;
     const accuracy = submitted ? item.correct / submitted * 100 : 0;
     const speed = item.elapsedSeconds > 0 ? submitted / item.elapsedSeconds * 60 : 0;
-    return { ...item, speed, accuracy, score: speed * (accuracy / 100) ** 2 };
-  }).sort((a, b) => b.score - a.score || b.accuracy - a.accuracy ||
+    const officialScore = item.elapsedSeconds > 0 ? item.correct / item.elapsedSeconds * 60 * (accuracy / 100) : 0;
+    return {
+      ...item,
+      speed,
+      accuracy,
+      officialScore,
+      belowThreshold: accuracy < OFFICIAL_THRESHOLDS.passage * 100,
+      score: speed * (accuracy / 100) ** 2,
+    };
+  }).sort((a, b) => b.officialScore - a.officialScore || b.accuracy - a.accuracy ||
     a.elapsedSeconds - b.elapsedSeconds || a.at - b.at);
 }
 
@@ -589,15 +627,16 @@ function renderTable(container, items, sample = false, ranked = true) {
     return;
   }
   const table = document.createElement("table");
-  table.className = "score-table";
-  table.innerHTML = `<thead><tr>${ranked ? "<th scope='col'>名次</th>" : ""}<th scope='col'>暱稱 / 用時</th><th scope='col'>綜合分</th><th scope='col'>準確度</th></tr></thead>`;
+  table.className = ranked ? "score-table ranked" : "score-table";
+  table.innerHTML = `<thead><tr>${ranked ? "<th scope='col'>名次</th>" : ""}<th scope='col'>暱稱 / 用時</th>${ranked ? "<th scope='col'>正式分</th>" : ""}<th scope='col'>綜合分</th><th scope='col'>準確度</th></tr></thead>`;
   const tbody = document.createElement("tbody");
   let rank = 0;
   let last = null;
   const ordered = rankRecords(items);
   if (!ranked) ordered.sort((a, b) => b.at - a.at);
   for (const [index, item] of ordered.entries()) {
-    if (!last || item.score !== last.score || item.accuracy !== last.accuracy || item.elapsedSeconds !== last.elapsedSeconds) rank = index + 1;
+    if (!last || item.officialScore !== last.officialScore || item.accuracy !== last.accuracy ||
+        item.elapsedSeconds !== last.elapsedSeconds) rank = index + 1;
     last = item;
     const row = document.createElement("tr");
     if (ranked) {
@@ -615,13 +654,28 @@ function renderTable(container, items, sample = false, ranked = true) {
     const origin = document.createElement("small");
     origin.textContent = sample ? "虛構示範人物" : `${new Date(item.at).toLocaleString("zh-HK", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} · 本機`;
     nameCell.append(origin);
-    const speedCell = document.createElement("td");
-    const speedText = document.createElement("strong");
-    speedText.textContent = item.score.toFixed(1);
-    speedCell.append(speedText);
+    const demoCell = document.createElement("td");
+    const demoText = ranked ? document.createElement("span") : document.createElement("strong");
+    demoText.textContent = item.score.toFixed(1);
+    demoCell.append(demoText);
     const accuracyCell = document.createElement("td");
     accuracyCell.textContent = item.accuracy === null ? "—" : `${Math.round(item.accuracy)}%`;
-    row.append(nameCell, speedCell, accuracyCell);
+    if (ranked) {
+      const officialCell = document.createElement("td");
+      officialCell.className = "score-official";
+      const officialText = document.createElement("strong");
+      officialText.textContent = item.officialScore.toFixed(1);
+      officialCell.append(officialText);
+      if (item.belowThreshold) {
+        officialCell.classList.add("below-threshold");
+        const note = document.createElement("small");
+        note.textContent = "未達 85% 門檻";
+        officialCell.append(note);
+      }
+      row.append(nameCell, officialCell, demoCell, accuracyCell);
+    } else {
+      row.append(nameCell, demoCell, accuracyCell);
+    }
     tbody.append(row);
   }
   table.append(tbody);
@@ -636,10 +690,12 @@ function renderBoards() {
   $("#hinted-board-card").hidden = hintedRecords.length === 0;
   renderTable($("#hinted-board"), hintedRecords, false, false);
   const baseTime = boardGroup === "mobile" ? 105 : 65;
-  const sample = ["打字阿晴", "粵拼小隊長", "慢慢嚟都得"].map((name, index) => ({
-    name, elapsedSeconds: baseTime + index * 12, correct: tokens.length - (index + 1) * 2,
-    errors: (index + 1) * 2, at: index,
-  }));
+  const sample = [
+    { name: "打字阿晴", elapsedSeconds: baseTime, correct: tokens.length, errors: 0 },
+    { name: "粵拼小隊長", elapsedSeconds: baseTime + 12, correct: tokens.length - 4, errors: 4 },
+    { name: "慢慢嚟都得", elapsedSeconds: baseTime + 24, correct: tokens.length - 8, errors: 8 },
+    { name: "邊學邊打", elapsedSeconds: baseTime + 30, correct: tokens.length - 18, errors: 18 },
+  ].map((item, index) => ({ ...item, at: index }));
   renderTable($("#sample-board"), sample, true);
   $("#storage-note").textContent = storageAvailable ? "" : "未能保存紀錄，關頁後新成績會遺失。";
   $("#clear-scores").hidden = records.length === 0;
@@ -668,6 +724,12 @@ $("#flow-official").addEventListener("click", () => {
 $("#flow-practice").addEventListener("click", () => {
   flowChoice = "practice";
   renderFlowChoice();
+});
+// 設定卡「自由練習」捷徑列嘅「單篇」：直接揀返單篇模式喺呢頁開始。
+$("#practice-here").addEventListener("click", () => {
+  flowChoice = "practice";
+  renderFlowChoice();
+  $("#start").focus({ preventScroll: true });
 });
 $("#play-again").addEventListener("click", () => startRound(true));
 $("#edit-settings").addEventListener("click", resetRound);

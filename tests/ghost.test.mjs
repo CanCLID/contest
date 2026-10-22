@@ -288,8 +288,13 @@ function ghostTab({ flowMode = false } = {}) {
     const classes = new Set();
     const attributes = new Map();
     const own = new Map();
+    let text = "";
+    let textWrites = 0;
     const node = {
-      hidden: false, disabled: false, textContent: "", value: "", style: {},
+      hidden: false, disabled: false, value: "", style: {},
+      get textContent() { return text; },
+      set textContent(next) { textWrites += 1; text = String(next); },
+      get textWrites() { return textWrites; },
       dataset: {}, className: "", selectionStart: 0, children: [],
       classList: {
         add: (...names) => names.forEach(name => classes.add(name)),
@@ -587,27 +592,38 @@ test("淨計時：賽道冇幽靈條、賽果對手進度顯示 —，其餘計�
   assert.equal(tab.get("#flow-next").hidden, true, "流程外唔會出「下一輪」掣");
 });
 
-test("?flow=1：鎖定淨計時、收埋對手選擇，完場寫入篇章輪再接去成績卡", () => {
+test("?flow=1：鎖定內建 55 音節／分示範幽靈陪跑，完場寫入篇章輪再接去成績卡", () => {
   withFlowStorage(storage => {
     const tab = ghostTab({ flowMode: true });
     assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
     assert.match(tab.get("#flow-banner").textContent, /官方流程第 3 輪：篇章/);
-    assert.equal(tab.get("#opponent-options").hidden, true, "流程鎖定淨計時");
+    assert.match(tab.get("#flow-banner").textContent, /示範幽靈陪跑，唔影響計分/);
+    assert.equal(tab.get("#opponent-options").hidden, true, "流程鎖定對手，唔畀揀");
     assert.equal(tab.get("#opponent-heading").hidden, true);
     assert.equal(tab.get("#best-card").hidden, true);
     assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
     assert.equal(tab.get("#lobby-link").href, "../../index.html");
-    assert.match(tab.get("#start-note").textContent, /官方流程第 3 輪：篇章/);
-    assert.match(tab.get("#tagline").textContent, /篇章淨計時/);
+    assert.match(tab.get("#start-note").textContent, /示範幽靈陪跑，唔影響計分/);
+    assert.match(tab.get("#tagline").textContent, /55 音節／分示範幽靈陪跑/);
     assert.equal(tab.get("#flow-next").hidden, true, "未開局未出下一輪掣");
 
     tab.start();
     tab.setTime(3000);
     tab.tick();
-    assert.equal(tab.get("#ghost-lane").hidden, true);
+    assert.equal(tab.get("#ghost-lane").hidden, false, "示範幽靈照樣顯示賽道條");
+    assert.match(tab.get("#race-opponent").textContent, /示範幽靈 · 55 音節／分/);
+    assert.match(tab.get("#race-opponent").textContent, /目標時間/);
+    const early = Number.parseFloat(tab.get("#ghost-bar").style.width);
+    tab.setTime(9000);
+    tab.tick();
+    assert.ok(Number.parseFloat(tab.get("#ghost-bar").style.width) > early, "幽靈條跟時間推進（純氣氛）");
 
     finishPassage(tab);
     assert.equal(tab.get("#result").hidden, false);
+    const rows = tab.get("#result-details").children;
+    assert.equal(rows.at(-1).children[0].textContent, "幽靈進度");
+    assert.notEqual(rows.at(-1).children[1].textContent, "—", "示範幽靈有進度比較");
+    assert.match(tab.get("#result-summary").textContent, /示範陪跑，唔影響計分/);
     const tokens = flattenQuestions();
     const saved = storage.read("canclid-contest-official-flow").rounds.passage;
     assert.equal(saved.correct, tokens.length);
@@ -624,4 +640,20 @@ test("?flow=1：鎖定淨計時、收埋對手選擇，完場寫入篇章輪再�
     assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一場」");
     assert.equal(tab.get("#edit-settings").hidden, true, "流程內冇「揀過對手」");
   });
+});
+
+test("renderRace 只喺數字有變先寫 DOM，唔會每個 tick 重寫同一節點", () => {
+  const tab = ghostTab();
+  tab.start();
+  tab.setTime(3000);
+  tab.tick();
+  const time = tab.get("#time");
+  const writes = time.textWrites;
+  assert.ok(writes > 0, "開局之後要寫過時間");
+  tab.tick();
+  assert.equal(time.textWrites, writes, "同一時刻重複 tick 唔應該再寫 #time");
+  tab.setTime(3600);
+  tab.tick();
+  assert.equal(time.textWrites, writes + 1, "時間有變就寫一次");
+  assert.equal(time.textContent, "00:00.6");
 });

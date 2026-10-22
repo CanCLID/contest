@@ -7,13 +7,14 @@
   <meta name="description" content="一齊打粵拼，試吓你嘅速度同準確度。CanCLID 粵拼打字比賽互動展示版。">
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=15">
+  <link rel="stylesheet" href="./styles.css?v=16">
   <style>
     /* 官方三輪試玩：設定卡嘅玩法選擇，其餘樣式沿用 styles.css。 */
     .flow-field { margin-bottom: 4px; }
-    .flow-note { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+    /* 兩個玩法說明長度唔同，預留高度免得切換分段掣時設定卡跳動。 */
+    .flow-note { margin: 12px 0 0; color: var(--muted); font-size: 14px; min-height: 3.2em; }
   </style>
-  <script src="./app.mjs?v=15" type="module"></script>
+  <script src="./app.mjs?v=16" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳去主要內容</a>
@@ -76,12 +77,14 @@
                 <span class="focus-hint">點一下文字繼續輸入</span>
               </div>
               <div class="up-next"><span>下一句</span><p id="next-sentence"></p></div>
-              <form id="typing-form" class="typing-form" autocomplete="off">
-                <div class="input-bottom"><p id="input-feedback" role="status">按「開始試玩」，直接打高亮字嘅粵拼。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一字</span></div>
-              </form>
-              <div id="result" class="result" hidden>
-                <span class="result-icon" aria-hidden="true">✳</span>
-                <div><h2 id="result-title">完成喇！</h2><p id="result-summary"></p><button class="text-button" id="view-result-board">睇本機成績 <span aria-hidden="true">↗</span></button></div>
+              <div class="result-slot">
+                <form id="typing-form" class="typing-form" autocomplete="off">
+                  <div class="input-bottom"><p id="input-feedback" role="status">按「開始試玩」，直接打高亮字嘅粵拼。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一字</span></div>
+                </form>
+                <div id="result" class="result" hidden>
+                  <span class="result-icon" aria-hidden="true">✳</span>
+                  <div><h2 id="result-title">完成喇！</h2><p id="result-summary"></p><button class="text-button" id="view-result-board">睇本機成績 <span aria-hidden="true">↗</span></button></div>
+                </div>
               </div>
               <div id="countdown-overlay" class="countdown-overlay" hidden><span>準備起跑</span><strong id="countdown-number">3</strong></div>
             </div>
@@ -103,7 +106,15 @@
                   <button id="flow-official" class="selected" type="button" aria-pressed="true">官方三輪試玩</button>
                   <button id="flow-practice" type="button" aria-pressed="false">單篇自由練習</button>
                 </div>
-                <p id="flow-note" class="flow-note">官方三輪＝單字 90 秒＋詞組 120 秒＋篇章計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。</p>
+                <p id="flow-note" class="flow-note">官方三輪＝單字 90 秒＋詞組 120 秒＋篇章（示範幽靈陪跑）計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。</p>
+              </div>
+              <div class="practice-links" role="group" aria-label="自由練習入口">
+                <span class="practice-links-label">自由練習</span>
+                <button id="practice-here" class="practice-chip" type="button" title="揀單篇自由練習，喺呢頁開始">單篇（本頁）</button>
+                <a class="practice-chip" href="./games/rocks/">單字 · 落石</a>
+                <a class="practice-chip" href="./games/chain/">詞組 · 詞鏈</a>
+                <a class="practice-chip" href="./games/ghost/">篇章 · 幽靈</a>
+                <a class="practice-chip" href="./games/tower/">解鎖塔</a>
               </div>
               <label class="field-label group-heading" for="nickname">暱稱</label>
               <input id="nickname" class="nickname-input" maxlength="16" placeholder="粵拼新星" autocomplete="off">
@@ -128,17 +139,19 @@
           <div class="segmented" aria-label="排行榜組別" role="group"><button data-board-group="desktop" class="selected" aria-pressed="true">電腦組</button><button data-board-group="mobile" aria-pressed="false">手機組</button></div>
           <span id="board-article" class="board-article"></span>
         </div>
-        <section class="board-card"><div class="board-heading"><div><h2>無提示成績</h2><p>同組別、文章同規則比較。有提示同無提示合共保存最近 20 輪。</p></div><span class="pill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores">清除本機紀錄</button></section>
+        <section class="board-card"><div class="board-heading"><div><h2>無提示成績</h2><p>同組別、文章同規則比較，按正式分排名。有提示同無提示合共保存最近 20 輪。</p></div><span class="pill">只存本機</span></div><div id="local-board"></div><p id="storage-note" class="storage-note"></p><button id="clear-scores" class="text-button clear-scores">清除本機紀錄</button></section>
         <section id="hinted-board-card" class="board-card" hidden><div class="board-heading"><div><h2>用過提示嘅紀錄</h2><p>按最近完成排列，只供練習參考，唔參與排名。</p></div><span class="pill">用過提示</span></div><div id="hinted-board"></div></section>
-        <section class="board-card sample-board"><div class="board-heading"><div><h2>排行榜效果預覽</h2><p>以下全部係虛構示範數據，唔係真人參賽成績。</p></div><span class="pill">示範數據</span></div><div id="sample-board"></div></section>
-        <p class="board-rule">試算綜合分 ＝ 輸入速度 × 準確度²，淨係 demo 試算，方便同場比較。正式方向已定：準確度門檻＋「正確音節／分鐘 × 準確度」，三題型以組內中位數標準化合成，詳見 SPEC §5.5。同分先比較準確度，再比較完成時間；全部相同則並列。</p>
+        <section class="board-card sample-board"><div class="board-heading"><div><h2>排行榜效果預覽</h2><p>以下全部係虛構示範數據（包括正式分欄），唔係真人參賽成績。</p></div><span class="pill">示範數據</span></div><div id="sample-board"></div></section>
+        <p class="board-rule">正式分 R ＝ 正確音節／分鐘 × 準確度；篇章準確度門檻 85%，未達門檻會標示「未達 85% 門檻」兼唔入正式排名。本機榜先按正式分、再按準確度、最後按用時排序，三項相同就並列。綜合分（速度 × 準確度²）係舊 demo 試算，只作新舊紀錄比較。正式賽三輪（單字 0.3／詞組 0.3／篇章 0.4）以組內中位數標準化合成，由伺服器計算，詳見<button class="inline-link" type="button" data-view="rules">玩法頁</button>；三輪流程成績唔入呢個本機單篇榜。</p>
       </section>
 
       <section id="rules-view" class="view secondary-view" hidden aria-labelledby="rules-heading">
         <div class="page-heading"><h1 id="rules-heading">玩法</h1><button class="outline-button" data-view="arena">返去試玩 ↗</button></div>
         <div class="rules-grid">
-          <article class="rule-card"><h2>輸入同改錯</h2><p>直接打高亮字嘅粵拼，字母會顯示喺漢字上方。只接受 A–Z 字母，唔使聲調或標點，按空白鍵或 Enter 確認，錯字照樣前進。</p><p>未輸入字母時，按 Backspace 退返上一字，亦可退返上一句。最後一字提交即完場，之後唔可以改。</p><p>開「粵拼提示」後，每個字上方都會顯示灰色、無聲調嘅正確粵拼，打啱嘅字母會原位變黑。錯誤部分用紅色刪線標示，旁邊綠色係正確答案。用過提示嘅紀錄會分開顯示，唔參與無提示排名。</p></article>
-          <article class="rule-card"><h2>固定文章，計時完成</h2><p>速度按音節／分鐘計，準確度按保留嘅答案計。改啱唔再扣分，但修正時間照計；中途唔暫停。</p><p>綜合分暫試 <code>速度 × 準確度²</code>（90% 代入 0.9），淨係 demo 試算、方便比較。正式方向已定：準確度門檻＋<code>正確音節／分鐘 × 準確度</code>，三題型以組內中位數標準化合成，詳見 SPEC §5.5。只保存完成全文嘅成績。</p></article>
+          <article class="rule-card"><h2>官方三輪試玩</h2><p>流程：單字（落石）90 秒 → 詞組（詞鏈）120 秒 → 篇章（幽靈）計時，三輪順住連打，最後出三輪成績卡。</p><p>每輪完場自動寫入流程狀態再跳去下一輪；成績卡逐輪顯示計分窗／用時、正確／已交、準確度、正式分同門檻。門檻：單字 90%、詞組 90%、篇章 85%，未達門檻嘅一輪正式賽唔計排名。</p><p>三輪總分由正式賽伺服器以組內中位數標準化（單字 0.3／詞組 0.3／篇章 0.4）合成；demo 只存本機，唔係正式結算。第 3 輪有內建 55 音節／分示範幽靈陪跑，純粹氣氛，唔影響計分。</p></article>
+          <article class="rule-card"><h2>計分方法</h2><p>正式分 <code>R ＝ 正確音節／分鐘 × 準確度</code>；準確度＝正確 ÷ 已提交，門檻為定時輪（單字／詞組）90%、篇章 85%。準確度按最後保留答案計：撤回改錯唔會永久扣分，但修正時間照計入用時。</p><p>本機榜同時列正式分同舊 demo 試算綜合分 <code>速度 × 準確度²</code>，後者只作新舊紀錄比較。同分次序：正式分 → 準確度 → 用時，三項相同就並列；正式賽三輪同分次序係三輪合計準確度 → 篇章準確度 → 篇章用時。</p><p>輸入：直接打高亮字嘅無聲調粵拼，字母顯示喺漢字上方；<kbd>Space</kbd>／<kbd>Enter</kbd> 確認，錯字照樣前進；未輸入字母時按 <kbd>Backspace</kbd> 退回上一字或上一句。</p></article>
+          <article class="rule-card"><h2>三個計分遊戲</h2><p>粵拼落石（單字）：60 秒內喺石頭落地前打出石上單字，落地扣命，三條命或時間到就結算；官方模式固定 90 秒、無命，石頭落地未擊破當一次提交錯誤。</p><p>粵拼詞鏈（詞組）：同一 seed 抽出 20 個詞順住逐個音節打，詞語全對連擊 +1，倍率最高 ×1.5；官方模式 120 秒連續題流，到點自動收卷。</p><p>幽靈競速（篇章）：同自己最佳時間線或內建示範幽靈鬥快打完全篇，另有「淨計時」唔設對手；官方流程用 55 音節／分示範幽靈陪跑，唔影響計分。三個遊戲都有練習／官方模式切換。</p></article>
+          <article class="rule-card"><h2>練習工具</h2><p>單篇自由練習：同一篇示範粵文由頭打到尾，可以開「粵拼提示」，成績存本機榜；用過提示嘅紀錄另列，唔參與排名。</p><p>聲韻解鎖塔：由聲母開始逐層解鎖韻腹、韻尾，自適應出題，達標先上到下一層；純練習，唔設排名。</p><p>遊戲大廳有齊四個小遊戲加單篇練習入口；試玩賽場設定卡亦有「自由練習」捷徑（單篇／單字／詞組／篇章／解鎖塔）。</p></article>
           <article class="rule-card"><h2>手機組同電腦組</h2><p>螢幕鍵盤揀手機組，實體鍵盤揀電腦組，平板亦按鍵盤分類。手機點一下題目，就可以用系統鍵盤輸入。</p><p>請自行確認組別，開賽後鎖定。網站無法可靠核實裝置或外接鍵盤。</p></article>
           <article class="rule-card rule-highlight"><h2>本機示範</h2><p>目前用原創示範文章，正式文章稍後提供。冇帳戶或同步對賽，紀錄只存喺呢個瀏覽器。</p><p>排行榜示範人物同成績均為虛構；未驗證防作弊或 2,000 人比賽容量。</p></article>
         </div>

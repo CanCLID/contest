@@ -170,30 +170,38 @@ function renderWord() {
     `${word.word}，第 ${Math.min(state.syllableIndex + 1, word.syllables.length)} 個音節`);
 }
 
+// 100ms tick 會重複行 renderMetrics，只喺值有變先寫 DOM。
+function setText(selector, value) {
+  const node = $(selector);
+  if (node.textContent !== value) node.textContent = value;
+}
+
 function renderMetrics(now = Date.now()) {
   if (!state) return;
   const metrics = getChainMetrics(state, now);
   const official = metrics.mode === "official";
-  $("#progress-label").textContent = official
+  setText("#progress-label", official
     ? `第 ${metrics.wordNumber} 個詞 · 官方輪`
-    : `第 ${metrics.wordNumber} / ${metrics.words} 個詞`;
-  $("#score").textContent = metrics.score.toFixed(1);
-  $("#cpm").textContent = String(Math.round(metrics.correctPerMinute));
-  $("#accuracy").textContent = metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—";
-  $("#time-label").textContent = official ? "剩餘時間" : "已用時間";
-  $("#time").textContent = formatClock(official ? metrics.remainingSeconds : metrics.elapsedSeconds);
-  $("#combo").textContent = `連擊 ${metrics.combo}`;
-  $("#multiplier").textContent = `倍率 ×${metrics.multiplier.toFixed(1)}`;
+    : `第 ${metrics.wordNumber} / ${metrics.words} 個詞`);
+  setText("#score", metrics.score.toFixed(1));
+  setText("#cpm", String(Math.round(metrics.correctPerMinute)));
+  setText("#accuracy", metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—");
+  setText("#time-label", official ? "剩餘時間" : "已用時間");
+  setText("#time", formatClock(official ? metrics.remainingSeconds : metrics.elapsedSeconds));
+  setText("#combo", `連擊 ${metrics.combo}`);
+  setText("#multiplier", `倍率 ×${metrics.multiplier.toFixed(1)}`);
   $("#multiplier").classList.toggle("capped", metrics.multiplier >= 1.5);
   const fraction = Math.round(metrics.progress * 100);
-  $("#time-bar").style.width = `${fraction}%`;
-  $("#time-track").setAttribute("aria-valuenow", String(fraction));
+  const width = `${fraction}%`;
+  if ($("#time-bar").style.width !== width) $("#time-bar").style.width = width;
+  const label = String(fraction);
+  if ($("#time-track").getAttribute("aria-valuenow") !== label) $("#time-track").setAttribute("aria-valuenow", label);
 }
 
 function render() {
   if (!state) return;
   renderWord();
-  $("#draft").textContent = draft || "—";
+  setText("#draft", draft || "—");
   renderMetrics();
 }
 

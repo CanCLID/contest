@@ -33,9 +33,11 @@
 .result-details { display: grid; gap: 6px; margin: 0 0 12px; }
 .result-details > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; }
 .result-details dt { color: var(--muted); font-size: 14px; }
-.result-details dd { margin: 0; font-size: 16px; font-weight: 600; }
+.result-details dd { margin: 0; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .result .result-best { margin: 0; color: var(--green); font-size: 14px; }
 .result .storage-note { margin: 8px 0 0; color: #ad3323; }
+/* 完場動作列預留高度：完場時「再玩一場」／「查看三輪成績」出現唔會推低版面。 */
+.round-actions { min-height: 46px; }
 
 @media (max-width: 600px) {
   .track { padding: 18px; }
