@@ -8,6 +8,7 @@ import { FLOW_ROUNDS, appendFlowHistory, flowTotals, readFlow, readFlowHistory }
 registerStrings({
   hans: {
     "summary.skip": "跳去主要内容",
+    "summary.brand": "粤拼竞速",
     "summary.navBack": "‹ 试玩赛场",
     "summary.badge": "三轮成绩卡",
     "summary.heroTitle": "官方三轮试玩 · 成绩卡",
