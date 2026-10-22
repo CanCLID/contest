@@ -1094,12 +1094,13 @@ test("arena 支援 ?practice=1：預設揀單篇自由練習，唔會開三輪�
   });
 });
 
-test("設定卡「自由練習」捷徑：單篇留喺本頁，其餘連去遊戲大廳各模式", () => {
+test("設定卡「自由練習」捷徑：揀自由練習先展開面板，其餘連去遊戲大廳各模式", () => {
   const tab = openTab();
-  tab.get("#practice-here").fire("click");
+  tab.get("#flow-practice").fire("click");
   assert.equal(tab.evaluate("flowChoice"), "practice");
   assert.equal(tab.get("#flow-practice").getAttribute("aria-pressed"), "true");
   assert.match(tab.get("#flow-note").textContent, /單篇練習/);
+  assert.equal(tab.get("#practice-panel").hidden, false, "揀自由練習先展開捷徑面板");
 
   const arena = readFileSync(new URL("../demo/index.html", import.meta.url), "utf8");
   for (const href of ["./games/rocks/", "./games/chain/", "./games/ghost/", "./games/tower/"]) {
@@ -1113,6 +1114,20 @@ test("設定卡「自由練習」捷徑：單篇留喺本頁，其餘連去遊�
   assert.match(lobby, /單篇練習/);
   assert.doesNotMatch(lobby, /game-card[^>]*flow=1/, "官方三輪流程唔係小遊戲，大廳唔准有 flow=1 卡");
   assert.match(lobby, /flow-pointer/, "大廳要有去試玩賽場開始官方流程嘅提示條");
+});
+
+test("設定卡玩法選項卡：預設官方三輪收埋練習面板，開始掣文字跟揀選變", () => {
+  const tab = openTab();
+  assert.equal(tab.get("#practice-panel").hidden, true, "預設官方三輪唔展開自由練習面板");
+  assert.match(textOf(tab.get("#start")), /三輪/);
+
+  tab.get("#flow-practice").fire("click");
+  assert.equal(tab.get("#practice-panel").hidden, false);
+  assert.match(textOf(tab.get("#start")), /單篇/);
+
+  tab.get("#flow-official").fire("click");
+  assert.equal(tab.get("#practice-panel").hidden, true);
+  assert.match(textOf(tab.get("#start")), /三輪/);
 });
 
 test("玩法頁六張卡：官方流程、計分方法、三個遊戲、練習工具、組別、本機示範", () => {

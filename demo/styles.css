@@ -36,8 +36,8 @@ h2 { font-size: 22px; line-height: 1.4; }
 .hero { max-width: 1000px; margin-inline: auto; padding: 32px 0 24px; }
 .orange { color: var(--orange); }
 .arena-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 1000px; margin-inline: auto; gap: 20px; align-items: start; }
-#arena-view:not(.has-race) .hero { max-width: 480px; margin-inline: auto; }
-#arena-view:not(.has-race) .arena-grid { max-width: 480px; }
+#arena-view:not(.has-race) .hero { max-width: 640px; margin-inline: auto; }
+#arena-view:not(.has-race) .arena-grid { max-width: 640px; }
 .round-summary { padding: 18px 24px; border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 10px; background: var(--white); }
 .round-details { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 16px 24px; margin: 0; }
 .round-details > div { min-width: 0; }
@@ -276,11 +276,26 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   *, *:before, *:after { transition: none !important; scroll-behavior: auto !important; }
 }
 
-/* 設定卡「自由練習」捷徑列：單篇留喺本頁，其餘連去遊戲大廳各模式。 */
-.practice-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
-.practice-links-label { font-size: 14px; color: var(--muted); }
-.practice-chip { display: inline-flex; align-items: center; min-height: 34px; padding: 4px 12px; border: 1px solid #cbd3c3; border-radius: 24px; background: var(--white); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
+/* 設定卡玩法選項卡：兩張全寬卡揀官方三輪或自由練習，揀「自由練習」先展開入口面板。 */
+.path-options { display: grid; gap: 10px; }
+.path-option { display: block; width: 100%; min-height: 64px; padding: 10px 14px; border: 1px solid #cbd3c3; border-radius: 7px; background: transparent; text-align: left; }
+.path-option.selected { background: var(--white); border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+.path-option-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 16px; font-weight: 600; }
+.path-option-desc { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; font-weight: 400; }
+.path-badge { padding: 2px 10px; border: 1px solid #f0cfae; border-radius: 24px; background: var(--orange-light); color: var(--orange); font-size: 13px; font-weight: 600; white-space: nowrap; }
+/* 兩個玩法說明都係一句，預留一行高度免得切換選項卡時設定卡跳動。 */
+.flow-note { margin: 12px 0 0; min-height: 1.6em; color: var(--muted); font-size: 14px; }
+.practice-panel { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #cbd3c3; }
+.practice-panel-lead { margin: 0; font-size: 14px; }
+.practice-panel-label { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+/* 自由練習面板：單篇留喺本頁，其餘 chip 連去遊戲大廳各模式。 */
+.practice-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.practice-chip { display: inline-flex; align-items: center; min-height: 44px; padding: 4px 12px; border: 1px solid #cbd3c3; border-radius: 24px; background: var(--white); color: var(--ink); font-size: 14px; font-weight: 600; text-decoration: none; }
 .practice-chip:hover { border-color: var(--green); color: var(--green); }
+.practice-lobby-link { display: inline-block; margin-top: 12px; color: var(--green); font-size: 14px; }
+@media (max-width: 600px) {
+  .practice-links { display: grid; grid-template-columns: 1fr 1fr; }
+}
 
 /* 完場區：輸入提示同完場卡疊喺同一格，預留高度令完場時卡片高度唔跳。 */
 .result-slot { display: grid; min-height: 152px; }

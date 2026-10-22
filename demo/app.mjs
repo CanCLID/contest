@@ -11,8 +11,8 @@ const groupNames = { desktop: "電腦組", mobile: "手機組" };
 // 主入口預設「官方三輪試玩」（單字 → 詞組 → 篇章 → 成績卡）；單篇自由練習保留原本玩法。
 // 遊戲大廳「單篇練習」卡會帶 ?practice=1 過嚟，預設揀返單篇自由練習。
 const flowNotes = {
-  official: "官方三輪＝單字 90 秒＋詞組 120 秒＋篇章（示範幽靈陪跑）計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。",
-  practice: "單篇練習＝現有玩法：同一篇示範粵文由頭打到尾，可以開粵拼提示，成績只存本機，唔入三輪流程。",
+  official: "官方三輪：單字 90 秒 → 詞組 120 秒 → 篇章計時 → 三輪成績卡",
+  practice: "單篇練習：由頭打到尾，可開粵拼提示，成績存本機榜",
 };
 const practiceRequested = (() => {
   try {
@@ -388,6 +388,14 @@ function startOfficialFlow() {
   location.href = flowHref("single");
 }
 
+// 開始掣文字跟玩法揀選變；resetRound 還原設定卡時用返同一段文字。
+function renderStartLabel() {
+  const official = flowChoice === "official";
+  $("#start").innerHTML = official
+    ? '開始三輪試玩 <span aria-hidden="true">↗</span>'
+    : '開始單篇練習 <span aria-hidden="true">↗</span>';
+}
+
 function renderFlowChoice() {
   const official = flowChoice === "official";
   const officialButton = $("#flow-official");
@@ -397,6 +405,9 @@ function renderFlowChoice() {
   practiceButton.classList.toggle("selected", !official);
   practiceButton.setAttribute("aria-pressed", String(!official));
   $("#flow-note").textContent = official ? flowNotes.official : flowNotes.practice;
+  // 自由練習面板（單篇入口＋小遊戲 chips）跟玩法揀選展開／收埋。
+  $("#practice-panel").hidden = official;
+  renderStartLabel();
 }
 
 function startRound(replay = false) {
@@ -585,7 +596,7 @@ function resetRound() {
   $("#setup-fields").disabled = false;
   $("#cancel-run").hidden = true;
   $("#start").disabled = false;
-  $("#start").innerHTML = '開始試玩 <span aria-hidden="true">↗</span>';
+  renderStartLabel();
   $("#start-note").textContent = "倒數 3 秒開始";
   $("#race-status").textContent = "賽道準備好";
   $("#race-group").textContent = "本機試玩 · 無需登入";
@@ -724,12 +735,6 @@ $("#flow-official").addEventListener("click", () => {
 $("#flow-practice").addEventListener("click", () => {
   flowChoice = "practice";
   renderFlowChoice();
-});
-// 設定卡「自由練習」捷徑列嘅「單篇」：直接揀返單篇模式喺呢頁開始。
-$("#practice-here").addEventListener("click", () => {
-  flowChoice = "practice";
-  renderFlowChoice();
-  $("#start").focus({ preventScroll: true });
 });
 $("#play-again").addEventListener("click", () => startRound(true));
 $("#edit-settings").addEventListener("click", resetRound);
