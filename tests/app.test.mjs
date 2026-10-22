@@ -1292,7 +1292,7 @@ function withLocaleEnv({ store = new Map(), i18n: i18nModule = i18n } = {}, run)
       try {
         return run(tab, dom);
       } finally {
-        i18nModule.setLocale("hant");
+        i18nModule.setLocale("yue-Hant");
       }
     });
   });
@@ -1300,7 +1300,7 @@ function withLocaleEnv({ store = new Map(), i18n: i18nModule = i18n } = {}, run)
 
 test("雙語界面：未設定過嘅話預設繁體，lang、靜態文案同切換掣都係繁體", () => {
   withLocaleEnv({}, (tab, dom) => {
-    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    assert.equal(dom.documentElement.lang, "yue-Hant");
     assert.equal(dom.nav.textContent, "試玩賽場");
     assert.equal(dom.rulesNav.textContent, "玩法");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
@@ -1316,7 +1316,7 @@ test("雙語界面：未設定過嘅話預設繁體，lang、靜態文案同切�
 test("雙語界面：撳 locale-toggle 轉簡體（靜態＋動態），再撳還原繁體", () => {
   withLocaleEnv({}, (tab, dom) => {
     dom.click(dom.toggle);
-    assert.equal(dom.documentElement.lang, "zh-Hans");
+    assert.equal(dom.documentElement.lang, "yue-Hans");
     assert.equal(dom.nav.textContent, "试玩赛场");
     assert.equal(dom.rulesNav.textContent, "玩法", "同形字保持原樣");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粤拼新星");
@@ -1331,7 +1331,7 @@ test("雙語界面：撳 locale-toggle 轉簡體（靜態＋動態），再撳�
     assert.match(tab.get("#board-article").textContent, /同篇比较/);
 
     dom.click(dom.toggle);
-    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    assert.equal(dom.documentElement.lang, "yue-Hant");
     assert.equal(dom.nav.textContent, "試玩賽場");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
     assert.equal(dom.toggle.textContent, "简");
@@ -1343,8 +1343,8 @@ test("雙語界面：撳 locale-toggle 轉簡體（靜態＋動態），再撳�
 
 test("雙語界面：localStorage 記住咗簡體，下次開站直接出簡體", async () => {
   const fresh = await import("../demo/i18n.mjs?case=app-stored-hans");
-  withLocaleEnv({ store: new Map([[localeStorageKey, "hans"]]), i18n: fresh }, (tab, dom) => {
-    assert.equal(dom.documentElement.lang, "zh-Hans");
+  withLocaleEnv({ store: new Map([[localeStorageKey, "yue-Hans"]]), i18n: fresh }, (tab, dom) => {
+    assert.equal(dom.documentElement.lang, "yue-Hans");
     assert.equal(dom.nav.textContent, "试玩赛场");
     assert.equal(dom.toggle.textContent, "繁");
     assert.match(tab.get("#flow-note").textContent, /官方三轮/);

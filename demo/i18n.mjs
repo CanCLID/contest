@@ -1,4 +1,4 @@
-// 全站 i18n 運行庫：繁體粵語（預設）／簡體粵文。零依賴。
+// 全站 i18n 運行庫：繁體粵語 yue-Hant（預設）／簡體粵文 yue-Hans。零依賴。
 // 用法：
 //   - 靜態文案：HTML 留繁體原文，俾要翻譯嘅元素加 data-i18n="ns.key"。
 //   - 動態文案：t("ns.key", "繁體原文", { var })——繁體原文行內做 fallback，
@@ -10,6 +10,10 @@
 
 const STORAGE_KEY = "canclid-contest-locale";
 const LOCALE_EVENT = "canclid-locale";
+const HANT = "yue-Hant";
+const HANS = "yue-Hans";
+// 舊版內部值（hant/hans）自動遷移。
+const LEGACY_LOCALES = { hant: HANT, hans: HANS };
 const hansDict = new Map();
 let current = null;
 
@@ -24,7 +28,8 @@ export function detectLocale() {
   try {
     if (typeof localStorage !== "undefined") {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "hant" || saved === "hans") return (current = saved);
+      const mapped = saved ? (LEGACY_LOCALES[saved] ?? saved) : null;
+      if (mapped === HANT || mapped === HANS) return (current = mapped);
     }
   } catch {}
   let lang = "";
@@ -34,7 +39,8 @@ export function detectLocale() {
       lang = String((Array.isArray(languages) && languages[0]) || navigator.language || "").toLowerCase();
     }
   } catch {}
-  current = /(^|-)(cn|sg)(-|$)/.test(lang) || lang.includes("hans") ? "hans" : "hant";
+  // 簡體系統（zh-CN/zh-SG 或任何 *-Hans，包括 yue-Hans）→ 簡體粤文；其他 → 繁體粤語。
+  current = /(^|-)(cn|sg)(-|$)/.test(lang) || lang.includes("hans") ? HANS : HANT;
   return current;
 }
 
@@ -48,7 +54,7 @@ export function registerStrings({ hans }) {
 
 export function t(key, hantText, vars) {
   const locale = detectLocale();
-  const template = locale === "hans" ? (hansDict.get(key) ?? hantText) : hantText;
+  const template = locale === HANS ? (hansDict.get(key) ?? hantText) : hantText;
   if (!vars) return template;
   return template.replace(/\{(\w+)\}/g, (match, name) => (vars[name] != null ? String(vars[name]) : match));
 }
@@ -57,7 +63,7 @@ function swapElement(el, attr, dictKey) {
   const cacheAttr = `i18nHant${attr === "textContent" ? "" : attr[0].toUpperCase() + attr.slice(1)}`;
   const original = el.dataset[cacheAttr];
   if (original == null) el.dataset[cacheAttr] = attr === "textContent" ? el.textContent : el.getAttribute(attr);
-  if (detectLocale() === "hans") {
+  if (detectLocale() === HANS) {
     const value = hansDict.get(dictKey);
     if (value != null) {
       if (attr === "textContent") el.textContent = value;
@@ -74,12 +80,12 @@ export function applyStaticI18n(root = typeof document !== "undefined" ? documen
   for (const el of root.querySelectorAll("[data-i18n]")) swapElement(el, "textContent", el.dataset.i18n);
   for (const el of root.querySelectorAll("[data-i18n-placeholder]")) swapElement(el, "placeholder", el.dataset.i18nPlaceholder);
   const html = root.documentElement;
-  if (html && html.setAttribute) html.setAttribute("lang", detectLocale() === "hans" ? "zh-Hans" : "zh-Hant-HK");
+  if (html && html.setAttribute) html.setAttribute("lang", detectLocale() === HANS ? HANS : HANT);
 }
 
 function updateToggleButtons() {
   if (typeof document === "undefined") return;
-  const hans = detectLocale() === "hans";
+  const hans = detectLocale() === HANS;
   for (const button of document.querySelectorAll("[data-locale-toggle]")) {
     button.textContent = hans ? t("common.toggleHant", "繁") : t("common.toggleHans", "简");
     button.setAttribute("aria-label", hans ? t("common.toggleAriaHans", "切換繁體粤語界面") : t("common.toggleAriaHant", "切換简体粤文界面"));
@@ -88,7 +94,7 @@ function updateToggleButtons() {
 }
 
 export function setLocale(locale) {
-  if (locale !== "hant" && locale !== "hans") throw new RangeError("locale must be hant|hans");
+  if (locale !== HANT && locale !== HANS) throw new RangeError("locale must be yue-Hant|yue-Hans");
   if (locale === current) return;
   current = locale;
   try {
@@ -111,7 +117,7 @@ export function initI18n() {
     if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
       document.addEventListener("click", event => {
         const button = event.target && typeof event.target.closest === "function" ? event.target.closest("[data-locale-toggle]") : null;
-        if (button) setLocale(detectLocale() === "hant" ? "hans" : "hant");
+        if (button) setLocale(detectLocale() === HANT ? HANS : HANT);
       });
     }
   } catch {}

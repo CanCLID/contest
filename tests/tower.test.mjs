@@ -505,7 +505,7 @@ function withLocale(page, run) {
   try {
     return run();
   } finally {
-    setLocale("hant");
+    setLocale("yue-Hant");
     store.delete(LOCALE_STORAGE_KEY);
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -534,7 +534,7 @@ test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant �
     assert.equal(staticText(page, "tower.title"), "聲韻解鎖塔");
     assert.equal(page.toggle.textContent, "简");
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(staticText(page, "tower.title"), "声韵解锁塔");
     assert.equal(staticText(page, "tower.tagline"), "由最简单的声母开始，一层一层解锁粤拼嘅 19 个声母、11 个韵腹同 8 个韵尾。");
     assert.equal(staticText(page, "tower.badge"), "练习模式，不设排名");
@@ -549,7 +549,7 @@ test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant �
       assert.notEqual(t(node.dataset.i18n, "\u0000冇譯文"), "\u0000冇譯文", `${node.dataset.i18n} 冇 hans 譯文`);
     }
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(staticText(page, "tower.title"), "聲韻解鎖塔");
     assert.equal(staticText(page, "tower.componentInitial"), "聲母");
     assert.equal(page.toggle.textContent, "简");
@@ -563,7 +563,7 @@ test("i18n：本層文案、元件格仔同結果卡跟 locale 轉，hant 還原
     assert.equal(page.get("#stage-note").textContent, "本層目標：準確度 ≥95%、速度 ≥20 音節／分");
     assert.equal(page.get("#round-progress").textContent, "已答 0 / 10 題");
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(page.get("#stage-note").textContent, "本层目标：准确度 ≥95%、速度 ≥20 音节／分");
     assert.equal(page.get("#goal-accuracy").textContent, "≥95%（10 题要全中）");
     assert.equal(page.get("#unlocked-count").textContent, "7 / 38 个元件");
@@ -581,7 +581,7 @@ test("i18n：本層文案、元件格仔同結果卡跟 locale 轉，hant 還原
     assert.match(page.get("#result-summary").textContent, /^9 \/ 10 题啱 · 准确度 90% · 速度 /);
     assert.equal(page.get("#feedback").textContent, "本轮完咗，睇下面嘅结果。");
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(page.get("#stage-note").textContent, "本層目標：準確度 ≥95%、速度 ≥20 音節／分");
     assert.equal(page.get("#result-title").textContent, "未達標，留返喺第 1 層");
     assert.equal(page.get("#continue").textContent, "再嚟一輪");
@@ -599,7 +599,7 @@ test("i18n：過關解鎖同層數文案跟 locale 轉，hant 還原", () => {
     assert.equal(page.get("#result-title").textContent, "第 1 層完成，上一層解鎖咗！");
     assert.equal(page.get("#continue").textContent, "開始第 2 層");
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(page.get("#result-title").textContent, "第 1 层完成，上一层解锁咗！");
     assert.equal(page.get("#continue").textContent, "开始第 2 层");
     assert.equal(page.get("#unlock-note").textContent, "新解锁：声母 d、t、n、l；韵腹 a");
@@ -607,7 +607,7 @@ test("i18n：過關解鎖同層數文案跟 locale 轉，hant 還原", () => {
     const cells = page.get("#component-initial").children;
     assert.equal(cells.find(cell => cell.dataset.value === "d").children[1].textContent, "—");
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(page.get("#result-title").textContent, "第 1 層完成，上一層解鎖咗！");
     assert.equal(page.get("#unlock-note").textContent, "新解鎖：聲母 d、t、n、l；韻腹 a");
   });

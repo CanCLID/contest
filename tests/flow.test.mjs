@@ -345,17 +345,17 @@ const LOCALE_STORAGE_KEY = "canclid-contest-locale";
 
 // 每條 i18n 測試尾都要還原 locale，順手清走 localStorage 入面嘅語言紀錄。
 function restoreLocale() {
-  setLocale("hant");
+  setLocale("yue-Hant");
   try {
     globalThis.localStorage?.removeItem?.(LOCALE_STORAGE_KEY);
   } catch {}
 }
 
 test("流程標籤跟語言切換：hans 出簡體粵文，hant 還原繁體", () => {
-  assert.equal(getLocale(), "hant", "node 環境預設繁體");
+  assert.equal(getLocale(), "yue-Hant", "node 環境預設繁體");
   assert.equal(flowRoundLabel("single"), "官方流程第 1 輪：單字");
   try {
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(flowRoundLabel("single"), "官方流程第 1 轮：单字");
     assert.equal(flowRoundLabel("words"), "官方流程第 2 轮：词组");
     assert.equal(flowRoundLabel("passage"), "官方流程第 3 轮：篇章");
@@ -367,7 +367,7 @@ test("流程標籤跟語言切換：hans 出簡體粵文，hant 還原繁體", (
   } finally {
     restoreLocale();
   }
-  assert.equal(getLocale(), "hant");
+  assert.equal(getLocale(), "yue-Hant");
   assert.equal(flowRoundLabel("words"), "官方流程第 2 輪：詞組", "還原繁體");
   assert.equal(flowNextLabel("passage"), "查看三輪成績 →");
 });

@@ -80,7 +80,7 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding:
 .draft { display: flex; align-items: center; justify-content: center; min-height: 60px; margin: 0; border-bottom: 2px solid var(--line); font-family: var(--mono); font-size: 38px; font-weight: 600; letter-spacing: 8px; text-indent: 8px; overflow-wrap: anywhere; }
 .draft.empty::after { content: "打粵拼…"; color: #9aa39a; font-family: var(--sans); font-size: 20px; font-weight: 400; letter-spacing: 1px; }
 /* 輸入區水印係 CSS 文字，i18n 運行庫改唔到；跟 documentElement 嘅 lang 換簡體。 */
-html[lang="zh-Hans"] .draft.empty::after { content: "打粤拼…"; }
+html[lang="yue-Hans"] .draft.empty::after { content: "打粤拼…"; }
 .capture { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
 .feedback { margin: 12px 0 0; min-height: 26px; text-align: center; font-size: 15px; }
 .entry .note { text-align: center; margin-top: 4px; }

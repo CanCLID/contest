@@ -1190,7 +1190,7 @@ function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
     fireTick: () => intervalCallback?.(),
     // 還原語言同清走呢個測試寫入嘅 storage，唔好影響其他測試。
     cleanup() {
-      setLocale("hant");
+      setLocale("yue-Hant");
       store.clear();
       restoreGlobals();
     },
@@ -1200,14 +1200,14 @@ function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
 test("i18n：切去簡體粵文，靜態文案（連 placeholder）、動態文案同切換掣一齊變", () => {
   const tab = chainI18nTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
   try {
-    assert.equal(getLocale(), "hant", "node 冇 navigator，預設一定係繁體");
+    assert.equal(getLocale(), "yue-Hant", "node 冇 navigator，預設一定係繁體");
     assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
     assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
     assert.equal(tab.toggle.textContent, "简");
     assert.equal(tab.get("#best-note").textContent, "本地最佳：未有紀錄。");
 
-    setLocale("hans");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hans");
+    setLocale("yue-Hans");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hans");
 
     // 靜態文案（index.html 嘅 data-i18n／data-i18n-placeholder）
     assert.equal(tab.static("chain.title").textContent, "粤拼词链");
@@ -1239,8 +1239,8 @@ test("i18n：切去簡體粵文，靜態文案（連 placeholder）、動態文�
     assert.match(tab.get("#result-summary").textContent, /用时 02:00\.0/);
 
     // 切返繁體：靜態、動態同切換掣全部還原
-    setLocale("hant");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hant");
+    setLocale("yue-Hant");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hant");
     assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
     assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
     assert.equal(tab.toggle.textContent, "简");
@@ -1260,7 +1260,7 @@ test("i18n：?flow=1 流程橫額、seed 標籤同「前往第 N 輪」掣跟語
     try {
       assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
 
-      setLocale("hans");
+      setLocale("yue-Hans");
       assert.equal(tab.get("#flow-banner").textContent,
         "官方流程第 2 轮：词组 · 固定 120 秒连续题流 · 退出流程会丢弃三轮进度。");
       assert.equal(tab.get("#mode-note").textContent,
@@ -1272,7 +1272,7 @@ test("i18n：?flow=1 流程橫額、seed 標籤同「前往第 N 輪」掣跟語
       tab.fireTick();
       assert.equal(tab.get("#flow-next").textContent, "前往第 3 轮：篇章 →");
 
-      setLocale("hant");
+      setLocale("yue-Hant");
       assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
       assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
     } finally {

@@ -7,7 +7,7 @@ const STORAGE_KEY = "canclid-contest-locale";
 
 // 運行庫嘅語言係模組狀態：每個測試完都還原返繁體，唔好影響下一個測試。
 test.afterEach(() => {
-  setLocale("hant");
+  setLocale("yue-Hant");
 });
 
 // 運行庫喺呼叫嗰刻先讀 globalThis 嘅 document／window／localStorage／navigator，
@@ -99,50 +99,50 @@ function withDom(run, { store = new Map() } = {}) {
 }
 
 test("冇 navigator／localStorage 嗰陣 detectLocale 預設繁體，t() 出返原文", () => {
-  assert.equal(detectLocale(), "hant");
-  assert.equal(getLocale(), "hant");
+  assert.equal(detectLocale(), "yue-Hant");
+  assert.equal(getLocale(), "yue-Hant");
   assert.equal(t("test.unknown", "繁體原文"), "繁體原文");
 });
 
 test("setLocale('hans') 之後 t() 出簡體，registerStrings 生效，還原返繁體", () => {
   registerStrings({ hans: { "test.nav": "试玩赛场" } });
   assert.equal(t("test.nav", "試玩賽場"), "試玩賽場", "繁體照出原文");
-  setLocale("hans");
-  assert.equal(getLocale(), "hans");
+  setLocale("yue-Hans");
+  assert.equal(getLocale(), "yue-Hans");
   assert.equal(t("test.nav", "試玩賽場"), "试玩赛场");
   assert.equal(t("test.missing", "未登記"), "未登記", "冇登記嘅 key 保持原文");
-  setLocale("hant");
+  setLocale("yue-Hant");
   assert.equal(t("test.nav", "試玩賽場"), "試玩賽場");
 });
 
 test("t() 用 {var} 套變數，簡體譯文一樣套，缺變數保持原樣", () => {
   registerStrings({ hans: { "test.sentence": "第 {index} 句 / {total}" } });
   assert.equal(t("test.sentence", "第 {index} 句 / {total}", { index: 1, total: 3 }), "第 1 句 / 3");
-  setLocale("hans");
+  setLocale("yue-Hans");
   assert.equal(t("test.sentence", "第 {index} 句 / {total}", { index: 2, total: 3 }), "第 2 句 / 3");
   assert.equal(t("test.sentence", "第 {index} 句 / {total}", { index: 2 }), "第 2 句 / {total}");
 });
 
 test("setLocale 寫入 localStorage，非法 locale 拋 RangeError", () => {
   withDom((dom, storage) => {
-    setLocale("hans");
-    assert.equal(storage.store.get(STORAGE_KEY), "hans");
-    setLocale("hant");
-    assert.equal(storage.store.get(STORAGE_KEY), "hant");
+    setLocale("yue-Hans");
+    assert.equal(storage.store.get(STORAGE_KEY), "yue-Hans");
+    setLocale("yue-Hant");
+    assert.equal(storage.store.get(STORAGE_KEY), "yue-Hant");
     assert.throws(() => setLocale("zh-TW"), RangeError);
     assert.throws(() => setLocale(""), RangeError);
-    assert.equal(getLocale(), "hant", "拋錯唔會改到當前語言");
+    assert.equal(getLocale(), "yue-Hant", "拋錯唔會改到當前語言");
   });
 });
 
 test("detectLocale 先讀 localStorage，再跟 navigator 語言判斷簡繁", async () => {
   const stored = await import("../demo/i18n.mjs?case=stored-hans");
-  withGlobals({ localStorage: memoryStorage(new Map([[STORAGE_KEY, "hans"]])) }, () => {
-    assert.equal(stored.getLocale(), "hans");
+  withGlobals({ localStorage: memoryStorage(new Map([[STORAGE_KEY, "yue-Hans"]])) }, () => {
+    assert.equal(stored.getLocale(), "yue-Hans");
   });
   for (const [language, expected] of [
-    ["zh-CN", "hans"], ["zh-SG", "hans"], ["zh-Hans", "hans"],
-    ["zh-TW", "hant"], ["zh-HK", "hant"], ["en-US", "hant"],
+    ["zh-CN", "yue-Hans"], ["zh-SG", "yue-Hans"], ["yue-Hans", "yue-Hans"],
+    ["zh-TW", "yue-Hant"], ["zh-HK", "yue-Hant"], ["en-US", "yue-Hant"],
   ]) {
     const instance = await import(`../demo/i18n.mjs?case=lang-${language}`);
     withGlobals({ navigator: { language, languages: [language] } }, () => {
@@ -155,16 +155,16 @@ test("data-i18n／data-i18n-placeholder 跟 locale 換，hant 還原原文，lan
   registerStrings({ hans: { "test.nav": "试玩赛场", "test.nickname": "粤拼新星" } });
   withDom(dom => {
     initI18n();
-    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    assert.equal(dom.documentElement.lang, "yue-Hant");
     assert.equal(dom.nav.textContent, "試玩賽場");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
-    setLocale("hans");
-    assert.equal(dom.documentElement.lang, "zh-Hans");
+    setLocale("yue-Hans");
+    assert.equal(dom.documentElement.lang, "yue-Hans");
     assert.equal(dom.nav.textContent, "试玩赛场");
     assert.equal(dom.same.textContent, "玩法", "同形字保持原樣");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粤拼新星");
-    setLocale("hant");
-    assert.equal(dom.documentElement.lang, "zh-Hant-HK");
+    setLocale("yue-Hant");
+    assert.equal(dom.documentElement.lang, "yue-Hant");
     assert.equal(dom.nav.textContent, "試玩賽場");
     assert.equal(dom.nickname.getAttribute("placeholder"), "粵拼新星");
   });
@@ -180,17 +180,17 @@ test("initI18n 綁定 [data-locale-toggle]：撳掣切換、更新 aria，再派
     assert.equal(dom.toggle.getAttribute("aria-pressed"), "false");
     assert.equal(dom.toggle.getAttribute("aria-label"), "切換简体粤文界面");
     dom.click(dom.toggle);
-    assert.equal(getLocale(), "hans");
+    assert.equal(getLocale(), "yue-Hans");
     assert.equal(dom.toggle.textContent, "繁");
     assert.equal(dom.toggle.getAttribute("aria-pressed"), "true");
     assert.equal(dom.toggle.getAttribute("aria-label"), "切換繁體粤語界面");
     assert.equal(dom.nav.textContent, "试玩赛场");
-    assert.deepEqual(events, ["hans"]);
+    assert.deepEqual(events, ["yue-Hans"]);
     dom.click(dom.toggle);
-    assert.equal(getLocale(), "hant");
+    assert.equal(getLocale(), "yue-Hant");
     assert.equal(dom.toggle.textContent, "简");
     assert.equal(dom.nav.textContent, "試玩賽場");
-    assert.deepEqual(events, ["hans", "hant"]);
+    assert.deepEqual(events, ["yue-Hans", "yue-Hant"]);
   });
 });
 

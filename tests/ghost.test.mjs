@@ -809,7 +809,7 @@ function withLocale(page, run) {
   try {
     return run();
   } finally {
-    setLocale("hant");
+    setLocale("yue-Hant");
     store.delete(LOCALE_STORAGE_KEY);
     for (const [name, descriptor] of previous) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor);
@@ -835,7 +835,7 @@ test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant �
     assert.equal(staticText(page, "ghost.title"), "幽靈競速");
     assert.equal(page.toggle.textContent, "简");
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(staticText(page, "ghost.title"), "幽灵竞速");
     assert.equal(staticText(page, "ghost.opponentHeading"), "拣对手");
     assert.equal(staticText(page, "ghost.start"), "开始竞速");
@@ -848,7 +848,7 @@ test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant �
       assert.notEqual(t(node.dataset.i18n, "\u0000冇譯文"), "\u0000冇譯文", `${node.dataset.i18n} 冇 hans 譯文`);
     }
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(staticText(page, "ghost.title"), "幽靈競速");
     assert.equal(staticText(page, "ghost.start"), "開始競速");
     assert.equal(staticText(page, "ghost.hintConfirm"), "確認；未輸入時按");
@@ -866,7 +866,7 @@ test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", () => {
       detail: "賽道只顯示自己，專心計自己嘅時間同分數",
     });
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.deepEqual(optionLabels(page)[0], {
       label: "净计时（唔设对手）",
       detail: "赛道只显示自己，专心计自己嘅时间同分数",
@@ -884,7 +884,7 @@ test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", () => {
     assert.equal(page.get("#race-status").textContent, "竞速进行中");
     assert.equal(page.get("#race-opponent").textContent, `净计时（唔设对手） · 全文 ${total} 音节`);
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(page.get("#player-value").textContent, `0 / ${total} 音節`);
     assert.equal(page.get("#race-status").textContent, "競速進行中");
     assert.equal(page.get("#race-opponent").textContent, `淨計時（唔設對手） · 全文 ${total} 音節`);
@@ -913,7 +913,7 @@ test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
     assert.match(rows()[4].children[1].textContent, /^幽靈完成咗 \d+%，你領先 \d+ 個音節$/);
     assert.match(page.get("#result-best").textContent, /^已更新本機最佳：/);
 
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(page.get("#result-title").textContent, "你赢咗幽灵");
     assert.equal(rows()[0].children[0].textContent, "完成时间");
     assert.equal(rows()[1].children[0].textContent, "正确音节／分钟");
@@ -923,7 +923,7 @@ test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
     assert.match(page.get("#result-summary").textContent, /^示范幽灵 · 55 音节／分 · 全文 \d+ 音节$/);
     assert.match(page.get("#result-best").textContent, /^已更新本机最佳：/);
 
-    setLocale("hant");
+    setLocale("yue-Hant");
     assert.equal(page.get("#result-title").textContent, "你贏咗幽靈");
     assert.equal(rows()[0].children[0].textContent, "完成時間");
     assert.match(page.get("#result-best").textContent, /^已更新本機最佳：/);
@@ -936,7 +936,7 @@ test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，
     withLocale(page, () => {
       assert.match(page.get("#flow-banner").textContent, /^官方流程第 3 輪：篇章/);
 
-      setLocale("hans");
+      setLocale("yue-Hans");
       assert.equal(page.get("#flow-banner").textContent,
         "官方流程第 3 轮：篇章 · 示范幽灵陪跑，不影响计分 · 退出流程会丢弃三轮进度。");
       assert.equal(page.get("#lobby-link").textContent, "‹ 退出流程");
@@ -955,7 +955,7 @@ test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，
       assert.equal(page.get("#flow-next").hidden, false);
       assert.equal(page.get("#flow-next").textContent, "查看三轮成绩 →");
 
-      setLocale("hant");
+      setLocale("yue-Hant");
       assert.match(page.get("#flow-banner").textContent, /^官方流程第 3 輪：篇章/);
       assert.match(page.get("#tagline").textContent, /^官方流程第 3 輪：篇章有內建 55 音節／分示範幽靈陪跑/);
       assert.equal(page.get("#flow-next").textContent, "查看三輪成績 →");

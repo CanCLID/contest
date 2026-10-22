@@ -365,7 +365,7 @@ const LOCALE_STORAGE_KEY = "canclid-contest-locale";
 
 // 每條 i18n 測試尾都要還原 locale，順手清走 localStorage 入面嘅語言紀錄。
 function restoreLocale() {
-  setLocale("hant");
+  setLocale("yue-Hant");
   try {
     globalThis.localStorage?.removeItem?.(LOCALE_STORAGE_KEY);
   } catch {}
@@ -405,11 +405,11 @@ test("成績卡靜態文案跟語言切換：data-i18n 元素出簡體，切換�
   const node = { dataset: { i18n: "summary.heroTitle" }, textContent: "官方三輪試玩 · 成績卡" };
   try {
     withFakeDocument([node], fake => {
-      setLocale("hans");
+      setLocale("yue-Hans");
       assert.equal(node.textContent, "官方三轮试玩 · 成绩卡");
       assert.equal(fake.toggle.textContent, "繁", "hans 時切換掣顯示「繁」");
       assert.equal(fake.toggle.attributes.get("aria-pressed"), "true");
-      setLocale("hant");
+      setLocale("yue-Hant");
       assert.equal(node.textContent, "官方三輪試玩 · 成績卡", "hant 還原繁體原文");
       assert.equal(fake.toggle.textContent, "简", "hant 時切換掣顯示「简」");
       assert.equal(fake.toggle.attributes.get("aria-pressed"), "false");
@@ -417,12 +417,12 @@ test("成績卡靜態文案跟語言切換：data-i18n 元素出簡體，切換�
   } finally {
     restoreLocale();
   }
-  assert.equal(getLocale(), "hant");
+  assert.equal(getLocale(), "yue-Hant");
 });
 
 test("成績卡動態文案跟語言切換：總計句、格式化輸出、歷史旗標出簡體", () => {
   try {
-    setLocale("hans");
+    setLocale("yue-Hans");
     assert.equal(summaryNote(), "三轮总分排名以组内中位数结算，正式比赛由服务器计算；呢度系本机流程试玩。");
     assert.equal(totalsLine(flowTotals({})), "三轮都未开始。");
     assert.equal(formatWindow({ done: true, timed: true, windowSeconds: 90 }), "固定 90 秒计分窗");
@@ -496,14 +496,14 @@ test("成績卡 DOM：收到 canclid-locale 會用新語言重畫", () => {
     assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 輪 · 單字");
     assert.match(tab.get("#totals-line").textContent, /三輪齊全/);
     try {
-      setLocale("hans");
+      setLocale("yue-Hans");
       tab.fire("canclid-locale");
       assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 轮 · 单字");
       assert.match(tab.get("#totals-line").textContent, /三轮齐全/);
       assert.match(tab.get("#player-line").textContent, /手机组/);
       assert.equal(tab.get("#summary-note").textContent,
         "三轮总分排名以组内中位数结算，正式比赛由服务器计算；呢度系本机流程试玩。");
-      setLocale("hant");
+      setLocale("yue-Hant");
       tab.fire("canclid-locale");
       assert.equal(rowCells(tab.get("#round-rows").children[0])[0], "第 1 輪 · 單字", "還原繁體");
     } finally {

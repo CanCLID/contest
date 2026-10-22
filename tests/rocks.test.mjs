@@ -1141,7 +1141,7 @@ function rocksI18nTab({ flowMode = false } = {}) {
     },
     // 還原語言同清走呢個測試寫入嘅 storage，唔好影響其他測試。
     cleanup() {
-      setLocale("hant");
+      setLocale("yue-Hant");
       storage.clear();
       restoreGlobals();
     },
@@ -1151,14 +1151,14 @@ function rocksI18nTab({ flowMode = false } = {}) {
 test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊變，切返繁體還原", () => {
   const tab = rocksI18nTab();
   try {
-    assert.equal(getLocale(), "hant", "node 冇 navigator，預設一定係繁體");
+    assert.equal(getLocale(), "yue-Hant", "node 冇 navigator，預設一定係繁體");
     assert.equal(tab.static("rocks.title").textContent, "粵拼落石");
     assert.equal(tab.static("rocks.how3").textContent, "漏接一次扣一條命。三條命用完，或者 60 秒倒數完，即刻結算。");
     assert.equal(tab.toggle.textContent, "简");
     assert.equal(tab.get("#mode-note").textContent, "練習模式：60 秒、三條命，成績只存本機。");
 
-    setLocale("hans");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hans");
+    setLocale("yue-Hans");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hans");
 
     // 靜態文案（index.html 嘅 data-i18n）
     assert.equal(tab.static("rocks.title").textContent, "粤拼落石");
@@ -1182,8 +1182,8 @@ test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊�
     assert.equal(tab.get("#best-note").textContent, "本地最佳：未有纪录（要达门槛先会记录）");
 
     // 切返繁體：靜態、動態同切換掣全部還原
-    setLocale("hant");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "hant");
+    setLocale("yue-Hant");
+    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hant");
     assert.equal(tab.static("rocks.title").textContent, "粵拼落石");
     assert.equal(tab.static("rocks.start").textContent, "開始遊戲");
     assert.equal(tab.toggle.textContent, "简");
@@ -1204,7 +1204,7 @@ test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣�
       assert.match(tab.get("#flow-banner").textContent, /官方流程第 1 輪：單字 · 固定 90 秒、無命/);
       assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒");
 
-      setLocale("hans");
+      setLocale("yue-Hans");
       assert.equal(tab.get("#flow-banner").textContent,
         "官方流程第 1 轮：单字 · 固定 90 秒、无命 · 退出流程会丢弃三轮进度。");
       assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 单字轮 90 秒");
@@ -1217,7 +1217,7 @@ test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣�
       tab.flushFrames();
       assert.equal(tab.get("#flow-next").textContent, "前往第 2 轮：词组 →");
 
-      setLocale("hant");
+      setLocale("yue-Hant");
       assert.equal(tab.get("#flow-next").textContent, "前往第 2 輪：詞組 →");
       assert.match(tab.get("#flow-banner").textContent, /^官方流程第 1 輪：單字 · seed rocks-0 · 固定 90 秒、無命。$/);
       assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒");
