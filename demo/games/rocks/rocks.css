@@ -35,6 +35,12 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding:
 .lead { margin: 0 0 20px; color: var(--muted); }
 .how { margin: 0 0 24px; padding-left: 22px; color: var(--muted); }
 .how li + li { margin-top: 8px; }
+.mode-field { margin: 0 0 24px; }
+.mode-label { display: block; margin-bottom: 8px; font-size: 14px; color: var(--muted); }
+.segmented { display: flex; gap: 4px; padding: 4px; border-radius: 8px; background: #e5e8dc; }
+.segmented button { flex: 1; padding: 10px 20px; border: 0; border-radius: 5px; background: transparent; font-size: 16px; white-space: nowrap; }
+.segmented button:hover { background: #dde1d0; }
+.segmented button.selected { background: var(--white); }
 .note { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 .note.subtle { color: #79837b; }
 .start-button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 13px 16px; border: 1px solid var(--orange); border-radius: 7px; background: var(--orange); color: #fff; font-size: 18px; font-weight: 600; }
@@ -43,6 +49,7 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding:
 .outline-button:hover { background: #e9eddf; }
 
 .hud { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.hud.official { grid-template-columns: repeat(4, 1fr); }
 .hud-item, .result-item { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; }
 .hud-label { color: var(--muted); font-size: 13px; }
 .hud-item strong, .result-item strong { font-size: 28px; font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
@@ -81,6 +88,7 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding:
   .card { padding: 20px; }
   h1 { font-size: 28px; }
   .hud { grid-template-columns: repeat(3, 1fr); gap: 12px 8px; }
+  .hud.official { grid-template-columns: repeat(2, 1fr); }
   .hud-item strong { font-size: 24px; }
   #clock { font-size: 22px; }
   .field { height: clamp(240px, 42vh, 340px); }

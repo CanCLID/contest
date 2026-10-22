@@ -33,13 +33,20 @@
               <li>一個詞全部音節都打啱 → 連擊 +1；個詞有任何一個錯 → 連擊即刻歸零。</li>
               <li>每個打啱嘅音節得 1 分 × 當時倍率。倍率 = 1 + 0.1 × 連擊，最高 <strong>×1.5</strong>。</li>
               <li>未輸入字母時按 <kbd>Backspace</kbd> 可以退回上一個已提交音節重打，分數同連擊一齊回滾。</li>
-              <li>打完 20 個詞即完場。成績用「正確音節／分鐘 × 準確度」，準確度未夠 90% 唔達標。</li>
+              <li>練習模式打完 20 個詞即完場。成績用「正確音節／分鐘 × 準確度」，準確度未夠 90% 唔達標。</li>
+              <li>官方模式（正式詞組輪）：固定 120 秒連續題流，到點自動收卷，計分窗照 120 秒計。</li>
               <li>成績只存喺呢個瀏覽器，唔會上傳。</li>
             </ul>
           </section>
           <aside class="panel setup-panel">
             <h2>開始</h2>
             <form id="setup-form" autocomplete="off">
+              <span class="field-label" id="mode-label">模式</span>
+              <div class="segmented" role="group" aria-labelledby="mode-label">
+                <button id="mode-practice" class="selected" type="button" aria-pressed="true">練習</button>
+                <button id="mode-official" type="button" aria-pressed="false">官方</button>
+              </div>
+              <p id="mode-note" class="field-note">練習模式：打完 20 個詞完場，成績只存本機。</p>
               <label class="field-label" for="seed">Seed（可以留空）</label>
               <input id="seed" class="seed-input" name="seed" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="留空＝隨機" maxlength="24" aria-describedby="seed-note">
               <p id="seed-note" class="field-note">同一個 seed 會出同一串詞，可以同朋友用同一串詞對賽。</p>
@@ -68,7 +75,7 @@
               <div class="metric"><span class="metric-label">得分</span><strong id="score">0.0</strong></div>
               <div class="metric"><span class="metric-label">正確音節／分</span><strong id="cpm">0</strong></div>
               <div class="metric"><span class="metric-label">準確度</span><strong id="accuracy">—</strong></div>
-              <div class="metric"><span class="metric-label">已用時間</span><strong id="time">00:00.0</strong></div>
+              <div class="metric"><span class="metric-label" id="time-label">已用時間</span><strong id="time">00:00.0</strong></div>
             </div>
             <p id="feedback" class="feedback" role="status">打粵拼，<kbd>Space</kbd> 或 <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一個音節。</p>
           </div>
@@ -86,6 +93,7 @@
             <div><dt>本地最佳</dt><dd id="result-best"></dd></div>
             <div><dt>連擊 · 得分</dt><dd id="result-detail"></dd></div>
           </dl>
+          <p id="window-note" class="field-note" hidden></p>
           <p id="result-summary" class="field-note"></p>
           <div class="result-actions">
             <button id="play-again" class="start-button" type="button">再玩一場 <span aria-hidden="true">↗</span></button>

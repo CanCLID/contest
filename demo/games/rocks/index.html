@@ -28,16 +28,25 @@
           <li>只打 A–Z 字母，打啱按 <kbd>Space</kbd> 或 <kbd>Enter</kbd> 提交，<kbd>Backspace</kbd> 刪一個字母。</li>
           <li>打啱：連擊加一，倍率最多 ×1.5；打錯或者漏接：連擊即刻歸零。</li>
           <li>漏接一次扣一條命。三條命用完，或者 60 秒倒數完，即刻結算。</li>
+          <li>官方模式（正式單字輪）：固定 90 秒、無命；石頭落地未擊破，計一次提交錯誤。</li>
           <li>計分同試玩賽場一致：每分鐘正確音節 × 準確度，準確度要達 90% 先計入排名。</li>
         </ul>
+        <div class="mode-field">
+          <span class="mode-label" id="mode-label">模式</span>
+          <div class="segmented" role="group" aria-labelledby="mode-label">
+            <button id="mode-practice" class="selected" type="button" aria-pressed="true">練習</button>
+            <button id="mode-official" type="button" aria-pressed="false">官方</button>
+          </div>
+          <p id="mode-note" class="note subtle">練習模式：60 秒、三條命，成績只存本機。</p>
+        </div>
         <button id="start-button" class="start-button" type="button">開始遊戲 <span aria-hidden="true">↗</span></button>
         <p id="intro-best" class="note">本地最佳：未有紀錄</p>
         <p class="note subtle">成績只存喺呢個瀏覽器；題庫未經人手校對，正式賽前須校對。</p>
       </section>
 
       <section id="play-card" class="card play" hidden aria-label="遊戲進行中">
-        <div class="hud">
-          <div class="hud-item"><span class="hud-label">剩命</span><strong id="lives" class="lives">♥♥♥</strong></div>
+        <div class="hud" id="hud">
+          <div class="hud-item" id="lives-item"><span class="hud-label">剩命</span><strong id="lives" class="lives">♥♥♥</strong></div>
           <div class="hud-item"><span class="hud-label">剩餘時間</span><strong id="clock">01:00.0</strong></div>
           <div class="hud-item"><span class="hud-label">速度</span><strong id="cpm">0</strong><span class="hud-unit">音節 / 分鐘</span></div>
           <div class="hud-item"><span class="hud-label">準確度</span><strong id="accuracy">—</strong></div>
@@ -67,6 +76,7 @@
           <div class="result-item"><span class="hud-label">正式分</span><strong id="result-score">0.0</strong><span class="hud-unit">每分鐘正確音節 × 準確度</span></div>
         </div>
         <p id="threshold-note" class="threshold">未達門檻，唔計排名。</p>
+        <p id="window-note" class="note subtle" hidden></p>
         <p id="result-detail" class="note subtle"></p>
         <p id="best-note" class="note">本地最佳：未有紀錄</p>
         <div class="result-actions">

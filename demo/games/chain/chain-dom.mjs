@@ -2,13 +2,18 @@
 // event.key first with a KeyA–KeyZ fallback, letters only, a visually hidden
 // native input so phone keyboards open, Space/Enter to submit and Backspace to
 // delete a letter or to recall the previous syllable when the draft is empty.
-import { createChainGame, getChainMetrics, recallSyllable, typeSyllable } from "./chain.mjs";
+import { OFFICIAL_CHAIN, createChainGame, finishByTime, getChainMetrics, recallSyllable, typeSyllable } from "./chain.mjs";
 import { CHAIN_BANK } from "./data.mjs";
 import { comboMultiplier, formatClock, normalizeAnswer, readJson, writeJson } from "../common.mjs";
 
 const STORAGE_KEY = "canclid-contest-games-chain";
+const MODE_STORAGE_KEY = "canclid-contest-games-chain-mode";
 const WORD_COUNT = 20;
 const KEEP_PLAYS = 10;
+const MODE_NOTES = {
+  practice: `練習模式：打完 ${WORD_COUNT} 個詞完場，成績只存本機。`,
+  official: "官方模式（正式詞組輪）：固定 120 秒連續題流，到點自動收卷。",
+};
 
 const $ = selector => document.querySelector(selector);
 
@@ -18,6 +23,7 @@ let composing = false;
 let physicalEdit = null;
 let ticker = null;
 let lastSeed = "";
+let mode = readJson(MODE_STORAGE_KEY, null) === "official" ? "official" : "practice";
 
 function announce(message) {
   $("#announcer").textContent = message;
@@ -32,6 +38,23 @@ function showView(view) {
 
 function focusTyping() {
   $("#answer").focus({ preventScroll: true });
+}
+
+function renderMode() {
+  const official = mode === "official";
+  const practiceButton = $("#mode-practice");
+  const officialButton = $("#mode-official");
+  practiceButton.classList.toggle("selected", !official);
+  practiceButton.setAttribute("aria-pressed", String(!official));
+  officialButton.classList.toggle("selected", official);
+  officialButton.setAttribute("aria-pressed", String(official));
+  $("#mode-note").textContent = MODE_NOTES[mode];
+}
+
+function selectMode(next) {
+  mode = next === "official" ? "official" : "practice";
+  writeJson(MODE_STORAGE_KEY, mode);
+  renderMode();
 }
 
 // --- rendering ------------------------------------------------------------
@@ -107,11 +130,15 @@ function renderWord() {
 function renderMetrics(now = Date.now()) {
   if (!state) return;
   const metrics = getChainMetrics(state, now);
-  $("#progress-label").textContent = `第 ${metrics.wordNumber} / ${metrics.words} 個詞`;
+  const official = metrics.mode === "official";
+  $("#progress-label").textContent = official
+    ? `第 ${metrics.wordNumber} 個詞 · 官方輪`
+    : `第 ${metrics.wordNumber} / ${metrics.words} 個詞`;
   $("#score").textContent = metrics.score.toFixed(1);
   $("#cpm").textContent = String(Math.round(metrics.correctPerMinute));
   $("#accuracy").textContent = metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—";
-  $("#time").textContent = formatClock(metrics.elapsedSeconds);
+  $("#time-label").textContent = official ? "剩餘時間" : "已用時間";
+  $("#time").textContent = formatClock(official ? metrics.remainingSeconds : metrics.elapsedSeconds);
   $("#combo").textContent = `連擊 ${metrics.combo}`;
   $("#multiplier").textContent = `倍率 ×${metrics.multiplier.toFixed(1)}`;
   $("#multiplier").classList.toggle("capped", metrics.multiplier >= 1.5);
@@ -181,24 +208,34 @@ function isRunning() {
 function start() {
   const raw = $("#seed").value.trim();
   lastSeed = raw || String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
-  state = createChainGame({ now: Date.now(), seed: lastSeed, wordCount: WORD_COUNT, bank: CHAIN_BANK });
+  const now = Date.now();
+  state = mode === "official"
+    ? createChainGame({ ...OFFICIAL_CHAIN, now, seed: lastSeed, wordCount: WORD_COUNT, bank: CHAIN_BANK })
+    : createChainGame({ now, seed: lastSeed, wordCount: WORD_COUNT, bank: CHAIN_BANK });
   draft = "";
   composing = false;
   physicalEdit = null;
   $("#answer").value = "";
   $("#answer").disabled = false;
-  $("#seed-label").textContent = `seed ${lastSeed}`;
+  $("#seed-label").textContent = mode === "official" ? `官方輪 · seed ${lastSeed}` : `seed ${lastSeed}`;
   $("#feedback").textContent = "打粵拼，Space 或 Enter 確認；未輸入時按 Backspace 改上一個音節。";
   showView("play");
   render();
   focusTyping();
   clearInterval(ticker);
   ticker = setInterval(tick, 100);
-  announce(`開始！本場 seed ${lastSeed}，共 ${WORD_COUNT} 個詞。`);
+  announce(mode === "official"
+    ? `開始！官方輪固定 ${state.durationSeconds} 秒，seed ${lastSeed}。`
+    : `開始！本場 seed ${lastSeed}，共 ${WORD_COUNT} 個詞。`);
 }
 
 function tick() {
   if (!isRunning()) return;
+  if (state.mode === "official") state = finishByTime(state, Date.now());
+  if (!isRunning()) {
+    finish();
+    return;
+  }
   renderMetrics(Date.now());
 }
 
@@ -222,6 +259,7 @@ function submit() {
   $("#answer").value = "";
   const previous = state;
   state = typeSyllable(state, value, Date.now());
+  if (state.mode === "official" && isRunning()) state = finishByTime(state, Date.now());
   if (state === previous) {
     $("#feedback").textContent = "空白提交唔計分，打字母先。";
     render();
@@ -256,11 +294,19 @@ function finish() {
   ticker = null;
   const metrics = getChainMetrics(state, Date.now());
   const { best, isBest } = saveResult(metrics);
-  $("#result-title").textContent = isBest ? "完成喇！新紀錄！" : "完成喇！";
+  const official = metrics.mode === "official";
+  const threshold = Math.round(metrics.threshold * 100);
+  $("#result-title").textContent = official ? "時間到，收卷！" : isBest ? "完成喇！新紀錄！" : "完成喇！";
   $("#result-cpm").textContent = `${metrics.correctPerMinute.toFixed(1)} 音節／分`;
   $("#result-accuracy").textContent = `${(metrics.accuracy * 100).toFixed(1)}%`;
   $("#result-score").textContent = metrics.officialScore.toFixed(1);
-  $("#result-threshold").textContent = metrics.meetsThreshold ? "達標" : "未達標（要 90% 準確度）";
+  $("#result-threshold").textContent = official
+    ? (metrics.meetsThreshold
+      ? `達 ${threshold}% 門檻，計入正式賽排名`
+      : `未達 ${threshold}% 門檻，正式賽不計排名`)
+    : (metrics.meetsThreshold ? "達標" : `未達標（要 ${threshold}% 準確度）`);
+  $("#window-note").hidden = !official;
+  if (official) $("#window-note").textContent = `官方模式：固定 ${metrics.scoredSeconds} 秒計分窗。`;
   $("#result-best").textContent = best
     ? `正式分 ${best.officialScore.toFixed(1)}（${formatWhen(best.at)}）`
     : "未有紀錄";
@@ -324,6 +370,8 @@ function onKeydown(event) {
 function mount() {
   $("#setup-form").addEventListener("submit", event => { event.preventDefault(); start(); });
   $("#play-again").addEventListener("click", playAgain);
+  $("#mode-practice").addEventListener("click", () => selectMode("practice"));
+  $("#mode-official").addEventListener("click", () => selectMode("official"));
   $("#typing-surface").addEventListener("click", focusTyping);
   // The hidden input sits inside the surface, so one listener covers both.
   $("#typing-surface").addEventListener("keydown", onKeydown);
@@ -354,6 +402,7 @@ function mount() {
   $("#answer").addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
   $("#answer").addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
   document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+  renderMode();
   renderBest(readStore().best);
   showView("setup");
 }

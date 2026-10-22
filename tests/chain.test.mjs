@@ -694,3 +694,239 @@ test("官方模式：OFFICIAL_CHAIN 常數、參數校驗同練習模式唔受�
   assert.equal(finishByTime(practice, 10 ** 9), practice, "練習模式冇定時收卷");
   assert.equal(getChainMetrics(practice, 0).mode, "practice");
 });
+
+// --- 模式切換（練習／官方）同官方輪 DOM 行為 --------------------------------
+
+const CHAIN_MODE_KEY = "canclid-contest-games-chain-mode";
+
+// 同 chainTab 一樣嘅迷你 DOM，但補上官方模式要用嘅全局（OFFICIAL_CHAIN、
+// finishByTime），記低 createChainGame 嘅參數，同埋捉住 setInterval 嘅回呼
+// 令測試可以自己撳一下「到點收卷」。
+function chainModeTab({ store = new Map() } = {}) {
+  let now = 0;
+  const elements = new Map();
+  const documentListeners = new Map();
+  const calls = [];
+  let intervalCallback = null;
+  let intervalDelay = null;
+
+  const makeElement = (tagName = "div", parent = null) => {
+    const classes = new Set();
+    const attributes = new Map();
+    const listeners = new Map();
+    const children = [];
+    let text = "";
+    const node = {
+      tagName, children, hidden: false, disabled: false, value: "", id: "", style: {}, clientHeight: 300,
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      get className() { return [...classes].join(" "); },
+      set className(value) {
+        classes.clear();
+        String(value).split(/\s+/).filter(Boolean).forEach(name => classes.add(name));
+      },
+      get textContent() { return text + children.map(child => child.textContent).join(""); },
+      set textContent(value) { text = String(value); children.length = 0; },
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: name => attributes.get(name) ?? null,
+      addEventListener(type, listener) {
+        if (!listeners.has(type)) listeners.set(type, []);
+        listeners.get(type).push(listener);
+      },
+      fire(type, event = {}) {
+        event.target ??= node;
+        event.preventDefault ??= () => {};
+        (listeners.get(type) ?? []).forEach(listener => listener(event));
+        parent?.fire(type, event);
+      },
+      append: (...nodes) => { children.push(...nodes); },
+      replaceChildren(...nodes) { children.length = 0; children.push(...nodes); },
+      focus() {}, blur() {},
+    };
+    return node;
+  };
+
+  const parents = new Map([["#answer", "#typing-surface"], ["#word", "#typing-surface"]]);
+  const get = selector => {
+    if (!elements.has(selector)) {
+      const parent = parents.has(selector) ? get(parents.get(selector)) : null;
+      const element = makeElement(selector === "#answer" ? "input" : "div", parent);
+      if (selector.startsWith("#")) element.id = selector.slice(1);
+      elements.set(selector, element);
+    }
+    return elements.get(selector);
+  };
+  const views = ["#setup-view", "#play-view", "#result-view"].map(get);
+  const body = makeElement("body");
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    Date: Clock,
+    OFFICIAL_CHAIN, CHAIN_BANK,
+    comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer, recallSyllable, typeSyllable,
+    createChainGame: options => {
+      const created = createChainGame(options);
+      calls.push({ options, state: created });
+      return created;
+    },
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval: (callback, delay) => { intervalCallback = callback; intervalDelay = delay; return 1; },
+    clearInterval: () => { intervalCallback = null; },
+    setTimeout: () => 1,
+    document: {
+      body,
+      querySelector: get,
+      querySelectorAll: () => views,
+      createElement: makeElement,
+      addEventListener(type, listener) { documentListeners.set(type, listener); },
+    },
+  }), { filename: "demo/games/chain/chain-dom.mjs" });
+
+  return {
+    get,
+    views,
+    store,
+    calls,
+    mode: () => JSON.parse(store.get(CHAIN_MODE_KEY) ?? "null"),
+    record: () => JSON.parse(store.get("canclid-contest-games-chain") ?? "null"),
+    setTime: value => { now = value; },
+    fireTick: () => intervalCallback?.(),
+    intervalMs: () => intervalDelay,
+    key: (key, code = key) => get("#answer").fire("keydown", { key, code }),
+    type(text) { for (const letter of text) this.key(letter, `Key${letter.toUpperCase()}`); },
+    submit() { this.key(" ", "Space"); },
+  };
+}
+
+test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開還原", () => {
+  const tab = chainModeTab();
+  assert.equal(tab.get("#mode-practice").getAttribute("aria-pressed"), "true");
+  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "false");
+  assert.ok(tab.get("#mode-practice").classList.contains("selected"));
+  assert.match(tab.get("#mode-note").textContent, /練習模式/);
+
+  tab.get("#mode-official").fire("click");
+  assert.equal(tab.mode(), "official");
+  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "true");
+  assert.ok(tab.get("#mode-official").classList.contains("selected"));
+  assert.ok(!tab.get("#mode-practice").classList.contains("selected"));
+  assert.match(tab.get("#mode-note").textContent, /120 秒/);
+
+  tab.get("#mode-practice").fire("click");
+  assert.equal(tab.mode(), "practice");
+
+  const reopened = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  assert.equal(reopened.get("#mode-official").getAttribute("aria-pressed"), "true");
+  assert.equal(reopened.get("#mode-practice").getAttribute("aria-pressed"), "false");
+  assert.match(reopened.get("#mode-note").textContent, /120 秒/);
+
+  const junk = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("ranked")]]) });
+  assert.equal(junk.get("#mode-practice").getAttribute("aria-pressed"), "true", "壞值要退回練習");
+});
+
+test("DOM 層：官方模式開局用 OFFICIAL_CHAIN、HUD 顯示剩餘時間，到點定時收卷顯示成績", () => {
+  const tab = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  tab.get("#seed").value = "official-seed";
+  tab.get("#setup-form").fire("submit");
+
+  const started = tab.calls.at(-1);
+  assert.equal(started.options.mode, "official");
+  assert.equal(started.options.durationSeconds, 120);
+  assert.equal(started.options.bank, CHAIN_BANK);
+  assert.equal(started.state.mode, "official");
+  assert.equal(started.state.endsAt, 120_000);
+  assert.equal(tab.get("#seed-label").textContent, "官方輪 · seed official-seed");
+  assert.equal(tab.get("#progress-label").textContent, "第 1 個詞 · 官方輪");
+  assert.equal(tab.get("#time-label").textContent, "剩餘時間");
+  assert.equal(tab.get("#time").textContent, "02:00.0");
+  assert.ok(tab.intervalMs() <= 250, "官方輪要定時檢查收卷");
+
+  tab.setTime(1000);
+  tab.type("zzz");
+  tab.submit();
+  assert.equal(tab.get("#play-view").hidden, false, "未夠鐘唔會收卷");
+
+  tab.setTime(120_000);
+  tab.fireTick();
+  assert.equal(tab.get("#play-view").hidden, true);
+  assert.equal(tab.get("#result-view").hidden, false);
+  assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
+  assert.match(tab.get("#result-threshold").textContent, /未達 90% 門檻，正式賽不計排名/);
+  assert.equal(tab.get("#window-note").hidden, false);
+  assert.match(tab.get("#window-note").textContent, /固定 120 秒計分窗/);
+  assert.match(tab.get("#result-summary").textContent, /用時 02:00\.0/);
+  const record = tab.record();
+  assert.equal(record.plays.length, 1);
+  assert.equal(record.plays[0].meetsThreshold, false);
+});
+
+test("DOM 層：官方模式連續題流唔會打完一批就完場；達門檻文案同逾時提交即刻收卷", () => {
+  const tab = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  tab.get("#seed").value = "official-full";
+  tab.get("#setup-form").fire("submit");
+  const plan = tab.calls.at(-1).state.words;
+
+  let time = 0;
+  for (const word of plan) {
+    for (const syllable of word.syllables) {
+      time += 1000;
+      tab.setTime(time);
+      tab.type(syllable);
+      tab.submit();
+    }
+  }
+  assert.equal(tab.get("#play-view").hidden, false, "官方模式打完一批會補下一批");
+  assert.equal(tab.get("#combo").textContent, `連擊 ${plan.length}`);
+
+  tab.setTime(120_000);
+  tab.fireTick();
+  assert.equal(tab.get("#result-view").hidden, false);
+  assert.match(tab.get("#result-threshold").textContent, /達 90% 門檻，計入正式賽排名/);
+  assert.match(tab.get("#window-note").textContent, /固定 120 秒計分窗/);
+
+  // 到點之後嘅提交：typeSyllable／finishByTime 即刻收卷，逾時答案唔入分。
+  const late = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  late.get("#setup-form").fire("submit");
+  late.setTime(120_000);
+  late.type("hoeng");
+  late.submit();
+  assert.equal(late.get("#result-view").hidden, false);
+  assert.equal(late.get("#result-title").textContent, "時間到，收卷！");
+  assert.equal(late.record().plays[0].correct, 0, "逾時提交唔會計分");
+});
+
+test("DOM 層：練習模式維持原本行為——已用時間、詞數進度、冇官方文案", () => {
+  const tab = chainModeTab();
+  tab.get("#setup-form").fire("submit");
+
+  const started = tab.calls.at(-1);
+  assert.equal(started.state.mode, "practice");
+  assert.equal(started.options.durationSeconds, undefined, "練習開局唔會傳官方參數");
+  assert.equal(tab.get("#time-label").textContent, "已用時間");
+  assert.equal(tab.get("#progress-label").textContent, "第 1 / 20 個詞");
+  assert.ok(tab.get("#seed-label").textContent.startsWith("seed "));
+
+  const plan = started.state.words;
+  let time = 0;
+  for (const word of plan) {
+    for (const syllable of word.syllables) {
+      time += 1000;
+      tab.setTime(time);
+      tab.type(syllable);
+      tab.submit();
+    }
+  }
+  assert.equal(tab.get("#result-view").hidden, false);
+  assert.equal(tab.get("#result-title").textContent, "完成喇！新紀錄！");
+  assert.equal(tab.get("#result-threshold").textContent, "達標");
+  assert.equal(tab.get("#window-note").hidden, true);
+  assert.equal(tab.get("#progress-label").textContent, `第 ${plan.length} / 20 個詞`);
+});

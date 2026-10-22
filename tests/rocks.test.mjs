@@ -724,3 +724,196 @@ test("官方模式：時間到先完場，之後嘅輸入同 tick 都無效", ()
   assert.equal(metrics.elapsedSeconds, 90);
   assert.equal(metrics.remainingSeconds, 0);
 });
+
+// --- 模式切換（練習／官方）同官方輪 DOM 行為 --------------------------------
+
+const ROCKS_MODE_KEY = "canclid-contest-games-rocks-mode";
+
+// 同 rocksTab 一樣嘅迷你 DOM，但補上官方模式要用嘅全局（OFFICIAL_ROCKS、
+// ROCK_QUESTIONS），同埋記低每次 createRocksGame 收到嘅參數同開局 state。
+function rocksModeTab({ store = new Map() } = {}) {
+  let now = 0;
+  let frameId = 0;
+  const frames = new Map();
+  const elements = new Map();
+  const documentListeners = new Map();
+  const calls = [];
+
+  const makeElement = () => {
+    const classes = new Set();
+    const attributes = new Map();
+    const own = new Map();
+    const node = {
+      hidden: false, textContent: "", value: "", style: {},
+      clientHeight: 300, offsetHeight: 100,
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: name => attributes.get(name) ?? null,
+      focus() {}, blur() {},
+      addEventListener(type, listener) {
+        if (!own.has(type)) own.set(type, []);
+        own.get(type).push(listener);
+      },
+      fire(type, event = {}) {
+        event.target ??= node;
+        event.preventDefault ??= () => {};
+        (own.get(type) ?? []).forEach(listener => listener(event));
+      },
+    };
+    return node;
+  };
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement());
+    return elements.get(selector);
+  };
+  const dispatchKey = (key, code) => {
+    documentListeners.get("keydown")?.({ key, code, preventDefault() {} });
+  };
+
+  class Clock extends Date {
+    static now() { return now; }
+  }
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    Date: Clock,
+    OFFICIAL_THRESHOLDS, OFFICIAL_ROCKS, ROCK_QUESTIONS,
+    comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
+    createRocksGame: options => {
+      const created = createRocksGame(options);
+      calls.push({ options, state: created });
+      return created;
+    },
+    getFallProgress, getRocksMetrics, tick, typeSyllable,
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    window: { addEventListener(type, listener) { documentListeners.set(`window:${type}`, listener); } },
+    document: {
+      querySelector: get,
+      addEventListener(type, listener) { documentListeners.set(type, listener); },
+    },
+    requestAnimationFrame(callback) { frameId += 1; frames.set(frameId, callback); return frameId; },
+    cancelAnimationFrame(id) { frames.delete(id); },
+    setTimeout: () => 1,
+  }), { filename: "demo/games/rocks/rocks-dom.mjs" });
+
+  return {
+    get,
+    store,
+    calls,
+    mode: () => JSON.parse(store.get(ROCKS_MODE_KEY) ?? "null"),
+    records: () => JSON.parse(store.get(ROCKS_STORAGE_KEY) ?? "null"),
+    setTime: value => { now = value; },
+    flushFrames(limit = 8) {
+      for (let i = 0; i < limit && frames.size > 0; i++) {
+        const queued = [...frames.values()];
+        frames.clear();
+        queued.forEach(callback => callback());
+      }
+    },
+    key: dispatchKey,
+    type(text) {
+      for (const character of text) dispatchKey(character, `Key${character.toUpperCase()}`);
+    },
+  };
+}
+
+test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開還原", () => {
+  const tab = rocksModeTab();
+  assert.equal(tab.get("#mode-practice").getAttribute("aria-pressed"), "true");
+  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "false");
+  assert.ok(tab.get("#mode-practice").classList.contains("selected"));
+  assert.match(tab.get("#mode-note").textContent, /練習模式/);
+
+  tab.get("#mode-official").fire("click");
+  assert.equal(tab.mode(), "official");
+  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "true");
+  assert.ok(tab.get("#mode-official").classList.contains("selected"));
+  assert.ok(!tab.get("#mode-practice").classList.contains("selected"));
+  assert.match(tab.get("#mode-note").textContent, /90 秒/);
+
+  tab.get("#mode-practice").fire("click");
+  assert.equal(tab.mode(), "practice");
+
+  const reopened = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("official")]]) });
+  assert.equal(reopened.get("#mode-official").getAttribute("aria-pressed"), "true");
+  assert.equal(reopened.get("#mode-practice").getAttribute("aria-pressed"), "false");
+  assert.match(reopened.get("#mode-note").textContent, /90 秒/);
+
+  const junk = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("ranked")]]) });
+  assert.equal(junk.get("#mode-practice").getAttribute("aria-pressed"), "true", "壞值要退回練習");
+});
+
+test("DOM 層：官方模式開局用 OFFICIAL_ROCKS、隱藏命數、90 秒倒數，成績卡有門檻同計分窗文案", () => {
+  const tab = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("official")]]) });
+  tab.get("#start-button").fire("click");
+
+  const started = tab.calls.at(-1);
+  assert.equal(started.options.mode, "official");
+  assert.equal(started.options.durationSeconds, 90);
+  assert.equal(started.options.lives, null);
+  assert.equal(started.options.bank, ROCK_QUESTIONS);
+  assert.equal(started.state.mode, "official");
+  assert.equal(started.state.endsAt, 90_000);
+  assert.equal(tab.get("#lives-item").hidden, true, "官方模式要收埋命數");
+  assert.equal(tab.get("#lives").textContent, "");
+  assert.ok(tab.get("#hud").classList.contains("official"));
+  assert.equal(tab.get("#clock").textContent, "01:30.0");
+
+  tab.setTime(90_000);
+  tab.flushFrames();
+  assert.equal(tab.get("#result-card").hidden, false);
+  assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
+  assert.match(tab.get("#threshold-note").textContent, /未達 90% 門檻，正式賽不計排名/);
+  assert.ok(tab.get("#threshold-note").classList.contains("miss"));
+  assert.equal(tab.get("#window-note").hidden, false);
+  assert.match(tab.get("#window-note").textContent, /固定 90 秒計分窗/);
+});
+
+test("DOM 層：官方模式打足全程達 90% 門檻，成績卡顯示達標同正式賽排名", () => {
+  const tab = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("official")]]) });
+  tab.get("#start-button").fire("click");
+
+  let time = 0;
+  for (let i = 0; i < 89; i++) {
+    time += 1000;
+    tab.setTime(time);
+    const hanzi = tab.get("#rock-hanzi").textContent;
+    const answer = ROCK_QUESTIONS.find(token => token.hanzi === hanzi)?.answers[0];
+    assert.ok(answer, `石頭顯示咗題庫以外嘅字：${hanzi}`);
+    tab.type(answer);
+    tab.key("Enter", "Enter");
+  }
+
+  tab.setTime(90_000);
+  tab.flushFrames();
+  assert.equal(tab.get("#result-card").hidden, false);
+  assert.match(tab.get("#threshold-note").textContent, /達 90% 門檻，成績計入正式賽排名/);
+  assert.ok(!tab.get("#threshold-note").classList.contains("miss"));
+  assert.match(tab.get("#window-note").textContent, /固定 90 秒計分窗/);
+  assert.equal(tab.get("#result-cpm").textContent, "59", "89 個正確音節 ÷ 1.5 分鐘");
+  assert.equal(tab.get("#result-accuracy").textContent, "100%");
+});
+
+test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡冇官方文案", () => {
+  const tab = rocksModeTab();
+  tab.get("#start-button").fire("click");
+
+  const started = tab.calls.at(-1);
+  assert.equal(started.state.mode, "practice");
+  assert.equal(started.options.durationSeconds, undefined, "練習開局唔會傳官方參數");
+  assert.equal(tab.get("#lives-item").hidden, false);
+  assert.equal(tab.get("#lives").textContent, "♥♥♥");
+  assert.equal(tab.get("#clock").textContent, "01:00.0");
+  assert.ok(!tab.get("#hud").classList.contains("official"));
+
+  tab.setTime(DEFAULT_DURATION_SECONDS * 1000);
+  tab.flushFrames();
+  assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
+  assert.equal(tab.get("#threshold-note").textContent, "未達門檻，唔計排名。");
+  assert.equal(tab.get("#window-note").hidden, true);
+});

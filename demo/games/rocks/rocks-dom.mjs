@@ -7,7 +7,9 @@ import {
   readJson,
   writeJson,
 } from "../common.mjs";
+import { ROCK_QUESTIONS } from "./data.mjs";
 import {
+  OFFICIAL_ROCKS,
   ROCKS_STORAGE_KEY,
   createRocksGame,
   getFallProgress,
@@ -19,6 +21,11 @@ import {
 const $ = selector => document.querySelector(selector);
 const capture = $("#capture");
 const thresholdPercent = Math.round(OFFICIAL_THRESHOLDS.timed * 100);
+const MODE_STORAGE_KEY = "canclid-contest-games-rocks-mode";
+const MODE_NOTES = {
+  practice: "練習模式：60 秒、三條命，成績只存本機。",
+  official: "官方模式（正式單字輪）：固定 90 秒、無命，石頭落地未擊破當一次提交錯誤。",
+};
 
 let state = null;
 let draft = "";
@@ -26,6 +33,7 @@ let frame = null;
 let fallSpan = 0;
 let roundSaved = false;
 let composing = false;
+let mode = readJson(MODE_STORAGE_KEY, null) === "official" ? "official" : "practice";
 
 function readRecord() {
   const saved = readJson(ROCKS_STORAGE_KEY, null);
@@ -54,13 +62,35 @@ function renderRecord() {
     : "本地最佳：未有紀錄";
 }
 
+function renderMode() {
+  const official = mode === "official";
+  const practiceButton = $("#mode-practice");
+  const officialButton = $("#mode-official");
+  practiceButton.classList.toggle("selected", !official);
+  practiceButton.setAttribute("aria-pressed", String(!official));
+  officialButton.classList.toggle("selected", official);
+  officialButton.setAttribute("aria-pressed", String(official));
+  $("#mode-note").textContent = MODE_NOTES[mode];
+}
+
+function selectMode(next) {
+  mode = next === "official" ? "official" : "practice";
+  writeJson(MODE_STORAGE_KEY, mode);
+  renderMode();
+}
+
 function render() {
   const time = Date.now();
   const metrics = getRocksMetrics(state, time);
   const progress = getFallProgress(state, time);
 
-  $("#lives").textContent = `${"♥".repeat(metrics.livesLeft)}${"♡".repeat(metrics.lives - metrics.livesLeft)}`;
-  $("#lives").setAttribute("aria-label", `剩 ${metrics.livesLeft} 條命`);
+  const official = state.mode === "official";
+  $("#hud").classList.toggle("official", official);
+  $("#lives-item").hidden = official;
+  $("#lives").textContent = official
+    ? ""
+    : `${"♥".repeat(metrics.livesLeft)}${"♡".repeat(metrics.lives - metrics.livesLeft)}`;
+  $("#lives").setAttribute("aria-label", official ? "官方模式：無命" : `剩 ${metrics.livesLeft} 條命`);
   $("#clock").textContent = formatClock(metrics.remainingSeconds);
   $("#cpm").textContent = String(Math.round(metrics.correctPerMinute));
   $("#accuracy").textContent = metrics.submitted ? `${Math.round(metrics.accuracy * 100)}%` : "—";
@@ -166,10 +196,19 @@ function finishRound() {
   $("#result-score").textContent = metrics.officialScore.toFixed(1);
   $("#result-detail").textContent =
     `擊破 ${metrics.correct} 個字 · 打錯 ${metrics.errors} 次 · 漏接 ${metrics.missed} 次 · 最高連擊 ${metrics.bestCombo}`;
-  $("#threshold-note").textContent = qualifies
-    ? `達 ${thresholdPercent}% 門檻，成績計入排名。`
-    : "未達門檻，唔計排名。";
+  const official = state.mode === "official";
+  $("#threshold-note").textContent = official
+    ? (qualifies
+      ? `達 ${thresholdPercent}% 門檻，成績計入正式賽排名。`
+      : `未達 ${thresholdPercent}% 門檻，正式賽不計排名。`)
+    : (qualifies
+      ? `達 ${thresholdPercent}% 門檻，成績計入排名。`
+      : "未達門檻，唔計排名。");
   $("#threshold-note").classList.toggle("miss", !qualifies);
+  $("#window-note").hidden = !official;
+  if (official) {
+    $("#window-note").textContent = `官方模式：固定 ${metrics.scoredSeconds} 秒計分窗，逾時未擊破當錯。`;
+  }
   const { best, plays } = readRecord();
   $("#best-note").textContent = best
     ? `${isBest ? "新紀錄！" : "本地最佳："}${best.officialScore.toFixed(1)} 分 · ${Math.round(best.correctPerMinute)} 音節/分 · 準確度 ${Math.round(best.accuracy * 100)}%${isBest ? `（玩過 ${plays} 局）` : ""}`
@@ -179,7 +218,11 @@ function finishRound() {
 }
 
 function startRound() {
-  state = createRocksGame({ now: Date.now(), seed: `rocks-${Date.now()}` });
+  const now = Date.now();
+  const seed = `rocks-${now}`;
+  state = mode === "official"
+    ? createRocksGame({ ...OFFICIAL_ROCKS, now, seed, bank: ROCK_QUESTIONS })
+    : createRocksGame({ now, seed });
   draft = "";
   roundSaved = false;
   showCard("play");
@@ -246,7 +289,10 @@ $("#field").addEventListener("pointerdown", () => {
 });
 $("#start-button").addEventListener("click", startRound);
 $("#play-again").addEventListener("click", startRound);
+$("#mode-practice").addEventListener("click", () => selectMode("practice"));
+$("#mode-official").addEventListener("click", () => selectMode("official"));
 window.addEventListener("resize", () => { measure(); if (state?.status === "running") render(); });
 
+renderMode();
 renderRecord();
 showCard("intro");
