@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import vm from "node:vm";
+import * as engine from "../demo/engine.mjs";
+import * as questions from "../demo/questions.mjs";
+import * as common from "../demo/games/common.mjs";
+import * as ghost from "../demo/games/ghost/ghost.mjs";
 import { createRun, submitAnswer, getMetrics } from "../demo/engine.mjs";
 import { flattenQuestions } from "../demo/questions.mjs";
 import { OFFICIAL_THRESHOLDS, roundMetrics } from "../demo/games/common.mjs";
@@ -11,9 +16,11 @@ import {
   builtInGhosts,
   createDemoGhost,
   createGhostRace,
+  createTimeline,
   ghostProgressAt,
   raceResult,
   recordTimeline,
+  recordTimelineFromTimes,
 } from "../demo/games/ghost/ghost.mjs";
 
 const domSource = readFileSync(new URL("../demo/games/ghost/ghost-dom.mjs", import.meta.url), "utf8");
@@ -142,6 +149,251 @@ test("recordTimeline rebuilds evenly spaced entries from a finished run", () => 
   assert.deepEqual(recordTimeline(thirds, 11000).map(entry => entry.at), [5000, 10000],
     "未完場就要傳入結束時間");
   assert.throws(() => recordTimeline(thirds), TypeError, "冇結束時間就唔可以亂估");
+});
+
+test("createTimeline validates and copies a recorded timeline", () => {
+  const input = [{ at: 100, index: 1 }, { at: 900, index: 2 }];
+  const timeline = createTimeline(input);
+  assert.deepEqual(timeline, input);
+  assert.notEqual(timeline, input);
+  assert.notEqual(timeline[0], input[0], "要出返新 object");
+  assert.deepEqual(createTimeline(), []);
+  assert.deepEqual(createTimeline([]), []);
+  assert.deepEqual(createTimeline([{ at: 10, index: 2 }]), [{ at: 10, index: 2 }],
+    "同一格式只要求遞增，唔要求由 1 開始");
+  assert.deepEqual(createTimeline([{ at: 10, index: 1 }, { at: 10, index: 2 }]).map(entry => entry.at),
+    [10, 10], "同一毫秒都可以兩次提交");
+
+  const race = createGhostRace({ now: 5000, total: 4, timeline: createTimeline(input) });
+  assert.equal(ghostProgressAt(race, 5000), 0);
+  assert.equal(ghostProgressAt(race, 5900), 0.5);
+
+  assert.throws(() => createTimeline("nope"), TypeError);
+  assert.throws(() => createTimeline([null]), TypeError);
+  assert.throws(() => createTimeline([{ at: -1, index: 1 }]), TypeError);
+  assert.throws(() => createTimeline([{ at: NaN, index: 1 }]), TypeError);
+  assert.throws(() => createTimeline([{ at: 10, index: 0 }]), TypeError);
+  assert.throws(() => createTimeline([{ at: 10, index: 1.5 }]), TypeError);
+  assert.throws(() => createTimeline([{ at: 20, index: 1 }, { at: 10, index: 2 }]), TypeError, "時間唔可以倒退");
+  assert.throws(() => createTimeline([{ at: 10, index: 2 }, { at: 20, index: 2 }]), TypeError, "音節數要遞增");
+  assert.throws(() => createTimeline([{ at: 10, index: 2 }, { at: 20, index: 1 }]), TypeError);
+});
+
+test("recordTimelineFromTimes turns absolute submit times into a relative timeline", () => {
+  assert.deepEqual(recordTimelineFromTimes(1000, [1500, 2400, 2400, 5100]), [
+    { at: 500, index: 1 },
+    { at: 1400, index: 2 },
+    { at: 1400, index: 3 },
+    { at: 4100, index: 4 },
+  ]);
+  assert.deepEqual(recordTimelineFromTimes(1000, []), []);
+  assert.deepEqual(recordTimelineFromTimes(1000, [1000]), [{ at: 0, index: 1 }], "開賽一刻提交");
+  assert.deepEqual(recordTimelineFromTimes(100.5, [200.9, 350.1]).map(entry => entry.at), [100, 250],
+    "performance.now() 嘅小數要四捨五入做整數毫秒");
+  assert.deepEqual(recordTimelineFromTimes(1000, [1500, 2400, 2400, 5100]).map(entry => entry.index), [1, 2, 3, 4]);
+
+  assert.throws(() => recordTimelineFromTimes(NaN, [1500]), TypeError);
+  assert.throws(() => recordTimelineFromTimes(1000, "nope"), TypeError);
+  assert.throws(() => recordTimelineFromTimes(1000, [999]), TypeError, "唔可以早過開賽時間");
+  assert.throws(() => recordTimelineFromTimes(1000, [1200, NaN]), TypeError);
+  assert.throws(() => recordTimelineFromTimes(1000, [1200, 1100]), TypeError, "時間倒退就唔係真時間線");
+});
+
+test("real submit times survive the stored-best round-trip and replay as a ghost", () => {
+  const tokens = flattenQuestions();
+  let run = createRun({ now: 1000, questionSet: tokens });
+  const times = [];
+  let at = 1000;
+  for (const [index, token] of tokens.entries()) {
+    // Irregular gaps, like a real player: 300 / 470 / 640 / 810 / 980 ms, then repeat.
+    at += 300 + (index % 5) * 170;
+    run = submitAnswer(run, token.answers[0], at);
+    times.push(at);
+  }
+  assert.equal(run.status, "finished");
+  const timeline = recordTimelineFromTimes(run.startedAt, times);
+  assert.equal(timeline.length, tokens.length);
+  assert.deepEqual(timeline.slice(0, 6), [
+    { at: 300, index: 1 },
+    { at: 770, index: 2 },
+    { at: 1410, index: 3 },
+    { at: 2220, index: 4 },
+    { at: 3200, index: 5 },
+    { at: 3500, index: 6 },
+  ]);
+  assert.equal(timeline.at(-1).at, run.finishedAt - run.startedAt, "最後一項就係完成時間");
+  assert.notDeepEqual(timeline.map(entry => entry.at), recordTimeline(run).map(entry => entry.at),
+    "真時間線唔係平均間隔");
+
+  // ghost-dom.mjs stores exactly this shape; only the timeline values changed.
+  const saved = JSON.parse(JSON.stringify({
+    version: 1,
+    total: tokens.length,
+    elapsedSeconds: (run.finishedAt - run.startedAt) / 1000,
+    correctPerMinute: 60 * tokens.length / ((run.finishedAt - run.startedAt) / 1000),
+    accuracy: 1,
+    officialScore: 1,
+    timeline,
+    at: 1_700_000_000_000,
+  }));
+  assert.equal(saved.version, 1);
+  assert.equal(saved.total, tokens.length);
+  assert.equal(saved.timeline.length, tokens.length);
+  assert.ok(saved.timeline.every((entry, position) =>
+    Number.isFinite(entry.at) && entry.index === position + 1), "要過到 readBest 嘅檢查");
+
+  const race = createGhostRace({ now: 1000, total: saved.total, timeline: saved.timeline });
+  assert.equal(ghostProgressAt(race, 1000), 0);
+  assert.equal(ghostProgressAt(race, 1000 + saved.elapsedSeconds * 1000), 1);
+  const halfway = ghostProgressAt(race, 1000 + saved.elapsedSeconds * 500);
+  assert.ok(halfway > 0.4 && halfway < 0.6, `中段進度 ${halfway}`);
+  assert.ok(ghostProgressAt(race, 1000 + 3000) > ghostProgressAt(race, 1000 + 2000), "跟真時間線推進");
+});
+
+// Drive the real ghost-dom.mjs in a vm with a mini DOM and a controllable
+// clock, the same way tests/rocks.test.mjs drives its DOM layer.
+const DOM_SOURCE = readFileSync(new URL("../demo/games/ghost/ghost-dom.mjs", import.meta.url), "utf8")
+  .replace(/^import[\s\S]*?from\s+"[^"]+";\n/gm, "")
+  .replace(/^export \{[^}]*\};\n/gm, "");
+
+function ghostTab() {
+  let now = 0;
+  let tickerId = 0;
+  const store = new Map();
+  const elements = new Map();
+  const tickers = new Map();
+
+  const makeElement = () => {
+    const classes = new Set();
+    const attributes = new Map();
+    const own = new Map();
+    const node = {
+      hidden: false, disabled: false, textContent: "", value: "", style: {},
+      dataset: {}, className: "", selectionStart: 0, children: [],
+      classList: {
+        add: (...names) => names.forEach(name => classes.add(name)),
+        remove: (...names) => names.forEach(name => classes.delete(name)),
+        contains: name => classes.has(name),
+        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
+      },
+      setAttribute: (name, value) => attributes.set(name, String(value)),
+      getAttribute: name => attributes.get(name) ?? null,
+      append(...items) { node.children.push(...items); },
+      replaceChildren(...items) { node.children = items; },
+      scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange() {},
+      addEventListener(type, listener) {
+        if (!own.has(type)) own.set(type, []);
+        own.get(type).push(listener);
+      },
+      fire(type, event = {}) {
+        event.target ??= node;
+        event.preventDefault ??= () => {};
+        (own.get(type) ?? []).forEach(listener => listener(event));
+      },
+    };
+    return node;
+  };
+
+  const get = selector => {
+    if (!elements.has(selector)) elements.set(selector, makeElement());
+    return elements.get(selector);
+  };
+  class Clock extends Date {
+    static now() { return now; }
+  }
+
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    ...engine, ...questions, ...common, ...ghost,
+    Date: Clock,
+    document: {
+      querySelector: get,
+      querySelectorAll: () => [],
+      createElement: makeElement,
+      addEventListener() {},
+      body: makeElement(),
+    },
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval(callback) { tickerId += 1; tickers.set(tickerId, callback); return tickerId; },
+    clearInterval(id) { tickers.delete(id); },
+  }), { filename: "demo/games/ghost/ghost-dom.mjs" });
+
+  return {
+    get,
+    store,
+    setTime(value) { now = value; },
+    tick() { [...tickers.values()].forEach(callback => callback()); },
+    saved: () => JSON.parse(store.get(GHOST_STORAGE_KEY) ?? "null"),
+    start() { get("#start").fire("click"); },
+    type(text, at) {
+      now = at;
+      const surface = get("#typing-surface");
+      for (const letter of text) surface.fire("keydown", { key: letter, code: `Key${letter.toUpperCase()}` });
+      surface.fire("keydown", { key: " ", code: "Space" });
+    },
+    backspace(times = 1) {
+      const surface = get("#typing-surface");
+      for (let press = 0; press < times; press++) surface.fire("keydown", { key: "Backspace", code: "Backspace" });
+    },
+  };
+}
+
+test("the DOM layer times every submit for real and saves a replayable best", () => {
+  const tab = ghostTab();
+  const tokens = flattenQuestions();
+  const startedAt = 3000;
+  // 400 / 570 / 740 / 910 / 1080 ms, then repeat: a player, not a metronome.
+  const gap = index => 400 + (index % 5) * 170;
+  const expected = [];
+
+  tab.start();
+  tab.setTime(startedAt);
+  tab.tick();
+  let clock = startedAt;
+  for (const [index, token] of tokens.entries()) {
+    clock += gap(index);
+    tab.type(token.answers[0], clock);
+    expected.push(clock - startedAt);
+    if (index === 2) {
+      // 撤回第 3 個音節再打過：時間線要記最後一次提交。
+      tab.backspace();
+      tab.backspace(tokens[index - 1].answers[0].length);
+      clock += 900;
+      tab.type(token.answers[0], clock);
+      expected[expected.length - 1] = clock - startedAt;
+    }
+  }
+
+  const saved = tab.saved();
+  assert.ok(saved, "完場要寫入本機最佳");
+  assert.equal(saved.version, 1, "存檔格式版本不變");
+  assert.equal(saved.total, tokens.length);
+  assert.equal(saved.timeline.length, tokens.length);
+  assert.deepEqual(saved.timeline.map(entry => entry.index), tokens.map((_, index) => index + 1));
+  assert.deepEqual(saved.timeline.map(entry => entry.at), expected, "at 要係每次提交嘅真時間");
+  assert.notDeepEqual(expected,
+    expected.map((_, index) => expected.at(-1) / expected.length * (index + 1)), "唔應該係平均間隔");
+  assert.equal(Math.round(saved.elapsedSeconds * 1000), saved.timeline.at(-1).at, "最後一項就係完成時間");
+
+  // The stored best still replays as an opponent.
+  const race = createGhostRace({ now: 0, total: saved.total, timeline: saved.timeline });
+  assert.equal(ghostProgressAt(race, 0), 0);
+  assert.equal(ghostProgressAt(race, saved.timeline.at(-1).at), 1);
+  const middle = ghostProgressAt(race, saved.timeline[tokens.length >> 1].at);
+  assert.ok(middle > 0.4 && middle < 0.6, `中段進度 ${middle}`);
+  assert.equal(tab.get("#result").hidden, false, "完場要顯示結果");
+});
+
+test("the DOM layer records real submit times and saves them in the old shape", () => {
+  assert.match(domSource, /import \{[^}]*recordTimelineFromTimes[^}]*\} from "\.\/ghost\.mjs"/);
+  assert.doesNotMatch(domSource, /\brecordTimeline\b/, "唔應該再用模擬時間線");
+  assert.match(domSource, /const now = Date\.now\(\);/);
+  assert.match(domSource, /submitTimes\[run\.index - 1\] = now/, "每次真提交要記時間");
+  assert.match(domSource, /recordTimelineFromTimes\(run\.startedAt, submitTimes\)/);
+  assert.match(domSource, /submitTimes\.length = run\.index/, "退回要剔走最後一個時間");
+  assert.equal((domSource.match(/submitTimes\.length = 0/g) ?? []).length, 2, "開新一輪同重設都要清空");
+  assert.match(domSource, /timeline: recordTimelineFromTimes/, "存檔欄位名不變");
+  assert.match(domSource, /const usable = saved\.timeline\.every/);
 });
 
 test("a recorded run replays as a ghost that finishes with the player's own time", () => {

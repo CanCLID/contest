@@ -5,7 +5,7 @@
 import { createRun, getMetrics, splitJyutping, submitAnswer, undoAnswer } from "../../engine.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "../../questions.mjs";
 import { OFFICIAL_THRESHOLDS, formatClock, readJson, roundMetrics, writeJson } from "../common.mjs";
-import { GHOST_STORAGE_KEY, builtInGhosts, createGhostRace, ghostProgressAt, raceResult, recordTimeline } from "./ghost.mjs";
+import { GHOST_STORAGE_KEY, builtInGhosts, createGhostRace, ghostProgressAt, raceResult, recordTimelineFromTimes } from "./ghost.mjs";
 
 export { GHOST_STORAGE_KEY };
 
@@ -31,6 +31,11 @@ let currentGlyph = null;
 let currentReading = null;
 let storageAvailable = true;
 let best = readBest();
+
+// Real per-syllable finish times for this run: submitTimes[position] is the
+// clock reading of the submit that completed syllable `position + 1`. Undoing
+// a syllable drops its entry, so the saved best replays what really happened.
+const submitTimes = [];
 
 function announce(message) {
   $("#announcer").textContent = message;
@@ -291,13 +296,21 @@ function editDraft(letter = null) {
 
 function submit() {
   if (!run || run.status !== "running") return;
+  const now = Date.now();
   const value = draft;
-  run = submitAnswer(run, value, Date.now());
+  const completed = run.index;
+  run = submitAnswer(run, value, now);
+  // Only a submit that moved the run on is a syllable finish; an empty draft
+  // leaves the run untouched and must not enter the timeline.
+  if (run.index > completed) {
+    submitTimes[run.index - 1] = now;
+    submitTimes.length = run.index;
+  }
   setDraft("");
   if (run.status === "finished") {
     renderPassage();
     renderRace();
-    finishRace(Date.now());
+    finishRace(now);
     return;
   }
   if (!value) {
@@ -314,6 +327,7 @@ function submit() {
 function undoLast() {
   if (!run || run.status !== "running" || run.index === 0) return;
   run = undoAnswer(run, Date.now());
+  submitTimes.length = run.index;
   setDraft(run.lastAnswer);
   $("#input-feedback").textContent = `修改「${tokens[run.index].hanzi}」之後再確認。`;
   renderPassage();
@@ -390,7 +404,9 @@ function finishRace(now) {
       correctPerMinute: official.correctPerMinute,
       accuracy: official.accuracy,
       officialScore: official.officialScore,
-      timeline: recordTimeline(run),
+      // One recorded time per accepted submit, so the stored timeline is a
+      // measurement rather than a reconstruction. Same shape as before.
+      timeline: recordTimelineFromTimes(run.startedAt, submitTimes),
       at: Date.now(),
     };
     storageAvailable = writeJson(GHOST_STORAGE_KEY, best);
@@ -423,6 +439,7 @@ function startRound() {
   draft = "";
   composing = false;
   resultSaved = false;
+  submitTimes.length = 0;
   countdownEnds = Date.now() + COUNTDOWN_MS;
 
   document.body.classList.add("running");
@@ -489,6 +506,7 @@ function resetRound() {
   draft = "";
   composing = false;
   resultSaved = false;
+  submitTimes.length = 0;
   currentGlyph = null;
   currentReading = null;
   document.body.classList.remove("running");

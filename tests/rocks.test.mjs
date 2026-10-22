@@ -9,6 +9,7 @@ import {
   DEFAULT_DURATION_SECONDS,
   DEFAULT_LIVES,
   FALL_DURATION_MS,
+  OFFICIAL_ROCKS,
   ROCKS_STORAGE_KEY,
   createRocksGame,
   getFallProgress,
@@ -560,4 +561,166 @@ test("DOM 層：時間到完場，未達門檻唔會寫入最佳成績", () => {
   assert.equal(tab.get("#threshold-note").textContent, "未達門檻，唔計排名。");
   assert.equal(tab.records().best, null);
   assert.equal(tab.records().plays, 1);
+});
+
+// --- 官方模式（正式單字輪，docs/INTEGRATION-PLAN.md §A2） --------------------
+
+test("官方模式：OFFICIAL_ROCKS 預設 90 秒、無命，mode 欄位跟身", () => {
+  assert.deepEqual(OFFICIAL_ROCKS, { mode: "official", durationSeconds: 90, lives: null });
+  const state = createRocksGame({ now: T0, seed: "official", ...OFFICIAL_ROCKS });
+  assert.equal(state.mode, "official");
+  assert.equal(state.status, "running");
+  assert.equal(state.durationSeconds, 90);
+  assert.equal(state.endsAt, T0 + 90_000);
+  assert.equal(state.lives, null);
+  assert.equal(state.livesLeft, null);
+
+  const bare = createRocksGame({ now: T0, seed: "official", mode: "official" });
+  assert.equal(bare.durationSeconds, 90, "官方模式唔傳長度都係 90 秒");
+  assert.equal(bare.lives, null, "官方模式冇命");
+
+  const practice = createRocksGame({ now: T0, seed: "practice" });
+  assert.equal(practice.mode, "practice");
+  assert.equal(practice.durationSeconds, DEFAULT_DURATION_SECONDS);
+  assert.equal(practice.lives, DEFAULT_LIVES);
+  assert.equal(getRocksMetrics(state, T0).mode, "official");
+  assert.equal(getRocksMetrics(practice, T0).mode, "practice");
+  assert.throws(() => createRocksGame({ now: T0, mode: "ranked" }), TypeError);
+});
+
+test("官方模式冇命：連續漏接都唔會完場，但每次漏接計入提交同錯誤", () => {
+  let state = createRocksGame({ now: T0, seed: "official-lives", mode: "official" });
+  let time = T0;
+  for (let i = 0; i < 5; i++) {
+    time += FALL_DURATION_MS;
+    state = tick(state, time);
+  }
+  assert.equal(state.status, "running", "冇命就唔會命盡完場");
+  assert.equal(state.livesLeft, null);
+  assert.equal(state.missed, 5);
+  assert.equal(state.submitted, 5, "漏接計入 S");
+  assert.equal(state.errors, 5, "漏接計入錯誤");
+  assert.equal(state.correct, 0);
+  assert.equal(state.combo, 0);
+  assert.equal(state.lastResult, "missed");
+  assert.equal(state.finishedReason, null);
+
+  const late = tick(state, T0 + 89_999);
+  assert.equal(late.status, "running");
+  assert.equal(late.submitted, 14, "89.999 秒之前落地嘅石頭全部照計漏接");
+});
+
+test("官方模式：逾時未擊破當一次提交錯誤，跳時間同逐個死線 tick 結果一致", () => {
+  const play = ticks => {
+    let state = createRocksGame({ now: T0, seed: "official-miss-score", mode: "official" });
+    let time = T0;
+    for (let i = 0; i < 15; i++) {
+      time += 1000;
+      state = typeSyllable(state, state.target.answers[0], time);
+    }
+    for (const at of ticks) state = tick(state, at);
+    return state;
+  };
+  const steadyTicks = [];
+  for (let at = T0 + 21_000; at <= T0 + 87_000; at += FALL_DURATION_MS) steadyTicks.push(at);
+  steadyTicks.push(T0 + 90_000);
+  const steady = play(steadyTicks);
+  const jumped = play([T0 + 90_000]);
+
+  for (const [label, state] of [["逐個死線 tick", steady], ["一次過跳到完場", jumped]]) {
+    assert.equal(state.status, "finished", label);
+    assert.equal(state.finishedReason, "time", label);
+    assert.equal(state.missed, 12, `${label}：15 個啱之後一路漏接到完場`);
+    assert.equal(state.correct, 15, label);
+    assert.equal(state.submitted, 27, `${label}：漏接全部計入 S`);
+    assert.equal(state.errors, 12, label);
+    const metrics = getRocksMetrics(state, T0 + 90_000);
+    closeTo(metrics.accuracy, 15 / 27, `${label} 準確度`);
+    assert.equal(metrics.correctPerMinute, 10, `${label}：15 ÷ 1.5 分鐘`);
+    closeTo(metrics.officialScore, (15 / 27) * 10, `${label} 正式分`);
+    assert.equal(metrics.meetsThreshold, false, `${label}：跳過唔打保唔到準確度`);
+    assert.equal(metrics.mode, "official", label);
+    assert.equal(metrics.scoredSeconds, 90, label);
+    assert.equal(metrics.livesLeft, null, label);
+  }
+});
+
+test("官方模式：逾時計錯之後準確度啱啱 90% 仍然達標，手算對照 roundMetrics", () => {
+  let state = createRocksGame({ now: T0, seed: "official-threshold", mode: "official", durationSeconds: 51 });
+  let time = T0;
+  for (let i = 0; i < 27; i++) {
+    time += 1000;
+    state = typeSyllable(state, state.target.answers[0], time);
+  }
+  assert.equal(state.status, "running");
+  // 27 秒之後停手：33／39／45 秒三次漏接，下一個死線（51 秒）啱啱好喺完場之後。
+  state = tick(state, T0 + 51_000);
+  assert.equal(state.status, "finished");
+  assert.equal(state.finishedReason, "time");
+  assert.equal(state.missed, 3);
+  assert.equal(state.correct, 27);
+  assert.equal(state.submitted, 30);
+
+  const metrics = getRocksMetrics(state, T0 + 51_000);
+  closeTo(metrics.accuracy, 0.9);
+  closeTo(metrics.correctPerMinute, 27 / (51 / 60));
+  closeTo(metrics.officialScore, (27 / (51 / 60)) * 0.9);
+  assert.equal(metrics.meetsThreshold, true, "啱啱 90% 就達門檻");
+  const reference = roundMetrics({ correct: 27, submitted: 30, seconds: 51 }, { threshold: OFFICIAL_THRESHOLDS.timed });
+  for (const key of ["accuracy", "correctPerMinute", "grossPerMinute", "demoScore", "officialScore", "meetsThreshold"]) {
+    assert.equal(metrics[key], reference[key], `${key} 應該同 common.roundMetrics 一致`);
+  }
+});
+
+test("官方模式：計分窗固定 90 秒，早停嘅 CPM 唔會虛高", () => {
+  let state = createRocksGame({ now: T0, seed: "official-window", mode: "official" });
+  let time = T0;
+  for (let i = 0; i < 15; i++) {
+    time += 2000;
+    state = typeSyllable(state, state.target.answers[0], time);
+  }
+  const live = getRocksMetrics(state, T0 + 30_000);
+  assert.equal(live.elapsedSeconds, 30);
+  assert.equal(live.scoredSeconds, 90, "計分窗係成個 T0");
+  assert.equal(live.correctPerMinute, 10, "15 個 ÷ 1.5 分鐘，唔係 ÷ 0.5 分鐘");
+  assert.equal(live.accuracy, 1);
+  assert.equal(live.remainingSeconds, 60);
+
+  // 之後停手：每 6 秒落地一次，全部計錯，直到 90 秒完場。
+  state = tick(state, T0 + 90_000);
+  assert.equal(state.status, "finished");
+  assert.equal(state.missed, 9);
+  const final = getRocksMetrics(state, T0 + 90_000);
+  assert.equal(final.scoredSeconds, 90);
+  assert.equal(final.correctPerMinute, 10);
+  closeTo(final.accuracy, 15 / 24);
+  assert.equal(final.meetsThreshold, false, "停手之後準確度跌穿門檻");
+});
+
+test("官方模式：死線一刻嘅遲到輸入跟漏接行，唔會額外多計一次", () => {
+  const state = createRocksGame({ now: T0, seed: "official-late", mode: "official" });
+  const answer = state.target.answers[0];
+  const after = typeSyllable(state, answer, T0 + FALL_DURATION_MS);
+  assert.equal(after.missed, 1);
+  assert.equal(after.submitted, 1, "只計漏接嗰一次");
+  assert.equal(after.errors, 1);
+  assert.equal(after.correct, 0);
+  assert.equal(after.spawned, 2);
+  assert.equal(after.status, "running");
+});
+
+test("官方模式：時間到先完場，之後嘅輸入同 tick 都無效", () => {
+  let state = createRocksGame({ now: T0, seed: "official-timeout", mode: "official" });
+  state = typeSyllable(state, state.target.answers[0], T0 + 1000);
+  assert.equal(state.correct, 1);
+  const ended = tick(state, T0 + 90_000);
+  assert.equal(ended.status, "finished");
+  assert.equal(ended.finishedReason, "time");
+  assert.equal(ended.finishedAt, T0 + 90_000);
+  assert.equal(typeSyllable(ended, "tin", T0 + 91_000), ended);
+  assert.equal(tick(ended, T0 + 120_000), ended);
+  const metrics = getRocksMetrics(ended, T0 + 120_000);
+  assert.equal(metrics.status, "finished");
+  assert.equal(metrics.elapsedSeconds, 90);
+  assert.equal(metrics.remainingSeconds, 0);
 });

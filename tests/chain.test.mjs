@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import {
+  OFFICIAL_CHAIN,
   createChainGame,
+  finishByTime,
   getChainMetrics,
   recallSyllable,
   typeSyllable,
@@ -528,4 +530,167 @@ test("DOM 層：手機原生輸入、IME 拒絕同 Enter 提交", () => {
   assert.equal(tab.get("#draft").textContent, "w", "event.key 唔可用時用 KeyA–KeyZ 鍵碼");
   tab.key("ArrowLeft", "ArrowLeft");
   assert.equal(tab.get("#draft").textContent, "w", "其他按鍵唔會改變草稿");
+});
+
+// --- 官方模式（正式詞組輪，docs/INTEGRATION-PLAN.md §A2） --------------------
+
+test("官方模式：連續題流——打完一批唔完場，自動補下一批", () => {
+  let game = createChainGame({ now: 0, seed: "official", mode: "official", wordCount: 4, bank });
+  assert.equal(game.mode, "official");
+  assert.equal(game.durationSeconds, 120);
+  assert.equal(game.endsAt, 120_000);
+  assert.equal(game.words.length, 4);
+  const firstBatch = game.words.map(entry => entry.word);
+
+  let now = 0;
+  for (const word of game.words) {
+    for (const syllable of word.syllables) {
+      now += 1000;
+      game = typeSyllable(game, syllable, now);
+    }
+  }
+  assert.equal(game.status, "running", "官方模式唔會打完一批就完場");
+  assert.equal(game.finishedAt, null);
+  assert.equal(game.words.length, 8, "即場補下一批");
+  assert.equal(game.batchCount, 2);
+  assert.equal(game.wordIndex, 4, "游標直接入新一批");
+  assert.equal(game.syllableIndex, 0);
+  assert.deepEqual(game.words.slice(0, 4).map(entry => entry.word), firstBatch);
+  assert.ok(game.words.slice(4).every(entry => bank.some(item => item.word === entry.word)));
+
+  for (const word of game.words.slice(4)) {
+    for (const syllable of word.syllables) {
+      now += 1000;
+      game = typeSyllable(game, syllable, now);
+    }
+  }
+  assert.equal(game.words.length, 12, "第二批打完再補第三批");
+  assert.equal(game.batchCount, 3);
+  assert.equal(game.status, "running");
+  assert.equal(game.correct, 16);
+});
+
+test("官方模式：同一 seed 嘅連續題流完全可重現", () => {
+  const run = () => {
+    let game = createChainGame({ now: 0, seed: "repeat", mode: "official", wordCount: 4, bank });
+    let now = 0;
+    for (let i = 0; i < 30; i++) {
+      const word = game.words[game.wordIndex];
+      now += 1000;
+      game = typeSyllable(game, word.syllables[game.syllableIndex], now);
+    }
+    return game;
+  };
+  const first = run();
+  const second = run();
+  assert.equal(first.words.length, 16, "30 個音節＝15 個詞，跨咗三批");
+  assert.deepEqual(first.words, second.words);
+  assert.deepEqual(getChainMetrics(first, 30_000), getChainMetrics(second, 30_000));
+});
+
+test("官方模式：撤回跨批次邊界都準確回滾，重打出一模一樣嘅題流", () => {
+  let game = createChainGame({ now: 0, seed: "recall", mode: "official", wordCount: 4, bank });
+  let now = 0;
+  for (let i = 0; i < 8; i++) {
+    const word = game.words[game.wordIndex];
+    now += 1000;
+    game = typeSyllable(game, word.syllables[game.syllableIndex], now);
+  }
+  assert.equal(game.wordIndex, 4);
+  assert.equal(game.words.length, 8);
+  assert.equal(game.combo, 4);
+
+  const recalled = recallSyllable(game);
+  assert.equal(recalled.wordIndex, 3);
+  assert.equal(recalled.syllableIndex, 1);
+  assert.equal(recalled.combo, 3, "完成咗嘅詞帶起嘅連擊要回滾");
+  close(recalled.score, game.score - comboMultiplier(3), 1e-12);
+
+  const retyped = typeSyllable(recalled, recalled.words[3].syllables[1], now + 1000);
+  assert.deepEqual(retyped.words, game.words, "重打唔會再補一批、題流一模一樣");
+  assert.equal(retyped.batchCount, 2);
+  assert.equal(retyped.wordIndex, 4);
+  assert.equal(retyped.combo, 4);
+  close(retyped.score, game.score, 1e-12);
+});
+
+test("官方模式：finishByTime 夠鐘先收卷，凍結答案同計時", () => {
+  let game = createChainGame({ now: 0, seed: "time", mode: "official", wordCount: 4, bank });
+  let now = 0;
+  for (let i = 0; i < 10; i++) {
+    const word = game.words[game.wordIndex];
+    now += 1000;
+    game = typeSyllable(game, word.syllables[game.syllableIndex], now);
+  }
+  assert.equal(finishByTime(game, 119_999), game, "未夠鐘唔會收卷");
+  const finished = finishByTime(game, 120_000);
+  assert.equal(finished.status, "finished");
+  assert.equal(finished.finishedAt, 120_000, "凍結喺回合終點");
+  assert.equal(finished.finishedReason, "time");
+  assert.deepEqual(finished.answers, game.answers);
+  assert.equal(finished.correct, game.correct);
+  assert.equal(finished.score, game.score);
+  assert.equal(finishByTime(finished, 130_000), finished, "收卷之後再叫都唔變");
+  assert.equal(typeSyllable(finished, "hoeng", 121_000), finished, "完場後唔收提交");
+  assert.equal(recallSyllable(finished), finished, "完場後唔可以撤回");
+  const metrics = getChainMetrics(finished, 999_999);
+  assert.equal(metrics.elapsedSeconds, 120, "計時凍結喺 T0");
+  assert.equal(metrics.status, "finished");
+  assert.equal(metrics.remainingSeconds, 0);
+});
+
+test("官方模式：計分窗固定 T0＝120 秒，唔用實際遊玩時間", () => {
+  let game = createChainGame({ now: 0, seed: "window", mode: "official", wordCount: 4, bank });
+  let now = 0;
+  for (let i = 0; i < 10; i++) {
+    const word = game.words[game.wordIndex];
+    now += 1000;
+    game = typeSyllable(game, word.syllables[game.syllableIndex], now);
+  }
+  const live = getChainMetrics(game, 10_000);
+  assert.equal(live.elapsedSeconds, 10);
+  assert.equal(live.scoredSeconds, 120, "計分窗係成個 T0");
+  assert.equal(live.correctPerMinute, 5, "10 個 ÷ 2 分鐘，唔係 ÷ 10 秒");
+  assert.equal(live.officialScore, 5);
+  assert.equal(live.progress, 10 / 120, "官方模式進度跟時間行");
+
+  const final = getChainMetrics(finishByTime(game, 120_000), 120_000);
+  assert.equal(final.correctPerMinute, 5);
+  assert.equal(final.officialScore, 5);
+  assert.equal(final.accuracy, 1);
+  assert.equal(final.meetsThreshold, true);
+  assert.equal(final.threshold, 0.9);
+  assert.equal(final.remainingSeconds, 0);
+});
+
+test("官方模式：提交時發現逾時即刻收卷，逾時提交唔入分", () => {
+  let game = createChainGame({ now: 0, seed: "late", mode: "official", wordCount: 4, bank });
+  game = typeSyllable(game, game.words[0].syllables[0], 1000);
+  const before = game.answers.length;
+  const late = typeSyllable(game, game.words[0].syllables[1], 120_000);
+  assert.equal(late.status, "finished");
+  assert.equal(late.finishedReason, "time");
+  assert.equal(late.answers.length, before, "逾時提交唔會入答案");
+  assert.equal(late.correct, 1);
+  assert.equal(late.errors, 0);
+  assert.equal(typeSyllable(late, "hoeng", 121_000), late);
+});
+
+test("官方模式：OFFICIAL_CHAIN 常數、參數校驗同練習模式唔受影響", () => {
+  assert.deepEqual(OFFICIAL_CHAIN, { mode: "official", durationSeconds: 120 });
+  const game = createChainGame({ now: 0, seed: "s", wordCount: 4, bank, ...OFFICIAL_CHAIN });
+  assert.equal(game.mode, "official");
+  assert.equal(game.durationSeconds, 120);
+  assert.equal(game.endsAt, 120_000);
+  const short = createChainGame({ now: 0, seed: "s", wordCount: 4, bank, mode: "official", durationSeconds: 30 });
+  assert.equal(short.endsAt, 30_000);
+  assert.throws(() => createChainGame({ now: 0, seed: "s", wordCount: 4, bank, mode: "ranked" }), TypeError);
+  assert.throws(() => createChainGame({ now: 0, seed: "s", wordCount: 4, bank, mode: "official", durationSeconds: 0 }), TypeError);
+
+  const practice = start();
+  assert.equal(practice.mode, "practice");
+  assert.equal(practice.endsAt, null);
+  assert.equal(practice.durationSeconds, null);
+  assert.equal(finishByTime(practice, 10 ** 9), practice, "練習模式冇定時收卷");
+  assert.equal(getChainMetrics(practice, 0).mode, "practice");
 });

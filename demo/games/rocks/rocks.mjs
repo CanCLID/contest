@@ -1,5 +1,7 @@
 // 粵拼落石純邏輯：唔會掂 DOM、window 或者 localStorage，node --test 可以直接 import。
 // 掉落進度一律用注入嘅 now 計：目標出現時間 + fallDurationMs = 落地死線。
+// 兩個模式：practice（預設，60 秒、3 條命）同 official（正式單字輪：90 秒、無命、
+// 落地未擊破當一次提交錯誤，計分窗固定 T0——見 docs/INTEGRATION-PLAN.md §A2）。
 
 import {
   OFFICIAL_THRESHOLDS,
@@ -16,6 +18,14 @@ export const FALL_DURATION_MS = 6000;
 export const DEFAULT_DURATION_SECONDS = 60;
 export const DEFAULT_LIVES = 3;
 export const ROCKS_STORAGE_KEY = "canclid-contest-games-rocks";
+
+// 正式單字輪（整合計劃 §A2）：固定 90 秒、無命。lives: null 代表唔計命，
+// 等 official.mjs 可以直接 spread 呢個常數入 createRocksGame。
+export const OFFICIAL_ROCKS = Object.freeze({
+  mode: "official",
+  durationSeconds: 90,
+  lives: null,
+});
 
 // 由洗好嘅題庫隊列抽下一個目標；隊列用完就用同一個 rng 再洗，保持同 seed 可重現。
 function spawnTarget(state, spawnedAt) {
@@ -47,18 +57,26 @@ function finish(state, at, reason) {
 export function createRocksGame({
   now,
   seed = "rocks",
-  durationSeconds = DEFAULT_DURATION_SECONDS,
-  lives = DEFAULT_LIVES,
+  mode = "practice",
+  durationSeconds,
+  lives,
   bank = ROCK_QUESTIONS,
   fallDurationMs = FALL_DURATION_MS,
 } = {}) {
   if (!Number.isFinite(now)) {
     throw new TypeError("開局要有一個有限嘅開始時間。");
   }
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+  if (mode !== "practice" && mode !== "official") {
+    throw new TypeError("模式只可以係 practice 或者 official。");
+  }
+  const official = mode === "official";
+  const roundSeconds = durationSeconds ?? (official ? OFFICIAL_ROCKS.durationSeconds : DEFAULT_DURATION_SECONDS);
+  if (!Number.isFinite(roundSeconds) || roundSeconds <= 0) {
     throw new TypeError("回合長度要係正數秒。");
   }
-  if (!Number.isInteger(lives) || lives < 1) {
+  // 官方模式冇命：漏接唔會完場，lives 一律收埋。
+  const roundLives = official ? null : (lives ?? DEFAULT_LIVES);
+  if (!official && (!Number.isInteger(roundLives) || roundLives < 1)) {
     throw new TypeError("至少要有一條命。");
   }
   if (!Number.isFinite(fallDurationMs) || fallDurationMs <= 0) {
@@ -69,14 +87,15 @@ export function createRocksGame({
   const label = String(seed);
   const base = {
     status: "running",
+    mode,
     seed: label,
     startedAt: now,
     updatedAt: now,
-    durationSeconds,
-    endsAt: now + durationSeconds * 1000,
+    durationSeconds: roundSeconds,
+    endsAt: now + roundSeconds * 1000,
     fallDurationMs,
-    lives,
-    livesLeft: lives,
+    lives: roundLives,
+    livesLeft: roundLives,
     combo: 0,
     bestCombo: 0,
     spawned: 0,
@@ -96,26 +115,46 @@ export function createRocksGame({
   return spawnTarget(base, now);
 }
 
+// 目標落地（死線前未擊破）：一律斷連擊。練習模式扣命；官方模式冇命，
+// 改為計入提交同錯誤，封死「跳過唔打保準確度」嘅漏洞（整合計劃 D-1）。
+function recordMiss(state, missedAt) {
+  const official = state.mode === "official";
+  return {
+    ...state,
+    livesLeft: official ? state.livesLeft : state.livesLeft - 1,
+    missed: state.missed + 1,
+    submitted: official ? state.submitted + 1 : state.submitted,
+    errors: official ? state.errors + 1 : state.errors,
+    combo: 0,
+    lastResult: "missed",
+    lastAnswer: "",
+    lastTarget: state.target,
+    updatedAt: missedAt,
+  };
+}
+
 export function tick(state, now) {
   if (!state || state.status !== "running") return state;
   if (!Number.isFinite(now) || now < state.startedAt) return state;
-  if (now >= state.endsAt) return finish(state, state.endsAt, "time");
+  const official = state.mode === "official";
+
+  if (now >= state.endsAt) {
+    // 官方模式：完場前落地嘅石頭一律照計漏接，唔可以靠一次過跳時間避開。
+    let ended = state;
+    if (official) {
+      while (ended.target && ended.target.deadline < ended.endsAt) {
+        const missedAt = ended.target.deadline;
+        ended = spawnTarget(recordMiss(ended, missedAt), missedAt);
+      }
+    }
+    return finish(ended, state.endsAt, "time");
+  }
 
   let next = state;
   while (next.target && now >= next.target.deadline) {
     const missedAt = next.target.deadline;
-    const livesLeft = next.livesLeft - 1;
-    next = {
-      ...next,
-      livesLeft,
-      missed: next.missed + 1,
-      combo: 0,
-      lastResult: "missed",
-      lastAnswer: "",
-      lastTarget: next.target,
-      updatedAt: missedAt,
-    };
-    if (livesLeft <= 0) return finish(next, missedAt, "lives");
+    next = recordMiss(next, missedAt);
+    if (!official && next.livesLeft <= 0) return finish(next, missedAt, "lives");
     next = spawnTarget(next, missedAt);
   }
   return { ...next, updatedAt: now };
@@ -172,6 +211,7 @@ export function getRocksMetrics(state, now = state.updatedAt) {
 
   return {
     ...scored,
+    mode: state.mode,
     correct: state.correct,
     errors: state.errors,
     missed: state.missed,

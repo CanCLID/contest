@@ -142,7 +142,7 @@ GitHub Pages 部署方式見 [README](README.md)。用戶已批准公開現有 `
 
 **反作弊方向**：沿用中文跟打圈指標（擊鍵、碼長、回改率、鍵準）＋ 高分成績重打驗證（TypeRacer 先例）＋ 提交時間戳序列分析；demo 階段先記錄提交序列，正式場由伺服器覆核。
 
-正式賽串聯方案已存檔 [docs/INTEGRATION-PLAN.md](docs/INTEGRATION-PLAN.md)：三輪正式比賽直接沿用落石（單字輪）／詞鏈（詞組輪）／幽靈競速（篇章輪外殼），流程同 1c 階段細節見該文件；D-1~D-12 待決清單見方案 F2。
+正式賽串聯方案已存檔 [docs/INTEGRATION-PLAN.md](docs/INTEGRATION-PLAN.md)：三輪正式比賽直接沿用落石（單字輪）／詞鏈（詞組輪）／幽靈競速（篇章輪外殼），流程同 1c 階段細節見該文件；D-1~D-12 待決清單見方案 F 節。
 
 ## 4. 輸入同題目規則
 

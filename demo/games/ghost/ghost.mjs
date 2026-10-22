@@ -112,11 +112,60 @@ export function builtInGhosts(total, seed = GHOST_SEED) {
     createDemoGhost({ correctPerMinute, total, seed: seed + position }));
 }
 
-// Rebuild a ghost timeline from a run. The demo engine keeps only the final
-// timestamp, so submit times are simulated as evenly spaced from the average
-// interval: entry i lands at (i + 1) x averageInterval. The real game must
-// record every submit time as it happens and pass those in instead — this
-// reconstruction is a demo stand-in, not a measurement.
+// Validate and copy a timeline: [{ at: ms after the start, index: syllables
+// finished }]. Entries must advance in syllable count and never move backwards
+// in time, so the result can be stored and handed straight back to
+// createGhostRace.
+export function createTimeline(submissions = []) {
+  if (!Array.isArray(submissions)) {
+    throw new TypeError("A timeline needs an array of { at, index } submissions.");
+  }
+  let previousAt = -1;
+  let previousIndex = 0;
+  return submissions.map((entry, position) => {
+    const at = Number(entry?.at);
+    const index = Number(entry?.index);
+    if (!Number.isFinite(at) || at < 0) {
+      throw new TypeError(`Timeline entry ${position} needs a finite, non-negative "at".`);
+    }
+    if (!Number.isInteger(index) || index < 1) {
+      throw new TypeError(`Timeline entry ${position} needs an integer "index" of at least 1.`);
+    }
+    if (at < previousAt || index <= previousIndex) {
+      throw new TypeError("Timeline entries must advance in both time and syllable count.");
+    }
+    previousAt = at;
+    previousIndex = index;
+    return { at, index };
+  });
+}
+
+// The real recording path: pass the absolute timestamp of every accepted
+// submitAnswer call (Date.now() or performance.now(), in submission order) and
+// get the stored timeline shape back, with `at` relative to the gun. A caller
+// that lets the player undo drops the tail of its own times list, so an
+// abandoned attempt never reaches the ghost.
+export function recordTimelineFromTimes(startedAt, times = []) {
+  if (!Number.isFinite(startedAt)) {
+    throw new TypeError("A recorded timeline needs a finite start time.");
+  }
+  if (!Array.isArray(times)) {
+    throw new TypeError("A recorded timeline needs an array of submit times.");
+  }
+  return createTimeline(times.map((time, position) => {
+    if (!Number.isFinite(time) || time < startedAt) {
+      throw new TypeError(`Submit time ${position} must be finite and no earlier than the start time.`);
+    }
+    return { at: Math.round(time - startedAt), index: position + 1 };
+  }));
+}
+
+// @deprecated Demo stand-in only: the demo engine keeps just the final
+// timestamp, so submit times are reconstructed as evenly spaced from the
+// average interval, entry i landing at (i + 1) x averageInterval. The real
+// game records every submit time as it happens and calls
+// recordTimelineFromTimes() instead — this reconstruction is not a
+// measurement and will be removed once nothing replays a demo-era run.
 export function recordTimeline(run, now) {
   const answers = run?.answers ?? [];
   if (!answers.length) return [];
