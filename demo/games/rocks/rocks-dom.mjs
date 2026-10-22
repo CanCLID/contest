@@ -7,6 +7,15 @@ import {
   readJson,
   writeJson,
 } from "../common.mjs";
+import {
+  flowNextHref,
+  flowNextLabel,
+  flowRoundLabel,
+  flowRoundResult,
+  readFlow,
+  saveRoundResult,
+  startFlow,
+} from "../flow.mjs";
 import { ROCK_QUESTIONS } from "./data.mjs";
 import {
   OFFICIAL_ROCKS,
@@ -34,6 +43,37 @@ let fallSpan = 0;
 let roundSaved = false;
 let composing = false;
 let mode = readJson(MODE_STORAGE_KEY, null) === "official" ? "official" : "practice";
+
+// 官方三輪流程（?flow=1）：鎖定官方單字輪，完場寫入 flow store 再接去詞組。
+const flowMode = (() => {
+  try {
+    return new URLSearchParams(location.search).get("flow") === "1";
+  } catch {
+    return false;
+  }
+})();
+let flow = flowMode ? readFlow() ?? startFlow() : null;
+if (flowMode) mode = "official";
+
+function renderFlow() {
+  if (!flowMode) return;
+  $("#flow-banner").hidden = false;
+  $("#flow-banner").textContent = `${flowRoundLabel("single")} · 固定 90 秒、無命 · 退出流程會丟棄三輪進度。`;
+  $("#lobby-link").textContent = "‹ 退出流程";
+  $("#lobby-link").href = "../../index.html";
+  $("#lobby-link").title = "退出會丟棄三輪流程進度";
+  $("#mode-picker").hidden = true;
+  $("#mode-note").textContent = "官方流程鎖定官方規則：固定 90 秒、無命；種子每局隨機，開局後顯示喺上面。";
+  $("#intro-eyebrow").textContent = "官方流程 · 單字輪 90 秒";
+}
+
+function showFlowNext() {
+  const next = $("#flow-next");
+  next.hidden = false;
+  next.href = flowNextHref("single");
+  next.textContent = flowNextLabel("single");
+  $("#result-lobby").hidden = true;
+}
 
 function readRecord() {
   const saved = readJson(ROCKS_STORAGE_KEY, null);
@@ -74,6 +114,7 @@ function renderMode() {
 }
 
 function selectMode(next) {
+  if (flowMode) return;
   mode = next === "official" ? "official" : "practice";
   writeJson(MODE_STORAGE_KEY, mode);
   renderMode();
@@ -213,6 +254,12 @@ function finishRound() {
   $("#best-note").textContent = best
     ? `${isBest ? "新紀錄！" : "本地最佳："}${best.officialScore.toFixed(1)} 分 · ${Math.round(best.correctPerMinute)} 音節/分 · 準確度 ${Math.round(best.accuracy * 100)}%${isBest ? `（玩過 ${plays} 局）` : ""}`
     : "本地最佳：未有紀錄（要達門檻先會記錄）";
+  if (flowMode) {
+    // 流程內：寫入單字輪結果，完場只可以接去第 2 輪，冇「再玩一次」。
+    flow = saveRoundResult(flow, "single", flowRoundResult("single", metrics)) ?? flow;
+    $("#play-again").hidden = true;
+    showFlowNext();
+  }
   showCard("result");
   $("#result-card").focus({ preventScroll: true });
 }
@@ -226,6 +273,9 @@ function startRound() {
   draft = "";
   roundSaved = false;
   showCard("play");
+  if (flowMode) {
+    $("#flow-banner").textContent = `${flowRoundLabel("single")} · seed ${seed} · 固定 90 秒、無命。`;
+  }
   measure();
   render();
   if (frame === null) frame = requestAnimationFrame(frameStep);
@@ -294,5 +344,6 @@ $("#mode-official").addEventListener("click", () => selectMode("official"));
 window.addEventListener("resize", () => { measure(); if (state?.status === "running") render(); });
 
 renderMode();
+renderFlow();
 renderRecord();
 showCard("intro");

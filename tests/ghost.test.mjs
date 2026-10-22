@@ -5,6 +5,7 @@ import vm from "node:vm";
 import * as engine from "../demo/engine.mjs";
 import * as questions from "../demo/questions.mjs";
 import * as common from "../demo/games/common.mjs";
+import * as flowApi from "../demo/games/flow.mjs";
 import * as ghost from "../demo/games/ghost/ghost.mjs";
 import { createRun, submitAnswer, getMetrics } from "../demo/engine.mjs";
 import { flattenQuestions } from "../demo/questions.mjs";
@@ -256,7 +257,27 @@ const DOM_SOURCE = readFileSync(new URL("../demo/games/ghost/ghost-dom.mjs", imp
   .replace(/^import[\s\S]*?from\s+"[^"]+";\n/gm, "")
   .replace(/^export \{[^}]*\};\n/gm, "");
 
-function ghostTab() {
+// flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
+function withFlowStorage(run) {
+  const map = new Map();
+  const storage = {
+    map,
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem(key, value) { map.set(key, String(value)); },
+    removeItem(key) { map.delete(key); },
+    read: key => (map.has(key) ? JSON.parse(map.get(key)) : null),
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
+  try {
+    return run(storage);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
+    else delete globalThis.sessionStorage;
+  }
+}
+
+function ghostTab({ flowMode = false } = {}) {
   let now = 0;
   let tickerId = 0;
   const store = new Map();
@@ -298,13 +319,17 @@ function ghostTab() {
     if (!elements.has(selector)) elements.set(selector, makeElement());
     return elements.get(selector);
   };
+  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
   class Clock extends Date {
     static now() { return now; }
   }
 
   vm.runInContext(DOM_SOURCE, vm.createContext({
-    ...engine, ...questions, ...common, ...ghost,
+    ...engine, ...questions, ...common, ...ghost, ...flowApi,
     Date: Clock,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
     document: {
       querySelector: get,
       querySelectorAll: () => [],
@@ -513,4 +538,90 @@ test("the pure module stays free of DOM, window and storage access", () => {
     assert.doesNotMatch(source, new RegExp(`\\b${banned}\\b`), `ghost.mjs 唔應該用 ${banned}`);
   }
   assert.match(source, /from "\.\.\/common\.mjs"/, "共用 jitter 要來自 games/common.mjs");
+});
+
+// --- 淨計時同官方三輪流程（?flow=1） ----------------------------------------
+
+function finishPassage(tab, startAt = 3000) {
+  const tokens = flattenQuestions();
+  let clock = startAt;
+  for (const token of tokens) {
+    clock += 200;
+    tab.type(token.answers[0], clock);
+  }
+  return clock;
+}
+
+function chooseSolo(tab) {
+  tab.get("#opponent-options").fire("change", {
+    target: { closest: () => ({ value: "none", disabled: false }) },
+  });
+}
+
+test("淨計時：賽道冇幽靈條、賽果對手進度顯示 —，其餘計分同存檔不變", () => {
+  const tab = ghostTab();
+  const picker = tab.get("#opponent-options");
+  assert.ok(picker.children.some(option => option.dataset.opponent === "none"),
+    "對手選擇要有「淨計時」");
+
+  chooseSolo(tab);
+  tab.start();
+  tab.setTime(3000);
+  tab.tick();
+  assert.equal(tab.get("#ghost-lane").hidden, true, "淨計時唔顯示幽靈條");
+  assert.match(tab.get("#race-opponent").textContent, /淨計時/);
+  assert.doesNotMatch(tab.get("#race-opponent").textContent, /目標時間/);
+  assert.equal(tab.get("#player-track").getAttribute("aria-valuenow"), "0");
+
+  finishPassage(tab);
+  assert.equal(tab.get("#result").hidden, false);
+  assert.equal(tab.get("#result-title").textContent, "完成喇！");
+  const rows = tab.get("#result-details").children;
+  assert.equal(rows.at(-1).children[0].textContent, "幽靈進度");
+  assert.equal(rows.at(-1).children[1].textContent, "—");
+  assert.match(tab.get("#result-summary").textContent, /淨計時（唔設對手）/);
+  const saved = tab.saved();
+  assert.ok(saved, "淨計時照樣寫本機最佳");
+  assert.equal(saved.total, flattenQuestions().length);
+  assert.equal(saved.accuracy, 1);
+  assert.equal(tab.get("#flow-next").hidden, true, "流程外唔會出「下一輪」掣");
+});
+
+test("?flow=1：鎖定淨計時、收埋對手選擇，完場寫入篇章輪再接去成績卡", () => {
+  withFlowStorage(storage => {
+    const tab = ghostTab({ flowMode: true });
+    assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
+    assert.match(tab.get("#flow-banner").textContent, /官方流程第 3 輪：篇章/);
+    assert.equal(tab.get("#opponent-options").hidden, true, "流程鎖定淨計時");
+    assert.equal(tab.get("#opponent-heading").hidden, true);
+    assert.equal(tab.get("#best-card").hidden, true);
+    assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
+    assert.equal(tab.get("#lobby-link").href, "../../index.html");
+    assert.match(tab.get("#start-note").textContent, /官方流程第 3 輪：篇章/);
+    assert.match(tab.get("#tagline").textContent, /篇章淨計時/);
+    assert.equal(tab.get("#flow-next").hidden, true, "未開局未出下一輪掣");
+
+    tab.start();
+    tab.setTime(3000);
+    tab.tick();
+    assert.equal(tab.get("#ghost-lane").hidden, true);
+
+    finishPassage(tab);
+    assert.equal(tab.get("#result").hidden, false);
+    const tokens = flattenQuestions();
+    const saved = storage.read("canclid-contest-official-flow").rounds.passage;
+    assert.equal(saved.correct, tokens.length);
+    assert.equal(saved.submitted, tokens.length);
+    assert.equal(saved.accuracy, 1);
+    assert.equal(saved.threshold, 0.85);
+    assert.equal(saved.meetsThreshold, true);
+    assert.equal(Math.round(saved.seconds * 1000), tokens.length * 200, "篇章輪記實際完成用時");
+    assert.ok(saved.correctPerMinute > 0);
+
+    assert.equal(tab.get("#flow-next").hidden, false);
+    assert.equal(tab.get("#flow-next").href, "../summary/");
+    assert.equal(tab.get("#flow-next").textContent, "查看三輪成績 →");
+    assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一場」");
+    assert.equal(tab.get("#edit-settings").hidden, true, "流程內冇「揀過對手」");
+  });
 });

@@ -13,6 +13,7 @@ import {
 } from "../demo/games/chain/chain.mjs";
 import { CHAIN_BANK } from "../demo/games/chain/data.mjs";
 import { comboMultiplier, formatClock, hashSeed, mulberry32, normalizeAnswer, shuffled } from "../demo/games/common.mjs";
+import * as flowApi from "../demo/games/flow.mjs";
 
 // Two-syllable words keep the hand-computed arithmetic readable.
 const bank = [
@@ -699,10 +700,30 @@ test("官方模式：OFFICIAL_CHAIN 常數、參數校驗同練習模式唔受�
 
 const CHAIN_MODE_KEY = "canclid-contest-games-chain-mode";
 
+// flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
+function withFlowStorage(run) {
+  const map = new Map();
+  const storage = {
+    map,
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem(key, value) { map.set(key, String(value)); },
+    removeItem(key) { map.delete(key); },
+    read: key => (map.has(key) ? JSON.parse(map.get(key)) : null),
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
+  try {
+    return run(storage);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
+    else delete globalThis.sessionStorage;
+  }
+}
+
 // 同 chainTab 一樣嘅迷你 DOM，但補上官方模式要用嘅全局（OFFICIAL_CHAIN、
 // finishByTime），記低 createChainGame 嘅參數，同埋捉住 setInterval 嘅回呼
 // 令測試可以自己撳一下「到點收卷」。
-function chainModeTab({ store = new Map() } = {}) {
+function chainModeTab({ store = new Map(), flowMode = false } = {}) {
   let now = 0;
   const elements = new Map();
   const documentListeners = new Map();
@@ -760,6 +781,8 @@ function chainModeTab({ store = new Map() } = {}) {
     }
     return elements.get(selector);
   };
+  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
   const views = ["#setup-view", "#play-view", "#result-view"].map(get);
   const body = makeElement("body");
 
@@ -771,6 +794,9 @@ function chainModeTab({ store = new Map() } = {}) {
     Date: Clock,
     OFFICIAL_CHAIN, CHAIN_BANK,
     comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer, recallSyllable, typeSyllable,
+    ...flowApi,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
     createChainGame: options => {
       const created = createChainGame(options);
       calls.push({ options, state: created });
@@ -905,6 +931,9 @@ test("DOM 層：官方模式連續題流唔會打完一批就完場；達門檻�
 
 test("DOM 層：練習模式維持原本行為——已用時間、詞數進度、冇官方文案", () => {
   const tab = chainModeTab();
+  assert.equal(tab.get("#flow-banner").hidden, true, "唔係流程就唔會出流程橫額");
+  assert.equal(tab.get("#mode-picker").hidden, false);
+  assert.equal(tab.get("#seed-field").hidden, false);
   tab.get("#setup-form").fire("submit");
 
   const started = tab.calls.at(-1);
@@ -929,4 +958,55 @@ test("DOM 層：練習模式維持原本行為——已用時間、詞數進度�
   assert.equal(tab.get("#result-threshold").textContent, "達標");
   assert.equal(tab.get("#window-note").hidden, true);
   assert.equal(tab.get("#progress-label").textContent, `第 ${plan.length} / 20 個詞`);
+  assert.equal(tab.get("#flow-next").hidden, true, "流程外完場唔會出「下一輪」掣");
+});
+
+test("DOM 層：?flow=1 鎖定官方詞組輪、收埋 seed 輸入，到點寫入流程再接去篇章", () => {
+  withFlowStorage(storage => {
+    const tab = chainModeTab({ flowMode: true });
+    assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
+    assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組/);
+    assert.equal(tab.get("#mode-picker").hidden, true, "流程鎖定官方模式");
+    assert.equal(tab.get("#seed-field").hidden, true, "流程唔收 seed 輸入");
+    assert.equal(tab.get("#seed").hidden, true);
+    assert.equal(tab.get("#seed-note").hidden, true);
+    assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
+    assert.equal(tab.get("#lobby-link").href, "../../index.html");
+    assert.equal(tab.get("#flow-next").hidden, true, "未開局未出下一輪掣");
+
+    // 流程唔理模式切換，亦唔理手動 seed。
+    tab.get("#mode-practice").fire("click");
+    tab.get("#seed").value = "flow-ignored";
+    tab.get("#setup-form").fire("submit");
+    const started = tab.calls.at(-1);
+    assert.equal(started.options.mode, "official");
+    assert.equal(started.options.durationSeconds, 120);
+    assert.equal(started.options.bank, CHAIN_BANK);
+    assert.notEqual(started.options.seed, "flow-ignored", "流程用隨機 seed");
+    assert.match(started.options.seed, /^\d{6}$/);
+    assert.equal(tab.get("#seed-label").textContent, `官方流程第 2 輪：詞組 · seed ${started.options.seed}`);
+    assert.equal(tab.mode(), null, "流程唔會寫入模式偏好");
+
+    tab.setTime(1000);
+    tab.type("zzz");
+    tab.submit();
+    assert.equal(tab.get("#play-view").hidden, false, "未夠鐘唔會收卷");
+
+    tab.setTime(120_000);
+    tab.fireTick();
+    assert.equal(tab.get("#result-view").hidden, false);
+    const saved = storage.read("canclid-contest-official-flow").rounds.words;
+    assert.equal(saved.seconds, 120, "定時輪記固定計分窗");
+    assert.equal(saved.correct, 0);
+    assert.equal(saved.submitted, 1);
+    assert.equal(saved.accuracy, 0);
+    assert.equal(saved.threshold, 0.9);
+    assert.equal(saved.meetsThreshold, false);
+
+    assert.equal(tab.get("#flow-next").hidden, false);
+    assert.equal(tab.get("#flow-next").href, "../ghost/?flow=1");
+    assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
+    assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一場」");
+    assert.equal(tab.get("#result-lobby").hidden, true);
+  });
 });

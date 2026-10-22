@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 
 import { COMBO_CAP, OFFICIAL_THRESHOLDS, comboMultiplier, formatClock, roundMetrics } from "../demo/games/common.mjs";
+import * as flowApi from "../demo/games/flow.mjs";
 import { ROCK_QUESTIONS, validateBank } from "../demo/games/rocks/data.mjs";
 import {
   DEFAULT_DURATION_SECONDS,
@@ -729,9 +730,29 @@ test("官方模式：時間到先完場，之後嘅輸入同 tick 都無效", ()
 
 const ROCKS_MODE_KEY = "canclid-contest-games-rocks-mode";
 
+// flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
+function withFlowStorage(run) {
+  const map = new Map();
+  const storage = {
+    map,
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem(key, value) { map.set(key, String(value)); },
+    removeItem(key) { map.delete(key); },
+    read: key => (map.has(key) ? JSON.parse(map.get(key)) : null),
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
+  try {
+    return run(storage);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
+    else delete globalThis.sessionStorage;
+  }
+}
+
 // 同 rocksTab 一樣嘅迷你 DOM，但補上官方模式要用嘅全局（OFFICIAL_ROCKS、
 // ROCK_QUESTIONS），同埋記低每次 createRocksGame 收到嘅參數同開局 state。
-function rocksModeTab({ store = new Map() } = {}) {
+function rocksModeTab({ store = new Map(), flowMode = false } = {}) {
   let now = 0;
   let frameId = 0;
   const frames = new Map();
@@ -771,6 +792,8 @@ function rocksModeTab({ store = new Map() } = {}) {
     if (!elements.has(selector)) elements.set(selector, makeElement());
     return elements.get(selector);
   };
+  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
+  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
   const dispatchKey = (key, code) => {
     documentListeners.get("keydown")?.({ key, code, preventDefault() {} });
   };
@@ -783,6 +806,9 @@ function rocksModeTab({ store = new Map() } = {}) {
     Date: Clock,
     OFFICIAL_THRESHOLDS, OFFICIAL_ROCKS, ROCK_QUESTIONS,
     comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
+    ...flowApi,
+    location: { search: flowMode ? "?flow=1" : "", href: "" },
+    URLSearchParams,
     createRocksGame: options => {
       const created = createRocksGame(options);
       calls.push({ options, state: created });
@@ -901,6 +927,9 @@ test("DOM 層：官方模式打足全程達 90% 門檻，成績卡顯示達標�
 
 test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡冇官方文案", () => {
   const tab = rocksModeTab();
+  assert.equal(tab.get("#flow-banner").hidden, true, "唔係流程就唔會出流程橫額");
+  assert.equal(tab.get("#mode-picker").hidden, false);
+  assert.equal(tab.get("#lobby-link").href, undefined, "唔係流程就唔會改「遊戲大廳」條 link");
   tab.get("#start-button").fire("click");
 
   const started = tab.calls.at(-1);
@@ -916,4 +945,51 @@ test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡�
   assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
   assert.equal(tab.get("#threshold-note").textContent, "未達門檻，唔計排名。");
   assert.equal(tab.get("#window-note").hidden, true);
+  assert.equal(tab.get("#flow-next").hidden, true, "流程外完場唔會出「下一輪」掣");
 });
+
+test("DOM 層：?flow=1 鎖定官方單字輪、顯示流程橫額，完場寫入流程再接去詞組", () => {
+  withFlowStorage(storage => {
+    const tab = rocksModeTab({ flowMode: true });
+    assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
+    assert.match(tab.get("#flow-banner").textContent, /官方流程第 1 輪：單字/);
+    assert.match(tab.get("#flow-banner").textContent, /退出流程會丟棄三輪進度/);
+    assert.equal(tab.get("#mode-picker").hidden, true, "流程鎖定官方模式");
+    assert.equal(tab.get("#mode-note").textContent.includes("官方流程鎖定官方規則"), true);
+    assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒", "介紹卡唔會再寫 60 秒");
+    assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
+    assert.equal(tab.get("#lobby-link").href, "../../index.html");
+    assert.equal(tab.get("#flow-next").hidden, true, "未開局未出下一輪掣");
+
+    // 流程唔理模式切換，亦唔會改寫使用者嘅模式偏好。
+    tab.get("#mode-practice").fire("click");
+    tab.get("#start-button").fire("click");
+    const started = tab.calls.at(-1);
+    assert.equal(started.options.mode, "official");
+    assert.equal(started.options.durationSeconds, 90);
+    assert.equal(started.options.lives, null);
+    assert.equal(started.options.bank, ROCK_QUESTIONS);
+    assert.match(tab.get("#flow-banner").textContent, /seed rocks-0/, "開局要喺頁面顯示隨機 seed");
+    assert.equal(tab.mode(), null, "流程唔會寫入模式偏好");
+    assert.equal(tab.get("#lives-item").hidden, true);
+
+    tab.setTime(90_000);
+    tab.flushFrames();
+    assert.equal(tab.get("#result-card").hidden, false);
+    const saved = storage.read("canclid-contest-official-flow").rounds.single;
+    assert.equal(saved.seconds, 90, "定時輪記固定計分窗");
+    assert.equal(saved.correct, 0);
+    assert.equal(saved.submitted, 14, "官方單字輪：90 秒內落地嘅 14 塊石全部計提交錯誤");
+    assert.equal(saved.accuracy, 0);
+    assert.equal(saved.threshold, 0.9);
+    assert.equal(saved.meetsThreshold, false);
+    assert.equal(saved.officialScore, 0);
+
+    assert.equal(tab.get("#flow-next").hidden, false);
+    assert.equal(tab.get("#flow-next").href, "../chain/?flow=1");
+    assert.equal(tab.get("#flow-next").textContent, "前往第 2 輪：詞組 →");
+    assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一次」");
+    assert.equal(tab.get("#result-lobby").hidden, true);
+  });
+});
+

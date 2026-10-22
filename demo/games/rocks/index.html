@@ -14,14 +14,15 @@
   <a class="skip-link" href="#main">跳去主要內容</a>
   <div class="shell">
     <header class="topbar">
-      <a class="topbar-link" href="../">‹ 遊戲大廳</a>
+      <a id="lobby-link" class="topbar-link" href="../">‹ 遊戲大廳</a>
       <span class="brand">粵拼落石</span>
       <a class="topbar-link" href="../../index.html">試玩賽場 ↗</a>
     </header>
 
     <main id="main">
+      <p id="flow-banner" class="flow-banner" hidden></p>
       <section id="intro-card" class="card intro">
-        <p class="eyebrow">小遊戲 · 60 秒</p>
+        <p id="intro-eyebrow" class="eyebrow">小遊戲 · 60 秒</p>
         <h1>粵拼落石</h1>
         <p class="lead">石頭由上面跌落嚟，你要喺佢落地之前打出石上面嗰個字嘅粵拼。唔使打聲調數字。</p>
         <ul class="how">
@@ -33,7 +34,7 @@
         </ul>
         <div class="mode-field">
           <span class="mode-label" id="mode-label">模式</span>
-          <div class="segmented" role="group" aria-labelledby="mode-label">
+          <div id="mode-picker" class="segmented" role="group" aria-labelledby="mode-label">
             <button id="mode-practice" class="selected" type="button" aria-pressed="true">練習</button>
             <button id="mode-official" type="button" aria-pressed="false">官方</button>
           </div>
@@ -80,8 +81,9 @@
         <p id="result-detail" class="note subtle"></p>
         <p id="best-note" class="note">本地最佳：未有紀錄</p>
         <div class="result-actions">
+          <a id="flow-next" class="start-button flow-next" href="../chain/?flow=1" hidden>前往第 2 輪：詞組 →</a>
           <button id="play-again" class="start-button" type="button">再玩一次 <span aria-hidden="true">↗</span></button>
-          <a class="outline-button" href="../">返遊戲大廳</a>
+          <a id="result-lobby" class="outline-button" href="../">返遊戲大廳</a>
         </div>
       </section>
     </main>

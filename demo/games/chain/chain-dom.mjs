@@ -5,6 +5,15 @@
 import { OFFICIAL_CHAIN, createChainGame, finishByTime, getChainMetrics, recallSyllable, typeSyllable } from "./chain.mjs";
 import { CHAIN_BANK } from "./data.mjs";
 import { comboMultiplier, formatClock, normalizeAnswer, readJson, writeJson } from "../common.mjs";
+import {
+  flowNextHref,
+  flowNextLabel,
+  flowRoundLabel,
+  flowRoundResult,
+  readFlow,
+  saveRoundResult,
+  startFlow,
+} from "../flow.mjs";
 
 const STORAGE_KEY = "canclid-contest-games-chain";
 const MODE_STORAGE_KEY = "canclid-contest-games-chain-mode";
@@ -24,6 +33,39 @@ let physicalEdit = null;
 let ticker = null;
 let lastSeed = "";
 let mode = readJson(MODE_STORAGE_KEY, null) === "official" ? "official" : "practice";
+
+// 官方三輪流程（?flow=1）：鎖定官方詞組輪，完場寫入 flow store 再接去篇章。
+const flowMode = (() => {
+  try {
+    return new URLSearchParams(location.search).get("flow") === "1";
+  } catch {
+    return false;
+  }
+})();
+let flow = flowMode ? readFlow() ?? startFlow() : null;
+if (flowMode) mode = "official";
+
+function renderFlow() {
+  if (!flowMode) return;
+  $("#flow-banner").hidden = false;
+  $("#flow-banner").textContent = `${flowRoundLabel("words")} · 固定 120 秒連續題流 · 退出流程會丟棄三輪進度。`;
+  $("#lobby-link").textContent = "‹ 退出流程";
+  $("#lobby-link").href = "../../index.html";
+  $("#lobby-link").title = "退出會丟棄三輪流程進度";
+  $("#mode-picker").hidden = true;
+  $("#seed-field").hidden = true;
+  $("#seed").hidden = true;
+  $("#seed-note").hidden = true;
+  $("#mode-note").textContent = "官方流程鎖定官方規則：固定 120 秒連續題流，到點自動收卷；seed 每局隨機，開局後顯示。";
+}
+
+function showFlowNext() {
+  const next = $("#flow-next");
+  next.hidden = false;
+  next.href = flowNextHref("words");
+  next.textContent = flowNextLabel("words");
+  $("#result-lobby").hidden = true;
+}
 
 function announce(message) {
   $("#announcer").textContent = message;
@@ -52,6 +94,7 @@ function renderMode() {
 }
 
 function selectMode(next) {
+  if (flowMode) return;
   mode = next === "official" ? "official" : "practice";
   writeJson(MODE_STORAGE_KEY, mode);
   renderMode();
@@ -206,7 +249,7 @@ function isRunning() {
 }
 
 function start() {
-  const raw = $("#seed").value.trim();
+  const raw = flowMode ? "" : $("#seed").value.trim();
   lastSeed = raw || String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
   const now = Date.now();
   state = mode === "official"
@@ -217,7 +260,8 @@ function start() {
   physicalEdit = null;
   $("#answer").value = "";
   $("#answer").disabled = false;
-  $("#seed-label").textContent = mode === "official" ? `官方輪 · seed ${lastSeed}` : `seed ${lastSeed}`;
+  $("#seed-label").textContent = flowMode ? `${flowRoundLabel("words")} · seed ${lastSeed}`
+    : mode === "official" ? `官方輪 · seed ${lastSeed}` : `seed ${lastSeed}`;
   $("#feedback").textContent = "打粵拼，Space 或 Enter 確認；未輸入時按 Backspace 改上一個音節。";
   showView("play");
   render();
@@ -314,6 +358,12 @@ function finish() {
   $("#result-summary").textContent =
     `本場 seed ${state.seed}：${metrics.words} 個詞、${metrics.totalSyllables} 個音節，` +
     `用時 ${formatClock(metrics.elapsedSeconds)}，啱 ${metrics.correct}、錯 ${metrics.errors}。`;
+  if (flowMode) {
+    // 流程內：寫入詞組輪結果，完場只可以接去第 3 輪，冇「再玩一場」。
+    flow = saveRoundResult(flow, "words", flowRoundResult("words", metrics)) ?? flow;
+    $("#play-again").hidden = true;
+    showFlowNext();
+  }
   showView("result");
   announce(`完成。正確音節每分鐘 ${metrics.correctPerMinute.toFixed(1)}，準確度 ${(metrics.accuracy * 100).toFixed(1)}%。`);
 }
@@ -403,6 +453,7 @@ function mount() {
   $("#answer").addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
   document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
   renderMode();
+  renderFlow();
   renderBest(readStore().best);
   showView("setup");
 }

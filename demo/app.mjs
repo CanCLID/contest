@@ -1,4 +1,5 @@
 import { createRun, submitAnswer, undoAnswer, getMetrics, getComponentStats, splitJyutping } from "./engine.mjs?v=9";
+import { flowHref, startFlow } from "./games/flow.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs?v=10";
 
 const $ = selector => document.querySelector(selector);
@@ -6,6 +7,12 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const tokens = flattenQuestions();
 const storageKey = "canclid-contest-demo-v2";
 const groupNames = { desktop: "電腦組", mobile: "手機組" };
+// 主入口預設「官方三輪試玩」（單字 → 詞組 → 篇章 → 成績卡）；單篇自由練習保留原本玩法。
+const flowNotes = {
+  official: "官方三輪＝單字 90 秒＋詞組 120 秒＋篇章計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。",
+  practice: "單篇練習＝現有玩法：同一篇示範粵文由頭打到尾，可以開粵拼提示，成績只存本機，唔入三輪流程。",
+};
+let flowChoice = "official";
 let group = matchMedia("(max-width: 760px)").matches ? "mobile" : "desktop";
 let boardGroup = group;
 let run = null;
@@ -345,6 +352,27 @@ function renderMetrics(now = Date.now()) {
   $(".time-track").setAttribute("aria-valuenow", String(Math.round(fraction)));
 }
 
+function playerName() {
+  return $("#nickname").value.trim().slice(0, 16) || "粵拼新星";
+}
+
+// 官方三輪試玩：記低開始時間同參加者資料，再交去第 1 輪（落石官方單字輪）。
+function startOfficialFlow() {
+  startFlow(Date.now(), { name: playerName(), group });
+  location.href = flowHref("single");
+}
+
+function renderFlowChoice() {
+  const official = flowChoice === "official";
+  const officialButton = $("#flow-official");
+  const practiceButton = $("#flow-practice");
+  officialButton.classList.toggle("selected", official);
+  officialButton.setAttribute("aria-pressed", String(official));
+  practiceButton.classList.toggle("selected", !official);
+  practiceButton.setAttribute("aria-pressed", String(!official));
+  $("#flow-note").textContent = official ? flowNotes.official : flowNotes.practice;
+}
+
 function startRound(replay = false) {
   if (countdownEnds !== null || run?.status === "running" || (replay && !round)) return;
   run = null;
@@ -355,7 +383,7 @@ function startRound(replay = false) {
   physicalEdit = null;
   answerVersion++;
   round = replay ? { ...round }
-    : { group, articleId: ARTICLE.id, name: $("#nickname").value.trim().slice(0, 16) || "粵拼新星", rules: 2 };
+    : { group, articleId: ARTICLE.id, name: playerName(), rules: 2 };
   hintsVisible = false;
   round.hintsUsed = false;
   countdownEnds = Date.now() + 3000;
@@ -626,7 +654,21 @@ $$("[data-board-group]").forEach(button => button.addEventListener("click", () =
   boardGroup = button.dataset.boardGroup;
   renderBoards();
 }));
-$("#start").addEventListener("click", () => startRound());
+$("#start").addEventListener("click", () => {
+  if (flowChoice === "official") {
+    startOfficialFlow();
+    return;
+  }
+  startRound();
+});
+$("#flow-official").addEventListener("click", () => {
+  flowChoice = "official";
+  renderFlowChoice();
+});
+$("#flow-practice").addEventListener("click", () => {
+  flowChoice = "practice";
+  renderFlowChoice();
+});
 $("#play-again").addEventListener("click", () => startRound(true));
 $("#edit-settings").addEventListener("click", resetRound);
 $("#cancel-run").addEventListener("click", resetRound);
@@ -742,6 +784,7 @@ window.addEventListener("storage", event => {
 });
 
 setPressed("[data-group]", "group", group);
+renderFlowChoice();
 $("#article-title").textContent = ARTICLE.title;
 $("#article-detail").textContent = `示範粵文 · ${tokens.length} 音節`;
 $("#board-article").textContent = `同篇比較：${ARTICLE.title}`;

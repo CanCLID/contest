@@ -4,12 +4,39 @@ import { readFileSync } from "node:fs";
 import { webcrypto } from "node:crypto";
 import vm from "node:vm";
 import * as engine from "../demo/engine.mjs";
+import * as flow from "../demo/games/flow.mjs";
 import * as questions from "../demo/questions.mjs";
 
 const storageKey = "canclid-contest-demo-v2";
+const flowStorageKey = "canclid-contest-official-flow";
 const tokens = questions.flattenQuestions();
 const source = readFileSync(new URL("../demo/app.mjs", import.meta.url), "utf8")
   .replace(/^import .*;\n/gm, "");
+
+// 官方三輪流程會寫 sessionStorage（flow.mjs 喺呼叫嗰刻先讀 globalThis），
+// 所以需要嘅測試暫時掛一個假 storage 上 globalThis。
+function sessionStub() {
+  const map = new Map();
+  return {
+    map,
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem(key, value) { map.set(key, String(value)); },
+    removeItem(key) { map.delete(key); },
+    read: key => (map.has(key) ? JSON.parse(map.get(key)) : null),
+  };
+}
+
+function withSessionStorage(run) {
+  const storage = sessionStub();
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
+  try {
+    return run(storage);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
+    else delete globalThis.sessionStorage;
+  }
+}
 
 // Model the DOM operations used by input, focus and persistence regressions.
 function element(tagName = "div") {
@@ -77,11 +104,12 @@ function openTab(store = new Map(), failures = {}) {
     return view;
   });
   const window = element();
+  const location = { href: "" };
   class Clock extends Date {
     static now() { return now; }
   }
   const context = vm.createContext({
-    ...engine, ...questions, crypto: webcrypto, Date: Clock, window,
+    ...engine, ...questions, ...flow, crypto: webcrypto, Date: Clock, window, location,
     document: {
       querySelector: get,
       querySelectorAll: selector => selector === ".view" ? views : [],
@@ -113,7 +141,7 @@ function openTab(store = new Map(), failures = {}) {
   vm.runInContext(source, context, { filename: "demo/app.mjs" });
   const evaluate = expression => vm.runInContext(expression, context);
   return {
-    get, evaluate,
+    get, evaluate, location,
     setTime(value) { now = value; },
     flushTimeouts() { timeouts.splice(0).forEach(callback => callback()); },
     records: () => JSON.parse(evaluate("JSON.stringify(records)")),
@@ -121,6 +149,11 @@ function openTab(store = new Map(), failures = {}) {
       window.fire("storage", { key: storageKey, newValue: store.get(storageKey) ?? null });
     },
   };
+}
+
+// 主入口預設「官方三輪試玩」；單篇練習嘅測試要先撳「單篇自由練習」。
+function choosePractice(tab) {
+  tab.get("#flow-practice").fire("click");
 }
 
 function readyRound(tab, name, at = 0) {
@@ -291,6 +324,7 @@ test("ruby hints only toggle during a run and preserve draft, selection, clock, 
   toggle.fire("click");
   assert.equal(tab.evaluate("round"), null);
   tab.evaluate('group = "mobile"');
+  choosePractice(tab);
   tab.get("#start").fire("click");
   toggle.fire("click");
   assert.equal(toggle.disabled, true);
@@ -525,6 +559,7 @@ test("round settings become a frozen summary, survive replay, and are editable o
   assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
   tab.get("#nickname").value = " <b>甲</b> ";
   tab.evaluate('group = "mobile"');
+  choosePractice(tab);
   tab.get("#start").fire("click");
   assert.equal(tab.get("#race-card").hidden, false);
   assert.equal(tab.get("#setup-card").hidden, true);
@@ -575,6 +610,7 @@ test("round settings become a frozen summary, survive replay, and are editable o
   assert.equal(tab.evaluate("group"), "desktop");
   assert.equal(tab.get("#arena-view").classList.contains("has-race"), false);
   tab.get("#nickname").value = "Beta";
+  choosePractice(tab);
   tab.get("#start").fire("click");
   assert.equal(tab.get("#round-name").textContent, "Beta");
   assert.equal(tab.get("#round-group").textContent, "電腦組");
@@ -996,4 +1032,39 @@ test("old rules and other articles are excluded from the current local leaderboa
   assert.deepEqual(names(tab.records()), ["Current"]);
   assert.match(textOf(tab.get("#local-board")), /Current/);
   assert.doesNotMatch(textOf(tab.get("#local-board")), /OldRules|OtherArticle|OldKey/);
+});
+
+test("主入口預設官方三輪試玩：撳開始會開流程再跳去第 1 輪落石", () => {
+  withSessionStorage(storage => {
+    const tab = openTab();
+    assert.equal(tab.get("#flow-official").getAttribute("aria-pressed"), "true");
+    assert.equal(tab.get("#flow-practice").getAttribute("aria-pressed"), "false");
+    assert.ok(tab.get("#flow-official").classList.contains("selected"));
+    assert.equal(tab.evaluate("flowChoice"), "official");
+    assert.match(tab.get("#flow-note").textContent, /官方三輪/);
+
+    tab.get("#nickname").value = "  阿甲  ";
+    tab.evaluate('group = "mobile"');
+    tab.get("#start").fire("click");
+
+    assert.equal(tab.evaluate("run"), null, "官方流程唔會喺主站開單篇賽");
+    const saved = storage.read(flowStorageKey);
+    assert.equal(saved.version, 1);
+    assert.deepEqual(saved.rounds, {});
+    assert.deepEqual(saved.player, { name: "阿甲", group: "mobile" });
+    assert.ok(Number.isFinite(saved.startedAt));
+    assert.equal(tab.location.href, "./games/rocks/?flow=1");
+
+    // 揀返「單篇自由練習」就照舊喺主站開單篇賽，唔會再寫流程。
+    const practice = openTab();
+    practice.get("#flow-practice").fire("click");
+    assert.equal(practice.get("#flow-practice").getAttribute("aria-pressed"), "true");
+    assert.equal(practice.get("#flow-official").getAttribute("aria-pressed"), "false");
+    assert.equal(practice.evaluate("flowChoice"), "practice");
+    assert.match(practice.get("#flow-note").textContent, /單篇練習/);
+    practice.get("#start").fire("click");
+    assert.equal(practice.get("#setup-card").hidden, true);
+    assert.equal(practice.get("#round-name").textContent, "粵拼新星");
+    assert.equal(storage.map.size, 1, "單篇練習唔會寫流程");
+  });
 });

@@ -20,21 +20,22 @@
         <span class="brand-type">粵拼競速</span>
       </a>
       <nav class="nav" aria-label="遊戲導覽">
-        <a class="nav-link" href="../">‹ 遊戲大廳</a>
+        <a id="lobby-link" class="nav-link" href="../">‹ 遊戲大廳</a>
         <a class="nav-link" href="../../index.html">試玩賽場</a>
       </nav>
       <span class="demo-badge"><span></span>幽靈競速</span>
     </header>
 
     <main id="main">
+      <p id="flow-banner" class="flow-banner" hidden></p>
       <section id="setup-view" class="view">
         <div class="hero">
           <h1>幽靈競速</h1>
-          <p class="ghost-tagline">揀一個幽靈對手，同佢鬥快打完全篇粵文。幽靈照住固定節奏跑，你嘅成績會即時同佢比較。</p>
+          <p id="tagline" class="ghost-tagline">揀一個幽靈對手，同佢鬥快打完全篇粵文。幽靈照住固定節奏跑，你嘅成績會即時同佢比較。</p>
         </div>
         <div class="arena-grid">
           <section class="setup-card">
-            <div class="setup-heading"><h2>揀對手</h2></div>
+            <div id="opponent-heading" class="setup-heading"><h2>揀對手</h2></div>
             <div id="opponent-options" class="ghost-picker" role="radiogroup" aria-label="幽靈對手"></div>
             <div class="article-info">
               <span class="field-label">今次嘅文章</span>
@@ -68,7 +69,7 @@
               <div id="player-track" class="lane-track" role="progressbar" aria-label="你嘅進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="player-bar" class="lane-fill"></div></div>
               <span id="player-value" class="lane-value">0 / 0 音節</span>
             </div>
-            <div class="lane ghost-lane">
+            <div id="ghost-lane" class="lane ghost-lane">
               <span class="lane-label">幽靈</span>
               <div id="ghost-track" class="lane-track" role="progressbar" aria-label="幽靈進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="ghost-bar" class="lane-fill"></div></div>
               <span id="ghost-value" class="lane-value">0%</span>
@@ -114,6 +115,7 @@
         </section>
 
         <div class="round-actions">
+          <a id="flow-next" class="outline-button flow-next" href="../summary/" hidden>查看三輪成績 →</a>
           <button id="play-again" class="outline-button" hidden>再玩一場 <span aria-hidden="true">↗</span></button>
           <button id="edit-settings" class="text-button" hidden>揀過對手</button>
         </div>

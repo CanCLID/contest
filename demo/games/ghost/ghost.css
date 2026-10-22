@@ -4,6 +4,9 @@
 #race-view .race-card, #race-view .round-actions { max-width: 1000px; margin-inline: auto; }
 .nav-link { text-decoration: none; }
 .ghost-tagline { margin: 12px 0 0; color: var(--muted); font-size: 16px; }
+/* 官方三輪流程：頁頂橫額同完場嘅下一輪掣（?flow=1 專用，平時收埋）。 */
+.flow-banner { margin: 24px 0 0; padding: 12px 16px; border: 1px solid #cfddc8; border-left: 4px solid var(--green); border-radius: 8px; background: #eaf1e5; font-size: 15px; }
+.round-actions .flow-next { text-decoration: none; font-weight: 600; }
 
 .ghost-picker { display: grid; gap: 10px; }
 .opponent-option { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px; border: 1px solid #cbd3c3; border-radius: 8px; background: var(--white); cursor: pointer; }

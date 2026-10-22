@@ -8,7 +8,12 @@
   <title>粵拼競速 · CanCLID</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-  <script src="./app.mjs?v=14" type="module"></script>
+  <style>
+    /* 官方三輪試玩：設定卡嘅玩法選擇，其餘樣式沿用 styles.css。 */
+    .flow-field { margin-bottom: 4px; }
+    .flow-note { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+  </style>
+  <script src="./app.mjs?v=15" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">跳去主要內容</a>
@@ -92,7 +97,15 @@
           <aside id="setup-card" class="setup-card">
             <div class="setup-heading"><h2>試玩設定</h2></div>
             <fieldset id="setup-fields">
-              <label class="field-label" for="nickname">暱稱</label>
+              <div class="flow-field">
+                <span class="field-label" id="flow-label">玩法</span>
+                <div class="segmented" role="group" aria-labelledby="flow-label">
+                  <button id="flow-official" class="selected" type="button" aria-pressed="true">官方三輪試玩</button>
+                  <button id="flow-practice" type="button" aria-pressed="false">單篇自由練習</button>
+                </div>
+                <p id="flow-note" class="flow-note">官方三輪＝單字 90 秒＋詞組 120 秒＋篇章計時，行完出三輪成績卡；單篇練習＝現有玩法（可開提示，不入流程）。</p>
+              </div>
+              <label class="field-label group-heading" for="nickname">暱稱</label>
               <input id="nickname" class="nickname-input" maxlength="16" placeholder="粵拼新星" autocomplete="off">
               <legend class="sr-only">本輪試玩設定</legend>
               <div class="field-label group-heading" id="group-label">參賽組別</div>

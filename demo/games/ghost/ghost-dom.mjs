@@ -1,10 +1,21 @@
 // Ghost Race — DOM layer for demo/games/ghost/.
-// Renders the two-lane track, drives the shared engine (createRun /
-// submitAnswer / undoAnswer / getMetrics) with the same input rules as
-// demo/app.mjs, and keeps the player's best timeline in localStorage.
+// Renders the track (two lanes, or just the player's own lane in 「淨計時」
+// mode), drives the shared engine (createRun / submitAnswer / undoAnswer /
+// getMetrics) with the same input rules as demo/app.mjs, and keeps the
+// player's best timeline in localStorage. With ?flow=1 it locks 淨計時 and
+// writes the passage round into the official three-round flow store.
 import { createRun, getMetrics, splitJyutping, submitAnswer, undoAnswer } from "../../engine.mjs";
 import { ARTICLE, QUESTIONS, flattenQuestions } from "../../questions.mjs";
 import { OFFICIAL_THRESHOLDS, formatClock, readJson, roundMetrics, writeJson } from "../common.mjs";
+import {
+  flowNextHref,
+  flowNextLabel,
+  flowRoundLabel,
+  flowRoundResult,
+  readFlow,
+  saveRoundResult,
+  startFlow,
+} from "../flow.mjs";
 import { GHOST_STORAGE_KEY, builtInGhosts, createGhostRace, ghostProgressAt, raceResult, recordTimelineFromTimes } from "./ghost.mjs";
 
 export { GHOST_STORAGE_KEY };
@@ -36,6 +47,45 @@ let best = readBest();
 // clock reading of the submit that completed syllable `position + 1`. Undoing
 // a syllable drops its entry, so the saved best replays what really happened.
 const submitTimes = [];
+
+// 官方三輪流程（?flow=1）：鎖定「淨計時」（唔設對手），完場寫入 flow store 再接去成績卡。
+const flowMode = (() => {
+  try {
+    return new URLSearchParams(location.search).get("flow") === "1";
+  } catch {
+    return false;
+  }
+})();
+let flow = flowMode ? readFlow() ?? startFlow() : null;
+if (flowMode) selectedOpponentId = "none";
+
+// 「淨計時」：冇幽靈時間線，賽道只顯示自己嗰條進度條。
+function soloOpponent() {
+  return { id: "none", label: "淨計時（唔設對手）", correctPerMinute: 0, total, timeline: [] };
+}
+
+function renderFlow() {
+  if (!flowMode) return;
+  $("#flow-banner").hidden = false;
+  $("#flow-banner").textContent = `${flowRoundLabel("passage")} · 淨計時（唔設對手）· 退出流程會丟棄三輪進度。`;
+  $("#lobby-link").textContent = "‹ 退出流程";
+  $("#lobby-link").href = "../../index.html";
+  $("#lobby-link").title = "退出會丟棄三輪流程進度";
+  $("#opponent-heading").hidden = true;
+  $("#opponent-options").hidden = true;
+  $("#best-card").hidden = true;
+  $("#start-note").textContent = "官方流程第 3 輪：篇章 · 淨計時（唔設對手），倒數 3 秒開始。";
+  $("#tagline").textContent = "官方流程第 3 輪：篇章淨計時，唔設幽靈對手，打完全篇就有本輪成績。";
+}
+
+function showFlowNext() {
+  const next = $("#flow-next");
+  next.hidden = false;
+  next.href = flowNextHref("passage");
+  next.textContent = flowNextLabel("passage");
+  $("#play-again").hidden = true;
+  $("#edit-settings").hidden = true;
+}
 
 function announce(message) {
   $("#announcer").textContent = message;
@@ -98,7 +148,11 @@ function opponentOption({ id, label, detail, disabled = false }) {
 
 function renderOpponents() {
   if (!currentOpponent()) selectedOpponentId = ghosts[0].id;
-  const options = [];
+  const options = [opponentOption({
+    id: "none",
+    label: "淨計時（唔設對手）",
+    detail: "賽道只顯示自己，專心計自己嘅時間同分數",
+  })];
   if (best) {
     options.push(opponentOption({
       id: "best",
@@ -125,7 +179,7 @@ function renderOpponents() {
 
 function renderBestCard() {
   const card = $("#best-card");
-  card.hidden = !best;
+  card.hidden = flowMode || !best;
   if (!best) return;
   $("#best-time").textContent = formatClock(best.elapsedSeconds);
   $("#best-speed").textContent = `${Math.round(best.correctPerMinute)} 音節／分`;
@@ -136,6 +190,7 @@ function renderBestCard() {
 }
 
 function currentOpponent() {
+  if (selectedOpponentId === "none") return soloOpponent();
   if (selectedOpponentId === "best") {
     return best ? {
       id: "best",
@@ -260,6 +315,7 @@ function renderRace(now = Date.now()) {
   const ghost = race ? ghostProgressAt(race, now) : 0;
   setBar("#player-bar", "#player-track", metrics.progress);
   setBar("#ghost-bar", "#ghost-track", ghost);
+  $("#ghost-lane").hidden = opponent?.id === "none";
   $("#player-value").textContent = `${metrics.submitted} / ${total} 音節`;
   $("#ghost-value").textContent = `${Math.round(ghost * 100)}%`;
   $("#time").textContent = formatClock(metrics.elapsedSeconds);
@@ -346,14 +402,15 @@ function ghostLine(summary) {
 }
 
 function renderResult(summary, improved) {
-  $("#result-title").textContent = summary.verdict;
+  const solo = opponent?.id === "none";
+  $("#result-title").textContent = solo ? "完成喇！" : summary.verdict;
   $("#result-summary").textContent = `${opponent.label} · 全文 ${total} 音節`;
   const rows = [
     ["完成時間", formatClock(summary.elapsedSeconds)],
     ["正確音節／分鐘", String(Math.round(summary.correctPerMinute))],
     ["答案準確度", `${Math.round(summary.accuracyPercent)}%`],
     ["正式分", `${summary.officialScore.toFixed(1)}（準確度門檻 ${Math.round((summary.threshold ?? 0) * 100)}%${summary.meetsThreshold ? "，達標" : "，未達標"}）`],
-    ["幽靈進度", ghostLine(summary)],
+    ["幽靈進度", solo ? "—" : ghostLine(summary)],
   ];
   $("#result-details").replaceChildren(...rows.map(([term, value]) => {
     const row = document.createElement("div");
@@ -419,8 +476,18 @@ function finishRace(now) {
   $("#typing-form").hidden = true;
   $("#result").hidden = false;
   $("#give-up").hidden = true;
-  $("#play-again").hidden = false;
-  $("#edit-settings").hidden = false;
+  if (flowMode) {
+    // 流程內：寫入篇章輪結果，完場只可以睇三輪成績卡。
+    flow = saveRoundResult(flow, "passage", flowRoundResult("passage", {
+      correct: metrics.correct,
+      submitted: metrics.submitted,
+      elapsedSeconds: metrics.elapsedSeconds,
+    })) ?? flow;
+    showFlowNext();
+  } else {
+    $("#play-again").hidden = false;
+    $("#edit-settings").hidden = false;
+  }
   $("#race-status").textContent = "本輪已完成";
   $("#status-dot").classList.remove("live");
   document.body.classList.remove("running");
@@ -453,7 +520,9 @@ function startRound() {
   $("#countdown-overlay").hidden = false;
   $("#countdown-number").textContent = String(Math.ceil(COUNTDOWN_MS / 1000));
   $("#race-status").textContent = "準備起跑";
-  $("#race-opponent").textContent = `${opponent.label} · 目標時間 ${formatClock(targetSeconds(opponent))}`;
+  $("#race-opponent").textContent = opponent.id === "none"
+    ? `${opponent.label} · 全文 ${total} 音節`
+    : `${opponent.label} · 目標時間 ${formatClock(targetSeconds(opponent))}`;
   $("#status-dot").classList.remove("live");
   $("#answer").disabled = false;
   $("#answer").placeholder = "倒數後輸入粵拼";
@@ -478,7 +547,7 @@ function tick() {
       return;
     }
     run = createRun({ now: countdownEnds, questionSet: tokens });
-    race = createGhostRace({ now: countdownEnds, total, timeline: opponent.timeline });
+    race = opponent.id === "none" ? null : createGhostRace({ now: countdownEnds, total, timeline: opponent.timeline });
     countdownEnds = null;
     $("#countdown-overlay").hidden = true;
     $("#race-status").textContent = "競速進行中";
@@ -523,6 +592,7 @@ function resetRound() {
 }
 
 function selectOpponent(id) {
+  if (flowMode) return;
   selectedOpponentId = id;
   $$(".opponent-option").forEach(option => {
     option.classList.toggle("selected", option.dataset.opponent === id);
@@ -616,6 +686,7 @@ $("#article-detail").textContent = `示範粵文 · ${total} 音節 · 同試玩
 $("#completed-count").textContent = `0 / ${total} 音節`;
 $("#answer").disabled = true;
 renderOpponents();
+renderFlow();
 renderBestCard();
 renderPassage();
 renderRace();

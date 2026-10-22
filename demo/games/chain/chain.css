@@ -35,6 +35,9 @@ kbd { font: inherit; font-size: 14px; border: 1px solid var(--line); border-radi
 
 .hero { padding: 32px 0 24px; }
 .hero-note { margin: 8px 0 0; color: var(--muted); }
+/* 官方三輪流程：頁頂橫額同完場嘅下一輪掣（?flow=1 專用，平時收埋）。 */
+.flow-banner { margin: 24px 0 0; padding: 12px 16px; border: 1px solid #cfddc8; border-left: 4px solid var(--green); border-radius: 8px; background: #eaf1e5; font-size: 15px; }
+.result-actions .flow-next { justify-content: center; text-decoration: none; }
 .panel-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
 .panel { background: var(--white); border: 1px solid var(--line); border-radius: 14px; padding: 24px; }
 .panel h2 { margin-bottom: 12px; }

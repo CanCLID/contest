@@ -14,12 +14,13 @@
   <a class="skip-link" href="#main">跳去主要內容</a>
   <div class="site-shell">
     <header class="site-header">
-      <a class="back-link" href="../">‹ 遊戲大廳</a>
+      <a id="lobby-link" class="back-link" href="../">‹ 遊戲大廳</a>
       <span class="game-badge"><span aria-hidden="true"></span>小遊戲</span>
       <a class="back-link" href="../../index.html">試玩賽場</a>
     </header>
 
     <main id="main">
+      <p id="flow-banner" class="flow-banner" hidden></p>
       <section id="setup-view" class="view">
         <div class="hero">
           <h1>粵拼詞鏈</h1>
@@ -42,12 +43,12 @@
             <h2>開始</h2>
             <form id="setup-form" autocomplete="off">
               <span class="field-label" id="mode-label">模式</span>
-              <div class="segmented" role="group" aria-labelledby="mode-label">
+              <div id="mode-picker" class="segmented" role="group" aria-labelledby="mode-label">
                 <button id="mode-practice" class="selected" type="button" aria-pressed="true">練習</button>
                 <button id="mode-official" type="button" aria-pressed="false">官方</button>
               </div>
               <p id="mode-note" class="field-note">練習模式：打完 20 個詞完場，成績只存本機。</p>
-              <label class="field-label" for="seed">Seed（可以留空）</label>
+              <label id="seed-field" class="field-label" for="seed">Seed（可以留空）</label>
               <input id="seed" class="seed-input" name="seed" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="留空＝隨機" maxlength="24" aria-describedby="seed-note">
               <p id="seed-note" class="field-note">同一個 seed 會出同一串詞，可以同朋友用同一串詞對賽。</p>
               <button id="start" class="start-button" type="submit">開始遊戲 <span aria-hidden="true">↗</span></button>
@@ -96,8 +97,9 @@
           <p id="window-note" class="field-note" hidden></p>
           <p id="result-summary" class="field-note"></p>
           <div class="result-actions">
+            <a id="flow-next" class="start-button flow-next" href="../ghost/?flow=1" hidden>前往第 3 輪：篇章 →</a>
             <button id="play-again" class="start-button" type="button">再玩一場 <span aria-hidden="true">↗</span></button>
-            <a class="back-link" href="../">返去遊戲大廳</a>
+            <a id="result-lobby" class="back-link" href="../">返去遊戲大廳</a>
           </div>
         </div>
       </section>
