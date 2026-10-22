@@ -47,6 +47,9 @@ h2 { font-size: 22px; line-height: 1.4; margin: 0; }
 .game-tag.practice { color: var(--orange); background: var(--orange-light); border: 1px solid #f0cfae; }
 .game-cta { margin-top: auto; padding-top: 8px; font-weight: 600; color: var(--ink); }
 
+.flow-pointer { margin: 0 0 20px; padding: 14px 18px; background: var(--orange-light); border: 1px solid #f0cfae; border-radius: 12px; }
+.flow-pointer a { color: var(--ink); font-weight: 600; }
+
 .lobby-note { margin: 28px 0 0; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 .lobby-note a { color: var(--ink); }
 

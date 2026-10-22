@@ -1109,8 +1109,10 @@ test("設定卡「自由練習」捷徑：單篇留喺本頁，其餘連去遊�
 
   const lobby = readFileSync(new URL("../demo/games/index.html", import.meta.url), "utf8");
   assert.match(lobby, /href="\.\.\/\.\.\/index\.html\?practice=1"/, "大廳要有單篇練習卡");
-  assert.equal((lobby.match(/class="game-card"/g) ?? []).length, 6, "大廳共 6 張卡");
+  assert.equal((lobby.match(/class="game-card"/g) ?? []).length, 5, "大廳係練習集中地，共 5 張卡");
   assert.match(lobby, /單篇練習/);
+  assert.doesNotMatch(lobby, /game-card[^>]*flow=1/, "官方三輪流程唔係小遊戲，大廳唔准有 flow=1 卡");
+  assert.match(lobby, /flow-pointer/, "大廳要有去試玩賽場開始官方流程嘅提示條");
 });
 
 test("玩法頁六張卡：官方流程、計分方法、三個遊戲、練習工具、組別、本機示範", () => {
