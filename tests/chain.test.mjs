@@ -487,12 +487,12 @@ test("DOM 層：開局、逐個音節打出倍率、退回重打、完場同寫�
   assert.equal(record.best.seed, "dom-seed");
   assert.ok(record.best.officialScore > 0);
   assert.equal(record.best.meetsThreshold, true);
-  assert.match(tab.get("#result-best").textContent, /officialScore/);
+  assert.match(tab.get("#result-best").textContent, /正式分/);
 
   tab.get("#play-again").fire("click");
   assert.equal(tab.get("#seed").value, "dom-seed", "再玩一場保留同一個 seed");
   assert.equal(tab.get("#play-view").hidden, true);
-  assert.match(tab.get("#best-note").textContent, /本地最佳：officialScore/);
+  assert.match(tab.get("#best-note").textContent, /本地最佳：正式分/);
 });
 
 test("DOM 層：手機原生輸入、IME 拒絕同 Enter 提交", () => {

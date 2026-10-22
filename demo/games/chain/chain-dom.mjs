@@ -144,7 +144,7 @@ function formatWhen(at) {
 
 function renderBest(best) {
   $("#best-note").textContent = best
-    ? `本地最佳：officialScore ${best.officialScore.toFixed(1)}（${formatWhen(best.at)}，seed ${best.seed}）`
+    ? `本地最佳：正式分 ${best.officialScore.toFixed(1)}（${formatWhen(best.at)}，seed ${best.seed}）`
     : "本地最佳：未有紀錄。";
 }
 
@@ -262,7 +262,7 @@ function finish() {
   $("#result-score").textContent = metrics.officialScore.toFixed(1);
   $("#result-threshold").textContent = metrics.meetsThreshold ? "達標" : "未達標（要 90% 準確度）";
   $("#result-best").textContent = best
-    ? `officialScore ${best.officialScore.toFixed(1)}（${formatWhen(best.at)}）`
+    ? `正式分 ${best.officialScore.toFixed(1)}（${formatWhen(best.at)}）`
     : "未有紀錄";
   $("#result-detail").textContent = `連擊 ${metrics.combo} · 得分 ${metrics.score.toFixed(1)}`;
   $("#result-summary").textContent =

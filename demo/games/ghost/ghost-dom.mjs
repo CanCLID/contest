@@ -338,7 +338,7 @@ function renderResult(summary, improved) {
     ["完成時間", formatClock(summary.elapsedSeconds)],
     ["正確音節／分鐘", String(Math.round(summary.correctPerMinute))],
     ["答案準確度", `${Math.round(summary.accuracyPercent)}%`],
-    ["官方計分", `${summary.officialScore.toFixed(1)}（準確度門檻 ${Math.round((summary.threshold ?? 0) * 100)}%${summary.meetsThreshold ? "，達標" : "，未達標"}）`],
+    ["正式分", `${summary.officialScore.toFixed(1)}（準確度門檻 ${Math.round((summary.threshold ?? 0) * 100)}%${summary.meetsThreshold ? "，達標" : "，未達標"}）`],
     ["幽靈進度", ghostLine(summary)],
   ];
   $("#result-details").replaceChildren(...rows.map(([term, value]) => {
