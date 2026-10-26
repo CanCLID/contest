@@ -121,3 +121,20 @@ body.playing .typing-surface { cursor: text; }
   .metric:nth-child(3) { border-left: 0; }
   .result-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Phrase trials keep the full raw draft separate from the unsegmented prompt. */
+.input-mode-picker button { padding-inline: 8px; font-size: 14px; white-space: normal; }
+button:disabled { cursor: wait; opacity: .6; }
+.secondary-button { padding: 9px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--white); color: var(--green); font-size: 14px; }
+#engine-status[data-error="true"] { color: #a12e2e; }
+.phrase-input .cell-input { min-height: 12px; font-size: 16px; }
+.draft-line { min-width: 0; }
+#draft { overflow-wrap: anywhere; min-width: 0; }
+.phrase-review { margin-top: 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.phrase-review h2 { margin: 0 0 8px; font-size: 16px; }
+.review-parts { display: flex; flex-wrap: wrap; gap: 8px 16px; list-style: none; margin: 0 0 8px; padding: 0; }
+.review-part { display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: 16px; }
+.review-glyph { font-family: var(--sans); font-size: 18px; }
+.review-part.correct .review-glyph { color: var(--green); }
+.review-part.incorrect .review-glyph { color: #a12e2e; }
+#result-input-mode { margin-top: 16px; }

@@ -7,6 +7,9 @@ import * as questions from "../demo/questions.mjs";
 import * as common from "../demo/games/common.mjs";
 import * as flowApi from "../demo/games/flow.mjs";
 import * as ghost from "../demo/games/ghost/ghost.mjs";
+import * as freeInput from "../demo/games/free-input.mjs";
+const realFreeInput = await freeInput.loadFreeInput();
+const FREE_BEST_KEY = `${GHOST_STORAGE_KEY}:${freeInput.FREE_INPUT_RULE_VERSION}`;
 import * as i18nApi from "../demo/i18n.mjs";
 import { setLocale, t } from "../demo/i18n.mjs";
 import { createRun, submitAnswer, getMetrics } from "../demo/engine.mjs";
@@ -37,7 +40,7 @@ const questionSet = [
 ];
 const start = () => createRun({ now: 1000, questionSet });
 
-test("a demo ghost finishes the article at roughly the requested speed", () => {
+test("a demo ghost finishes the article at roughly the requested speed", async () => {
   for (const correctPerMinute of [55, 80, 42]) {
     const ghost = createDemoGhost({ correctPerMinute, total: 64, seed: 7 });
     assert.equal(ghost.timeline.length, 64, String(correctPerMinute));
@@ -59,7 +62,7 @@ test("a demo ghost finishes the article at roughly the requested speed", () => {
   }
 });
 
-test("a demo ghost is reproducible from its seed and jitters between seeds", () => {
+test("a demo ghost is reproducible from its seed and jitters between seeds", async () => {
   const first = createDemoGhost({ correctPerMinute: 55, total: 20, seed: 99 });
   const repeat = createDemoGhost({ correctPerMinute: 55, total: 20, seed: 99 });
   const other = createDemoGhost({ correctPerMinute: 55, total: 20, seed: 100 });
@@ -72,7 +75,7 @@ test("a demo ghost is reproducible from its seed and jitters between seeds", () 
     Array.from({ length: 20 }, (_, index) => Math.round(fixed / 20 * (index + 1))), "要有 jitter");
 });
 
-test("the built-in opponents are the 55 and 80 syllables-per-minute demo ghosts", () => {
+test("the built-in opponents are the 55 and 80 syllables-per-minute demo ghosts", async () => {
   assert.deepEqual(GHOST_CPM_PRESETS, [55, 80]);
   const ghosts = builtInGhosts(60);
   assert.deepEqual(ghosts.map(ghost => ghost.correctPerMinute), GHOST_CPM_PRESETS);
@@ -84,7 +87,7 @@ test("the built-in opponents are the 55 and 80 syllables-per-minute demo ghosts"
   }
 });
 
-test("ghost progress starts at zero, follows the timeline and finishes past the last entry", () => {
+test("ghost progress starts at zero, follows the timeline and finishes past the last entry", async () => {
   const timeline = [{ at: 1000, index: 2 }, { at: 3000, index: 6 }];
   const race = createGhostRace({ now: 5000, total: 8, timeline });
   assert.equal(ghostProgressAt(race, 5000), 0, "開賽一刻");
@@ -100,7 +103,7 @@ test("ghost progress starts at zero, follows the timeline and finishes past the 
     [0, 0.0625, 0.125, 0.1875, 0.25], "起點到第一項之間亦要線性插值");
 });
 
-test("progress stays zero without a usable race and clamps to a single-entry timeline", () => {
+test("progress stays zero without a usable race and clamps to a single-entry timeline", async () => {
   assert.equal(ghostProgressAt(createGhostRace({ now: 0, total: 8 }), 60000), 0);
   assert.equal(ghostProgressAt(undefined, 1000), 0);
   assert.equal(ghostProgressAt({}, 1000), 0);
@@ -113,7 +116,7 @@ test("progress stays zero without a usable race and clamps to a single-entry tim
   assert.equal(ghostProgressAt(instant, 100), 1, "一開賽就衝線");
 });
 
-test("a ghost race rejects an invalid start, length or timeline", () => {
+test("a ghost race rejects an invalid start, length or timeline", async () => {
   assert.throws(() => createGhostRace({ now: NaN, total: 4 }), TypeError);
   assert.throws(() => createGhostRace({ now: 0, total: 0 }), TypeError);
   assert.throws(() => createGhostRace({ now: 0, total: 2.5 }), TypeError);
@@ -129,7 +132,7 @@ test("a ghost race rejects an invalid start, length or timeline", () => {
     { startedAt: 100, total: 4, timeline: [{ at: 10, index: 1 }] });
 });
 
-test("recordTimeline rebuilds evenly spaced entries from a finished run", () => {
+test("recordTimeline rebuilds evenly spaced entries from a finished run", async () => {
   let run = start();
   run = submitAnswer(run, "nei", 4000);
   run = submitAnswer(run, "hou", 7000);
@@ -154,7 +157,7 @@ test("recordTimeline rebuilds evenly spaced entries from a finished run", () => 
   assert.throws(() => recordTimeline(thirds), TypeError, "冇結束時間就唔可以亂估");
 });
 
-test("createTimeline validates and copies a recorded timeline", () => {
+test("createTimeline validates and copies a recorded timeline", async () => {
   const input = [{ at: 100, index: 1 }, { at: 900, index: 2 }];
   const timeline = createTimeline(input);
   assert.deepEqual(timeline, input);
@@ -182,7 +185,7 @@ test("createTimeline validates and copies a recorded timeline", () => {
   assert.throws(() => createTimeline([{ at: 10, index: 2 }, { at: 20, index: 1 }]), TypeError);
 });
 
-test("recordTimelineFromTimes turns absolute submit times into a relative timeline", () => {
+test("recordTimelineFromTimes turns absolute submit times into a relative timeline", async () => {
   assert.deepEqual(recordTimelineFromTimes(1000, [1500, 2400, 2400, 5100]), [
     { at: 500, index: 1 },
     { at: 1400, index: 2 },
@@ -202,7 +205,7 @@ test("recordTimelineFromTimes turns absolute submit times into a relative timeli
   assert.throws(() => recordTimelineFromTimes(1000, [1200, 1100]), TypeError, "時間倒退就唔係真時間線");
 });
 
-test("real submit times survive the stored-best round-trip and replay as a ghost", () => {
+test("real submit times survive the stored-best round-trip and replay as a ghost", async () => {
   const tokens = flattenQuestions();
   let run = createRun({ now: 1000, questionSet: tokens });
   const times = [];
@@ -260,7 +263,7 @@ const DOM_SOURCE = readFileSync(new URL("../demo/games/ghost/ghost-dom.mjs", imp
   .replace(/^export \{[^}]*\};\n/gm, "");
 
 // flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
-function withFlowStorage(run) {
+async function withFlowStorage(run) {
   const map = new Map();
   const storage = {
     map,
@@ -272,19 +275,20 @@ function withFlowStorage(run) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
   try {
-    return run(storage);
+    return await run(storage);
   } finally {
     if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
     else delete globalThis.sessionStorage;
   }
 }
 
-function ghostTab({ flowMode = false } = {}) {
+function ghostTab({ flowMode = false, loader = async () => realFreeInput, questionSource = questions } = {}) {
   let now = 0;
   let tickerId = 0;
   const store = new Map();
   const elements = new Map();
   const tickers = new Map();
+  const timers = [];
 
   const makeElement = () => {
     const classes = new Set();
@@ -297,7 +301,7 @@ function ghostTab({ flowMode = false } = {}) {
       get textContent() { return text; },
       set textContent(next) { textWrites += 1; text = String(next); },
       get textWrites() { return textWrites; },
-      dataset: {}, className: "", selectionStart: 0, children: [],
+      dataset: {}, className: "", selectionStart: 0, selectionEnd: 0, children: [],
       classList: {
         add: (...names) => names.forEach(name => classes.add(name)),
         remove: (...names) => names.forEach(name => classes.delete(name)),
@@ -308,7 +312,7 @@ function ghostTab({ flowMode = false } = {}) {
       getAttribute: name => attributes.get(name) ?? null,
       append(...items) { node.children.push(...items); },
       replaceChildren(...items) { node.children = items; },
-      scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange() {},
+      scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange(start, end) { node.selectionStart = start; node.selectionEnd = end; },
       addEventListener(type, listener) {
         if (!own.has(type)) own.set(type, []);
         own.get(type).push(listener);
@@ -333,7 +337,7 @@ function ghostTab({ flowMode = false } = {}) {
   }
 
   vm.runInContext(DOM_SOURCE, vm.createContext({
-    ...engine, ...questions, ...common, ...ghost, ...flowApi,
+    ...engine, ...questionSource, ...common, ...ghost, ...flowApi, ...freeInput, loadFreeInput: loader,
     Date: Clock,
     location: { search: flowMode ? "?flow=1" : "", href: "" },
     URLSearchParams,
@@ -348,6 +352,7 @@ function ghostTab({ flowMode = false } = {}) {
     writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
     setInterval(callback) { tickerId += 1; tickers.set(tickerId, callback); return tickerId; },
     clearInterval(id) { tickers.delete(id); },
+    setTimeout(callback) { timers.push(callback); return timers.length; },
   }), { filename: "demo/games/ghost/ghost-dom.mjs" });
 
   return {
@@ -355,7 +360,10 @@ function ghostTab({ flowMode = false } = {}) {
     store,
     setTime(value) { now = value; },
     tick() { [...tickers.values()].forEach(callback => callback()); },
-    saved: () => JSON.parse(store.get(GHOST_STORAGE_KEY) ?? "null"),
+    ready: () => new Promise(resolve => setImmediate(resolve)),
+    flushTimers() { while (timers.length) timers.shift()(); },
+    saved: () => JSON.parse(store.get(FREE_BEST_KEY) ?? "null"),
+    trace: () => JSON.parse(store.get(`${GHOST_STORAGE_KEY}:traces:${freeInput.FREE_INPUT_RULE_VERSION}`) ?? "[]").at(-1),
     start() { get("#start").fire("click"); },
     type(text, at) {
       now = at;
@@ -370,8 +378,9 @@ function ghostTab({ flowMode = false } = {}) {
   };
 }
 
-test("the DOM layer times every submit for real and saves a replayable best", () => {
+test("the DOM layer times every submit for real and saves a replayable best", async () => {
   const tab = ghostTab();
+  await tab.ready();
   const tokens = flattenQuestions();
   const startedAt = 3000;
   // 400 / 570 / 740 / 910 / 1080 ms, then repeat: a player, not a metronome.
@@ -389,7 +398,7 @@ test("the DOM layer times every submit for real and saves a replayable best", ()
     if (index === 2) {
       // 撤回第 3 個音節再打過：時間線要記最後一次提交。
       tab.backspace();
-      tab.backspace(tokens[index - 1].answers[0].length);
+      tab.backspace(tokens[index].answers[0].length);
       clock += 900;
       tab.type(token.answers[0], clock);
       expected[expected.length - 1] = clock - startedAt;
@@ -398,7 +407,8 @@ test("the DOM layer times every submit for real and saves a replayable best", ()
 
   const saved = tab.saved();
   assert.ok(saved, "完場要寫入本機最佳");
-  assert.equal(saved.version, 1, "存檔格式版本不變");
+  assert.equal(saved.version, 2);
+  assert.equal(saved.rulesVersion, freeInput.FREE_INPUT_RULE_VERSION);
   assert.equal(saved.total, tokens.length);
   assert.equal(saved.timeline.length, tokens.length);
   assert.deepEqual(saved.timeline.map(entry => entry.index), tokens.map((_, index) => index + 1));
@@ -416,7 +426,7 @@ test("the DOM layer times every submit for real and saves a replayable best", ()
   assert.equal(tab.get("#result").hidden, false, "完場要顯示結果");
 });
 
-test("the DOM layer records real submit times and saves them in the old shape", () => {
+test("the DOM layer records real submit times and saves them in the old shape", async () => {
   assert.match(domSource, /import \{[^}]*recordTimelineFromTimes[^}]*\} from "\.\/ghost\.mjs"/);
   assert.doesNotMatch(domSource, /\brecordTimeline\b/, "唔應該再用模擬時間線");
   assert.match(domSource, /const now = Date\.now\(\);/);
@@ -428,7 +438,7 @@ test("the DOM layer records real submit times and saves them in the old shape", 
   assert.match(domSource, /const usable = saved\.timeline\.every/);
 });
 
-test("a recorded run replays as a ghost that finishes with the player's own time", () => {
+test("a recorded run replays as a ghost that finishes with the player's own time", async () => {
   const tokens = flattenQuestions();
   let run = createRun({ now: 0, questionSet: tokens });
   tokens.forEach((token, index) => { run = submitAnswer(run, token.answers[0], (index + 1) * 1000); });
@@ -462,7 +472,7 @@ test("a recorded run replays as a ghost that finishes with the player's own time
   assert.equal(summary.leadSyllables, 0);
 });
 
-test("raceResult combines the official metrics with the ghost comparison", () => {
+test("raceResult combines the official metrics with the ghost comparison", async () => {
   const official = roundMetrics({ correct: 48, submitted: 60, seconds: 60 },
     { threshold: OFFICIAL_THRESHOLDS.passage });
   const base = {
@@ -503,7 +513,7 @@ test("raceResult combines the official metrics with the ghost comparison", () =>
   assert.equal(tie.leadSyllables, 0);
 });
 
-test("raceResult falls back to a metrics ratio and clamps stray ghost progress", () => {
+test("raceResult falls back to a metrics ratio and clamps stray ghost progress", async () => {
   const ratioOnly = raceResult({
     playerMetrics: { accuracy: 0.9, progress: 1, total: 10, officialScore: 42, meetsThreshold: true, threshold: 0.85 },
     ghostProgress: 0.5,
@@ -520,14 +530,14 @@ test("raceResult falls back to a metrics ratio and clamps stray ghost progress",
   assert.throws(() => raceResult({ ghostProgress: 0.5 }), TypeError);
 });
 
-test("the best-run storage key is agreed once in the pure module and reused by the DOM layer", () => {
+test("the best-run storage key is agreed once in the pure module and reused by the DOM layer", async () => {
   assert.equal(GHOST_STORAGE_KEY, "canclid-contest-games-ghost");
   assert.match(domSource, /GHOST_STORAGE_KEY/);
   assert.match(domSource, /import \{[^}]*GHOST_STORAGE_KEY[^}]*\} from "\.\/ghost\.mjs"/);
   assert.doesNotMatch(domSource, /"canclid-contest-games-ghost"/, "key 只喺 ghost.mjs 定義一次");
 });
 
-test("the page skeleton links the lobby, the arena and its own assets, and every queried id exists", () => {
+test("the page skeleton links the lobby, the arena and its own assets, and every queried id exists", async () => {
   assert.match(html, /<link rel="stylesheet" href="\.\/ghost\.css">/);
   assert.match(html, /<script src="\.\/ghost-dom\.mjs" type="module"><\/script>/);
   assert.match(html, /href="\.\.\/"/, "要連返遊戲大廳");
@@ -539,7 +549,7 @@ test("the page skeleton links the lobby, the arena and its own assets, and every
   for (const id of new Set(ids)) assert.ok(html.includes(`id="${id}"`), `index.html 冇 id="${id}"`);
 });
 
-test("the pure module stays free of DOM, window and storage access", () => {
+test("the pure module stays free of DOM, window and storage access", async () => {
   const source = readFileSync(new URL("../demo/games/ghost/ghost.mjs", import.meta.url), "utf8");
   for (const banned of ["document", "window", "localStorage", "sessionStorage"]) {
     assert.doesNotMatch(source, new RegExp(`\\b${banned}\\b`), `ghost.mjs 唔應該用 ${banned}`);
@@ -565,8 +575,9 @@ function chooseSolo(tab) {
   });
 }
 
-test("淨計時：賽道冇幽靈條、賽果對手進度顯示 —，其餘計分同存檔不變", () => {
+test("淨計時：賽道冇幽靈條、賽果對手進度顯示 —，其餘計分同存檔不變", async () => {
   const tab = ghostTab();
+  await tab.ready();
   const picker = tab.get("#opponent-options");
   assert.ok(picker.children.some(option => option.dataset.opponent === "none"),
     "對手選擇要有「淨計時」");
@@ -594,9 +605,10 @@ test("淨計時：賽道冇幽靈條、賽果對手進度顯示 —，其餘計�
   assert.equal(tab.get("#flow-next").hidden, true, "流程外唔會出「下一輪」掣");
 });
 
-test("?flow=1：鎖定內建 55 音節／分示範幽靈陪跑，完場寫入篇章輪再接去成績卡", () => {
-  withFlowStorage(storage => {
+test("?flow=1：鎖定內建 55 音節／分示範幽靈陪跑，完場寫入篇章輪再接去成績卡", async () => {
+  await withFlowStorage(async storage => {
     const tab = ghostTab({ flowMode: true });
+    await tab.ready();
     assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
     assert.match(tab.get("#flow-banner").textContent, /官方流程第 3 輪：篇章/);
     assert.match(tab.get("#flow-banner").textContent, /示範幽靈陪跑，唔影響計分/);
@@ -631,8 +643,9 @@ test("?flow=1：鎖定內建 55 音節／分示範幽靈陪跑，完場寫入篇
     assert.equal(saved.correct, tokens.length);
     assert.equal(saved.submitted, tokens.length);
     assert.equal(saved.accuracy, 1);
-    assert.equal(saved.threshold, 0.85);
+    assert.equal(saved.threshold, OFFICIAL_THRESHOLDS.passage);
     assert.equal(saved.meetsThreshold, true);
+    assert.equal(saved.rulesVersion, freeInput.FREE_INPUT_RULE_VERSION);
     assert.equal(Math.round(saved.seconds * 1000), tokens.length * 200, "篇章輪記實際完成用時");
     assert.ok(saved.correctPerMinute > 0);
 
@@ -644,8 +657,9 @@ test("?flow=1：鎖定內建 55 音節／分示範幽靈陪跑，完場寫入篇
   });
 });
 
-test("renderRace 只喺數字有變先寫 DOM，唔會每個 tick 重寫同一節點", () => {
+test("renderRace 只喺數字有變先寫 DOM，唔會每個 tick 重寫同一節點", async () => {
   const tab = ghostTab();
+  await tab.ready();
   tab.start();
   tab.setTime(3000);
   tab.tick();
@@ -674,7 +688,7 @@ function miniNode() {
   let text = "";
   const node = {
     hidden: false, disabled: false, value: "", style: {}, dataset: {},
-    className: "", selectionStart: 0, children: [], href: "", title: "",
+    className: "", selectionStart: 0, selectionEnd: 0, children: [], href: "", title: "",
     get textContent() { return text; },
     set textContent(next) { text = String(next); },
     classList: {
@@ -687,7 +701,7 @@ function miniNode() {
     getAttribute: name => attributes.get(name) ?? null,
     append(...items) { node.children.push(...items); },
     replaceChildren(...items) { node.children = items; },
-    scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange() {},
+    scrollIntoView() {}, focus() {}, blur() {}, setSelectionRange(start, end) { node.selectionStart = start; node.selectionEnd = end; },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
@@ -719,6 +733,7 @@ function ghostPage({ flowMode = false } = {}) {
   const store = new Map();
   const elements = new Map();
   const tickers = new Map();
+  const timers = [];
   const localeListeners = [];
   const i18nNodes = staticNodes(html);
   const toggle = miniNode();
@@ -751,7 +766,7 @@ function ghostPage({ flowMode = false } = {}) {
     static now() { return now; }
   }
   vm.runInContext(DOM_SOURCE, vm.createContext({
-    ...engine, ...questions, ...common, ...ghost, ...flowApi, ...i18nApi,
+    ...engine, ...questions, ...common, ...ghost, ...flowApi, ...i18nApi, ...freeInput, loadFreeInput: async () => realFreeInput,
     Date: Clock,
     location: { search: flowMode ? "?flow=1" : "", href: "" },
     URLSearchParams,
@@ -761,9 +776,11 @@ function ghostPage({ flowMode = false } = {}) {
     writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
     setInterval(callback) { tickerId += 1; tickers.set(tickerId, callback); return tickerId; },
     clearInterval(id) { tickers.delete(id); },
+    setTimeout(callback) { timers.push(callback); return timers.length; },
   }), { filename: "demo/games/ghost/ghost-dom.mjs" });
 
   return {
+    ready: () => new Promise(resolve => setImmediate(resolve)),
     document,
     window,
     i18nNodes,
@@ -825,9 +842,10 @@ function optionLabels(page) {
   }));
 }
 
-test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant 還原", () => {
+test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant 還原", async () => {
   const page = ghostPage();
-  withLocale(page, () => {
+  await page.ready();
+  withLocale(page, async () => {
     // 切換掣嘅 markup 同位置（demo-badge 前）係 i18n 運行庫嘅契約
     assert.match(html, /<button class="locale-toggle" data-locale-toggle type="button" aria-pressed="false">简<\/button>\s*<span class="demo-badge">/);
     const css = readFileSync(new URL("../demo/games/ghost/ghost.css", import.meta.url), "utf8");
@@ -857,10 +875,11 @@ test("i18n：靜態文案、data-i18n 覆蓋同切換掣跟 locale 轉，hant �
   });
 });
 
-test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", () => {
+test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", async () => {
   const page = ghostPage();
+  await page.ready();
   const total = flattenQuestions().length;
-  withLocale(page, () => {
+  withLocale(page, async () => {
     assert.deepEqual(optionLabels(page)[0], {
       label: "淨計時（唔設對手）",
       detail: "賽道只顯示自己，專心計自己嘅時間同分數",
@@ -895,9 +914,10 @@ test("i18n：對手選項同 HUD label 跟 locale 轉，hant 還原", () => {
   });
 });
 
-test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
+test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", async () => {
   const page = ghostPage();
-  withLocale(page, () => {
+  await page.ready();
+  withLocale(page, async () => {
     page.start();
     page.setTime(3000);
     page.tick();
@@ -918,7 +938,7 @@ test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
     assert.equal(rows()[0].children[0].textContent, "完成时间");
     assert.equal(rows()[1].children[0].textContent, "正确音节／分钟");
     assert.equal(rows()[3].children[0].textContent, "正式分");
-    assert.match(rows()[3].children[1].textContent, /（准确度门槛 \d+%，(达标|未达标)）$/);
+    assert.match(rows()[3].children[1].textContent, /^\d+\.\d（准确度门槛 85%，达标）$/);
     assert.match(rows()[4].children[1].textContent, /^幽灵完成咗 \d+%，你领先 \d+ 个音节$/);
     assert.match(page.get("#result-summary").textContent, /^示范幽灵 · 55 音节／分 · 全文 \d+ 音节$/);
     assert.match(page.get("#result-best").textContent, /^已更新本机最佳：/);
@@ -930,10 +950,11 @@ test("i18n：賽果卡同最佳紀錄句跟 locale 轉，hant 還原", () => {
   });
 });
 
-test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，hant 還原", () => {
-  withFlowStorage(() => {
+test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，hant 還原", async () => {
+  await withFlowStorage(async () => {
     const page = ghostPage({ flowMode: true });
-    withLocale(page, () => {
+    await page.ready();
+    withLocale(page, async () => {
       assert.match(page.get("#flow-banner").textContent, /^官方流程第 3 輪：篇章/);
 
       setLocale("yue-Hans");
@@ -962,4 +983,204 @@ test("i18n：?flow=1 流程橫額同「查看三輪成績」掣跟 locale 轉，
       assert.equal(page.get("#lobby-link").textContent, "‹ 退出流程");
     });
   });
+});
+
+test("confirmed free input accepts a cross-sentence chunk only after confirmation and undoes the whole chunk", async () => {
+  const tab = ghostTab();
+  await tab.ready();
+  tab.start();
+  tab.setTime(3000);
+  tab.tick();
+  const tokens = flattenQuestions();
+  const count = tokens.findIndex(token => token.sentenceIndex === 1) + 2;
+  const raw = tokens.slice(0, count).map(token => token.answers[0]).join("").toUpperCase();
+  for (const key of raw) tab.get("#typing-surface").fire("keydown", { key, code: `Key${key}` });
+  assert.equal(tab.get("#player-value").textContent, `0 / ${tokens.length} 音節`, "typing alone never commits");
+  assert.equal(tab.get("#draft").textContent, raw);
+  tab.setTime(6000);
+  tab.get("#typing-surface").fire("keydown", { key: " ", code: "Space" });
+  assert.equal(tab.get("#player-value").textContent, `${count} / ${tokens.length} 音節`);
+  assert.match(tab.get("#sentence-label").textContent, /第 02 句/);
+  assert.equal(tab.get("#draft").textContent, "—");
+  tab.setTime(6500);
+  tab.backspace();
+  assert.equal(tab.get("#player-value").textContent, `0 / ${tokens.length} 音節`);
+  assert.equal(tab.get("#draft").textContent, raw, "undo restores original case and does not resubmit");
+  tab.setTime(7000);
+  tab.get("#typing-surface").fire("keydown", { key: "Enter", code: "Enter" });
+  tab.type(tokens.slice(count).map(token => token.answers[0]).join(""), 12000);
+  const saved = tab.saved();
+  assert.deepEqual(saved.timeline.slice(0, count).map(item => item.at), new Array(count).fill(4000));
+  assert.deepEqual(saved.timeline.slice(count).map(item => item.at), new Array(tokens.length - count).fill(9000));
+  const trace = tab.trace();
+  assert.equal(trace.finalCommits.length, 2);
+  assert.ok(trace.events.some(event => event.type === "undo" && event.raw === raw));
+  assert.equal(trace.finalCommits[0].raw, raw);
+  assert.equal(trace.metrics.accuracy, 1);
+  assert.equal(trace.metrics.errors, 0);
+  const frozen = JSON.stringify(trace);
+  tab.type("extra", 13000);
+  assert.equal(JSON.stringify(tab.trace()), frozen, "finished input cannot alter the saved trace");
+});
+
+test("wrong confirmation clears the whole draft, advances, counts an error, and can be undone", async () => {
+  const tab = ghostTab();
+  await tab.ready();
+  tab.start(); tab.setTime(3000); tab.tick();
+  const tokens = flattenQuestions();
+  tab.type("ZZZ", 4500);
+  assert.equal(tab.get("#player-value").textContent, `1 / ${tokens.length} 音節`);
+  assert.equal(tab.get("#draft").textContent, "—");
+  assert.equal(tab.get("#answer").value, "");
+  assert.equal(tab.get("#accuracy").textContent, "0%");
+  assert.equal(tab.get("#attempts").textContent, "0 正確 / 1 錯誤");
+  assert.ok(tab.get("#passage").children[0].classList.contains("incorrect"));
+  tab.setTime(5000);
+  tab.backspace();
+  assert.equal(tab.get("#player-value").textContent, `0 / ${tokens.length} 音節`);
+  assert.equal(tab.get("#draft").textContent, "ZZZ", "undo restores the exact original input");
+  assert.equal(tab.get("#attempts").textContent, "0 正確 / 0 錯誤");
+  tab.backspace(3);
+  tab.type(tokens.map(token => token.answers[0]).join(""), 7000);
+  assert.equal(tab.get("#result").hidden, false);
+  const trace = tab.trace();
+  assert.ok(trace.events.some(event => event.type === "submit" && event.raw === "ZZZ" && !event.plan.accepted[0].correct));
+  assert.equal(trace.finalCommits.length, 1);
+  assert.equal(trace.events.at(-1).remainingRaw, "");
+  assert.equal(trace.metrics.errors, 0);
+  assert.equal(trace.metrics.correct, tokens.length);
+  assert.equal(trace.metrics.accuracy, 1);
+  assert.ok(tab.saved().timeline.every(item => item.at === 4000), "undo drops the wrong confirmation's timestamp");
+});
+
+test("a wrong middle syllable and final suffix are committed and restore the original accuracy threshold", async () => {
+  const tab = ghostTab({ questionSource: {
+    ARTICLE: { title: "測試", text: "你好。我哋。" }, QUESTIONS: [[], []], flattenQuestions: () => questionSet,
+  } });
+  await tab.ready(); tab.start(); tab.setTime(3000); tab.tick();
+  tab.type("neiHauNGOdeiZZZ", 7000);
+  assert.equal(tab.get("#result").hidden, false);
+  assert.equal(tab.get("#answer").value, "");
+  assert.equal(tab.get("#draft").textContent, "—");
+  const trace = tab.trace();
+  assert.equal(trace.finalCommits[0].raw, "neiHauNGOdeiZZZ");
+  assert.equal(trace.finalCommits[0].accepted.map(item => item.answer).join(""), "neihaungodeizzz");
+  assert.equal(trace.metrics.submitted, 4);
+  assert.equal(trace.metrics.correct, 2);
+  assert.equal(trace.metrics.errors, 2);
+  assert.equal(trace.metrics.accuracy, 0.5);
+  assert.equal(trace.metrics.threshold, OFFICIAL_THRESHOLDS.passage);
+  assert.equal(trace.metrics.meetsThreshold, false);
+  assert.equal(trace.metrics.officialScore, 15, "original formula is correct syllables/minute × accuracy");
+  assert.match(tab.get("#result-details").children[3].children[1].textContent, /85%，未達標/);
+  assert.equal(tab.saved().accuracy, 0.5);
+  assert.equal(tab.saved().officialScore, 15);
+});
+
+test("an omitted middle syllable counts as wrong and whole-chunk undo restores scores and times", async () => {
+  const targets = [...questionSet, { hanzi: "好", answers: ["hou"], sentenceIndex: 1 }];
+  const tab = ghostTab({ questionSource: {
+    ARTICLE: { title: "測試", text: "你好。我哋好。" }, QUESTIONS: [[], []], flattenQuestions: () => targets,
+  } });
+  await tab.ready(); tab.start(); tab.setTime(3000); tab.tick();
+  tab.type("neiNGOdei", 4000);
+  assert.equal(tab.get("#player-value").textContent, "4 / 5 音節");
+  assert.equal(tab.get("#accuracy").textContent, "75%");
+  assert.equal(tab.get("#attempts").textContent, "3 正確 / 1 錯誤");
+  assert.equal(tab.get("#answer").value, "");
+  assert.ok(tab.get("#passage").children[1].classList.contains("incorrect"));
+  tab.setTime(4500); tab.backspace();
+  assert.equal(tab.get("#player-value").textContent, "0 / 5 音節");
+  assert.equal(tab.get("#accuracy").textContent, "—");
+  assert.equal(tab.get("#attempts").textContent, "0 正確 / 0 錯誤");
+  assert.equal(tab.get("#draft").textContent, "neiNGOdei");
+  tab.backspace(9);
+  tab.type("neihoungodeihou", 7000);
+  const trace = tab.trace();
+  const firstSubmit = trace.events.find(event => event.type === "submit");
+  assert.equal(firstSubmit.plan.accepted[1].answer, "");
+  assert.equal(firstSubmit.plan.accepted[1].correct, false);
+  assert.equal(trace.metrics.errors, 0);
+  assert.equal(trace.metrics.correct, 5);
+  assert.equal(trace.metrics.accuracy, 1);
+  assert.equal(trace.finalCommits.length, 1);
+  assert.deepEqual(tab.saved().timeline.map(item => item.at), new Array(5).fill(4000));
+});
+
+test("native input and Latin composition preserve edits and require a separate confirm", async () => {
+  const tab = ghostTab();
+  await tab.ready();
+  tab.start(); tab.setTime(3000); tab.tick();
+  const input = tab.get("#answer");
+  const tokens = flattenQuestions();
+  const first = tokens.slice(0, 2).map(token => token.answers[0]).join("");
+  input.fire("compositionstart");
+  input.value = first;
+  input.fire("input", { inputType: "insertCompositionText", isComposing: true, data: first });
+  assert.equal(tab.get("#draft").textContent, "—");
+  input.fire("compositionend", { data: first });
+  input.fire("input", { inputType: "insertCompositionText", data: first });
+  assert.equal(tab.get("#draft").textContent, first);
+  assert.equal(tab.get("#player-value").textContent, `0 / ${tokens.length} 音節`);
+  tab.flushTimers();
+  input.value = first + "1";
+  input.fire("input", { inputType: "insertFromPaste", data: input.value });
+  assert.equal(input.value, first, "tone digits are rejected without silently creating a matching answer");
+  input.setSelectionRange(0, first.length);
+  tab.get("#typing-surface").fire("keydown", { key: "x", code: "KeyX" });
+  assert.equal(tab.get("#draft").textContent, "x", "desktop selection replacement is applied");
+  tab.flushTimers();
+  input.value = first;
+  input.setSelectionRange(first.length, first.length);
+  input.fire("input", { inputType: "insertReplacementText", data: first });
+  tab.setTime(5000);
+  input.fire("beforeinput", { inputType: "insertText", data: " " });
+  assert.equal(tab.get("#player-value").textContent, `2 / ${tokens.length} 音節`);
+  assert.equal(tab.get("#draft").textContent, "—");
+});
+
+test("a failed engine load can retry before countdown, and accepted alternative readings are used", async () => {
+  let attempts = 0;
+  const tab = ghostTab({ loader: async () => {
+    if (++attempts === 1) throw new Error("fixture load failure");
+    return realFreeInput;
+  }, questionSource: { ARTICLE: { title: "測試", text: "你好。我哋。" }, QUESTIONS: [[], []], flattenQuestions: () => questionSet } });
+  await tab.ready();
+  assert.equal(tab.get("#start").disabled, true);
+  assert.equal(tab.get("#retry-engine").hidden, false);
+  tab.get("#retry-engine").fire("click");
+  await tab.ready();
+  assert.equal(tab.get("#start").disabled, false);
+  tab.start(); tab.setTime(3000); tab.tick();
+  tab.type("leihou", 4000);
+  assert.equal(tab.get("#player-value").textContent, "2 / 4 音節");
+  tab.type("ngodei", 5000);
+  assert.equal(tab.get("#result").hidden, false);
+  assert.equal(tab.trace().finalCommits[0].accepted[0].answer, "lei");
+});
+
+
+test("native text after an explicit confirm or backspace is not mistaken for the previous physical edit", async () => {
+  const tab = ghostTab();
+  await tab.ready();
+  tab.start(); tab.setTime(3000); tab.tick();
+  const tokens = flattenQuestions();
+  tab.type(tokens[0].answers[0], 4000);
+  // Deliberately do not flush the zero-delay keydown guard: different native
+  // edits are independent actions even if a browser dispatches them promptly.
+  const input = tab.get("#answer");
+  const second = tokens[1].answers[0];
+  input.value = second;
+  input.setSelectionRange(second.length, second.length);
+  input.fire("input", { inputType: "insertText", data: second });
+  assert.equal(tab.get("#draft").textContent, second);
+  input.fire("beforeinput", { inputType: "insertText", data: " " });
+  assert.equal(tab.get("#player-value").textContent, `2 / ${tokens.length} 音節`);
+  tab.get("#typing-surface").fire("keydown", { key: "x", code: "KeyX" });
+  tab.backspace();
+  const third = tokens[2].answers[0];
+  input.value = third;
+  input.setSelectionRange(third.length, third.length);
+  input.fire("input", { inputType: "insertText", data: third });
+  assert.equal(tab.get("#draft").textContent, third);
 });

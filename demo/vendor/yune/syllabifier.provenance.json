@@ -1,0 +1,27 @@
+{
+  "version": "yune-darts-8de49aab/jyut6ping3-2024.11.14/contest-1",
+  "yuneCommit": "8de49aab76a996f3aaa72a36b9d098bb76cc8f6e",
+  "darts": {
+    "path": "crates/yune-core/src/dictionary/double_array.rs",
+    "sha256": "ee7ad088ab23169a867c30dd0f3268329638172004c284e2453685e490616c35"
+  },
+  "dictionary": {
+    "path": "apps/yune-web/public/schema/jyut6ping3.dict.yaml",
+    "sha256": "b0abf4fbcbf18b8cf05f4689ea05a12be6cf301f29a7316699e2b1ab9c24d172",
+    "version": "2024.11.14",
+    "extraction": "all tab-separated code tokens; remove one trailing tone digit 1-6; deduplicate; no derive/fuzzy rules",
+    "provenance": {
+      "path": "apps/yune-web/public-demo/PROVENANCE.md",
+      "sha256": "5705803d89ce8fdfcb4a0b146119491b04c57a17ce025510e78194d2bbec07a1",
+      "attribution": "Yune records the Cantonese dictionary assets as TypeDuck-origin assets used with project-owner approval from the TypeDuck author.",
+      "licenseScope": "The dictionary header declares no standalone license; the Yune MIT code license is not asserted for dictionary data."
+    }
+  },
+  "dartsCodeLicense": {
+    "path": "LICENSE",
+    "sha256": "24205c80352463dc9eb95e9cf1b8efdefc153d1128977c8b7b8b95787d958a92",
+    "spdx": "MIT"
+  },
+  "syllableCount": 706,
+  "wasmSha256": "efad227b66dfda9dde4d71da381565a7370cc2d4ec0fcb1e57ba6b1c8f17de4c"
+}

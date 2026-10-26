@@ -20,6 +20,12 @@ import {
   typeSyllable,
 } from "../demo/games/rocks/rocks.mjs";
 
+import { loadFreeInput, MAX_FREE_INPUT, FREE_INPUT_RULE_VERSION, createFreeTrace, recordFreeEvent } from "../demo/games/free-input.mjs";
+import { confirmRocksInput } from "../demo/games/rocks/rocks-free.mjs";
+const testFreeEngine = await loadFreeInput();
+const freeTestApi = { MAX_FREE_INPUT, FREE_INPUT_RULE_VERSION, createFreeTrace, recordFreeEvent,
+  confirmRocksInput, loadFreeInput: () => Promise.resolve(testFreeEngine) };
+
 const T0 = 1_000;
 
 function closeTo(actual, expected, message) {
@@ -458,6 +464,7 @@ function rocksTab() {
 
   vm.runInContext(DOM_SOURCE, vm.createContext({
     Date: Clock,
+    ...freeTestApi,
     OFFICIAL_THRESHOLDS, comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
     createRocksGame, getFallProgress, getRocksMetrics, tick, typeSyllable,
     readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
@@ -474,8 +481,8 @@ function rocksTab() {
 
   return {
     get,
-    store,
-    records: () => JSON.parse(store.get(ROCKS_STORAGE_KEY) ?? "null"),
+    ready: () => new Promise(resolve => setImmediate(resolve)),    store,
+    records: () => JSON.parse([...store.entries()].find(([key]) => key.startsWith(`${ROCKS_STORAGE_KEY}:`))?.[1] ?? "null"),
     setTime: value => { now = value; },
     flushFrames(limit = 8) {
       for (let i = 0; i < limit && frames.size > 0; i++) {
@@ -491,8 +498,9 @@ function rocksTab() {
   };
 }
 
-test("DOM 層：開始、打啱、漏接、命盡完場同寫本地紀錄", () => {
+test("DOM 層：開始、打啱、漏接、命盡完場同寫本地紀錄", async () => {
   const tab = rocksTab();
+  await tab.ready();
   assert.equal(tab.get("#intro-card").hidden, false);
   assert.equal(tab.get("#play-card").hidden, true);
   assert.match(tab.get("#intro-best").textContent, /未有紀錄/);
@@ -546,12 +554,13 @@ test("DOM 層：開始、打啱、漏接、命盡完場同寫本地紀錄", () =
 
   const record = tab.records();
   assert.equal(record.plays, 1);
-  closeTo(record.best.officialScore, 1);
-  assert.equal(record.best.bestCombo, 1);
+  assert.equal(record.best.officialScore, 1);
+  assert.equal(record.best.accuracy, 1);
 });
 
-test("DOM 層：時間到完場，未達門檻唔會寫入最佳成績", () => {
+test("DOM 層：時間到完場，未達門檻唔會寫入最佳成績", async () => {
   const tab = rocksTab();
+  await tab.ready();
   tab.get("#start-button").fire("click");
   tab.setTime(DEFAULT_DURATION_SECONDS * 1000);
   tab.flushFrames();
@@ -732,7 +741,7 @@ test("官方模式：時間到先完場，之後嘅輸入同 tick 都無效", ()
 const ROCKS_MODE_KEY = "canclid-contest-games-rocks-mode";
 
 // flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
-function withFlowStorage(run) {
+async function withFlowStorage(run) {
   const map = new Map();
   const storage = {
     map,
@@ -744,7 +753,7 @@ function withFlowStorage(run) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
   Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
   try {
-    return run(storage);
+    return await run(storage);
   } finally {
     if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
     else delete globalThis.sessionStorage;
@@ -805,6 +814,7 @@ function rocksModeTab({ store = new Map(), flowMode = false } = {}) {
 
   vm.runInContext(DOM_SOURCE, vm.createContext({
     Date: Clock,
+    ...freeTestApi,
     OFFICIAL_THRESHOLDS, OFFICIAL_ROCKS, ROCK_QUESTIONS,
     comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
     ...flowApi,
@@ -830,10 +840,10 @@ function rocksModeTab({ store = new Map(), flowMode = false } = {}) {
 
   return {
     get,
-    store,
+    ready: () => new Promise(resolve => setImmediate(resolve)),    store,
     calls,
     mode: () => JSON.parse(store.get(ROCKS_MODE_KEY) ?? "null"),
-    records: () => JSON.parse(store.get(ROCKS_STORAGE_KEY) ?? "null"),
+    records: () => JSON.parse([...store.entries()].find(([key]) => key.startsWith(`${ROCKS_STORAGE_KEY}:`))?.[1] ?? "null"),
     setTime: value => { now = value; },
     flushFrames(limit = 8) {
       for (let i = 0; i < limit && frames.size > 0; i++) {
@@ -849,8 +859,9 @@ function rocksModeTab({ store = new Map(), flowMode = false } = {}) {
   };
 }
 
-test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開還原", () => {
+test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開還原", async () => {
   const tab = rocksModeTab();
+  await tab.ready();
   assert.equal(tab.get("#mode-practice").getAttribute("aria-pressed"), "true");
   assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "false");
   assert.ok(tab.get("#mode-practice").classList.contains("selected"));
@@ -875,8 +886,9 @@ test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開
   assert.equal(junk.get("#mode-practice").getAttribute("aria-pressed"), "true", "壞值要退回練習");
 });
 
-test("DOM 層：官方模式開局用 OFFICIAL_ROCKS、隱藏命數、90 秒倒數，成績卡有門檻同計分窗文案", () => {
+test("DOM 層：官方模式開局用 OFFICIAL_ROCKS、隱藏命數、90 秒倒數，成績卡有門檻同計分窗文案", async () => {
   const tab = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("official")]]) });
+  await tab.ready();
   tab.get("#start-button").fire("click");
 
   const started = tab.calls.at(-1);
@@ -895,14 +907,15 @@ test("DOM 層：官方模式開局用 OFFICIAL_ROCKS、隱藏命數、90 秒倒�
   tab.flushFrames();
   assert.equal(tab.get("#result-card").hidden, false);
   assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
-  assert.match(tab.get("#threshold-note").textContent, /未達 90% 門檻，正式賽不計排名/);
+  assert.match(tab.get("#threshold-note").textContent, /準確度未達 90%，唔計本機最佳/);
   assert.ok(tab.get("#threshold-note").classList.contains("miss"));
   assert.equal(tab.get("#window-note").hidden, false);
   assert.match(tab.get("#window-note").textContent, /固定 90 秒計分窗/);
 });
 
-test("DOM 層：官方模式打足全程達 90% 門檻，成績卡顯示達標同正式賽排名", () => {
+test("DOM 層：官方模式打足全程達 90% 門檻，成績卡顯示達標同正式賽排名", async () => {
   const tab = rocksModeTab({ store: new Map([[ROCKS_MODE_KEY, JSON.stringify("official")]]) });
+  await tab.ready();
   tab.get("#start-button").fire("click");
 
   let time = 0;
@@ -919,15 +932,16 @@ test("DOM 層：官方模式打足全程達 90% 門檻，成績卡顯示達標�
   tab.setTime(90_000);
   tab.flushFrames();
   assert.equal(tab.get("#result-card").hidden, false);
-  assert.match(tab.get("#threshold-note").textContent, /達 90% 門檻，成績計入正式賽排名/);
+  assert.match(tab.get("#threshold-note").textContent, /準確度達 90%，計入本機最佳/);
   assert.ok(!tab.get("#threshold-note").classList.contains("miss"));
   assert.match(tab.get("#window-note").textContent, /固定 90 秒計分窗/);
   assert.equal(tab.get("#result-cpm").textContent, "59", "89 個正確音節 ÷ 1.5 分鐘");
   assert.equal(tab.get("#result-accuracy").textContent, "100%");
 });
 
-test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡冇官方文案", () => {
+test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡冇官方文案", async () => {
   const tab = rocksModeTab();
+  await tab.ready();
   assert.equal(tab.get("#flow-banner").hidden, true, "唔係流程就唔會出流程橫額");
   assert.equal(tab.get("#mode-picker").hidden, false);
   assert.equal(tab.get("#lobby-link").href, undefined, "唔係流程就唔會改「遊戲大廳」條 link");
@@ -949,9 +963,10 @@ test("DOM 層：練習模式維持原本行為——命數照顯示、成績卡�
   assert.equal(tab.get("#flow-next").hidden, true, "流程外完場唔會出「下一輪」掣");
 });
 
-test("DOM 層：?flow=1 鎖定官方單字輪、顯示流程橫額，完場寫入流程再接去詞組", () => {
-  withFlowStorage(storage => {
+test("DOM 層：?flow=1 鎖定官方單字輪、顯示流程橫額，完場寫入流程再接去詞組", async () => {
+  await withFlowStorage(async storage => {
     const tab = rocksModeTab({ flowMode: true });
+  await tab.ready();
     assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
     assert.match(tab.get("#flow-banner").textContent, /官方流程第 1 輪：單字/);
     assert.match(tab.get("#flow-banner").textContent, /退出流程會丟棄三輪進度/);
@@ -1111,6 +1126,7 @@ function rocksI18nTab({ flowMode = false } = {}) {
 
   vm.runInContext(DOM_SOURCE, vm.createContext({
     Date: Clock,
+    ...freeTestApi,
     OFFICIAL_THRESHOLDS, OFFICIAL_ROCKS, ROCK_QUESTIONS,
     comboMultiplier, formatClock, ROCKS_STORAGE_KEY,
     ...flowApi,
@@ -1129,7 +1145,7 @@ function rocksI18nTab({ flowMode = false } = {}) {
 
   return {
     get,
-    static: key => staticNodes.find(entry => entry.key === key)?.node ?? null,
+    ready: () => new Promise(resolve => setImmediate(resolve)),    static: key => staticNodes.find(entry => entry.key === key)?.node ?? null,
     toggle,
     setTime: value => { now = value; },
     flushFrames(limit = 8) {
@@ -1148,8 +1164,9 @@ function rocksI18nTab({ flowMode = false } = {}) {
   };
 }
 
-test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊變，切返繁體還原", () => {
+test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊變，切返繁體還原", async () => {
   const tab = rocksI18nTab();
+  await tab.ready();
   try {
     assert.equal(getLocale(), "yue-Hant", "node 冇 navigator，預設一定係繁體");
     assert.equal(tab.static("rocks.title").textContent, "粵拼落石");
@@ -1172,13 +1189,13 @@ test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊�
     // 動態文案（模組 t() 畫出嚟）
     assert.equal(tab.get("#mode-note").textContent, "练习模式：60 秒、三条命，成绩只存本机。");
     tab.get("#start-button").fire("click");
-    assert.equal(tab.get("#feedback").textContent, "打粤拼，按 Space 或 Enter 提交（准确度要达 90% 先计排名）");
+    assert.equal(tab.get("#feedback").textContent, "打当前字嘅粤拼，再按 Space 或 Enter 判对错。");
 
     tab.setTime(DEFAULT_DURATION_SECONDS * 1000);
     tab.flushFrames();
     assert.equal(tab.get("#result-title").textContent, "时间到，游戏结束");
     assert.equal(tab.get("#threshold-note").textContent, "未达门槛，唔计排名。");
-    assert.equal(tab.get("#result-detail").textContent, "击破 0 个字 · 打错 0 次 · 漏接 0 次 · 最高连击 0");
+    assert.equal(tab.get("#result-detail").textContent, "击破 0 个字 · 错误 0 次 · 漏接 0 次 · 最高连击 0");
     assert.equal(tab.get("#best-note").textContent, "本地最佳：未有纪录（要达门槛先会记录）");
 
     // 切返繁體：靜態、動態同切換掣全部還原
@@ -1189,7 +1206,7 @@ test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊�
     assert.equal(tab.toggle.textContent, "简");
     assert.equal(tab.toggle.getAttribute("aria-pressed"), "false");
     assert.equal(tab.get("#mode-note").textContent, "練習模式：60 秒、三條命，成績只存本機。");
-    assert.equal(tab.get("#feedback").textContent, "打粵拼，按 Space 或 Enter 提交（準確度要達 90% 先計排名）");
+    assert.equal(tab.get("#feedback").textContent, "打當前字嘅粵拼，再按 Space 或 Enter 判對錯。");
     assert.equal(tab.get("#result-title").textContent, "時間到，遊戲結束");
     assert.equal(tab.get("#threshold-note").textContent, "未達門檻，唔計排名。");
   } finally {
@@ -1197,9 +1214,10 @@ test("i18n：切去簡體粵文，靜態文案、動態文案同切換掣一齊�
   }
 });
 
-test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣跟語言變", () => {
-  withFlowStorage(() => {
+test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣跟語言變", async () => {
+  await withFlowStorage(async () => {
     const tab = rocksI18nTab({ flowMode: true });
+  await tab.ready();
     try {
       assert.match(tab.get("#flow-banner").textContent, /官方流程第 1 輪：單字 · 固定 90 秒、無命/);
       assert.equal(tab.get("#intro-eyebrow").textContent, "官方流程 · 單字輪 90 秒");
@@ -1226,4 +1244,138 @@ test("i18n：?flow=1 流程橫額、介紹卡文案同「前往第 N 輪」掣�
       tab.cleanup();
     }
   });
+});
+
+test("自由確認：每次只判當前一石，連打隱藏下一字也只算一次錯誤", () => {
+  const state = createRocksGame({ now: 0, seed: "free-single" });
+  const current = state.target;
+  const nextHidden = state.queue[0];
+  const raw = current.answers[0] + nextHidden.answers[0];
+  const submitted = confirmRocksInput(state, raw, 1000, testFreeEngine);
+  assert.equal(submitted.accepted.length, 1);
+  assert.equal(submitted.accepted[0].correct, false);
+  assert.equal(submitted.accepted[0].answer, raw);
+  assert.equal(submitted.remainder, "");
+  assert.equal(submitted.state.correct, 0);
+  assert.equal(submitted.state.errors, 1);
+  assert.equal(submitted.state.submitted, 1);
+  assert.equal(submitted.state.spawned, 2);
+  assert.equal(submitted.state.target.hanzi, nextHidden.hanzi);
+  assert.equal(submitted.targets.length, 1, "trace exposes only the target being graded");
+  assert.equal(submitted.targets[0].hanzi, current.hanzi);
+});
+
+test("自由確認：錯字照樣提交、清空、換下一石，正確率沿用正確除提交", () => {
+  const state = createRocksGame({ now: 0, seed: "free-wrong" });
+  const correct = confirmRocksInput(state, state.target.answers[0], 100, testFreeEngine);
+  assert.equal(correct.accepted[0].correct, true);
+  assert.equal(correct.state.correct, 1);
+  const raw = correct.state.target.answers[0] + "XYZ";
+  const wrong = confirmRocksInput(correct.state, raw, 200, testFreeEngine);
+  assert.equal(wrong.state.correct, 1);
+  assert.equal(wrong.state.errors, 1);
+  assert.equal(wrong.state.submitted, 2);
+  assert.equal(wrong.state.spawned, correct.state.spawned + 1);
+  assert.equal(wrong.state.combo, 0);
+  assert.equal(wrong.accepted[0].correct, false);
+  assert.equal(wrong.remainder, "");
+  const metrics = getRocksMetrics(wrong.state);
+  assert.equal(metrics.accuracy, 0.5);
+  assert.equal(metrics.officialScore, metrics.correctPerMinute * 0.5);
+  assert.equal(metrics.meetsThreshold, false);
+  assert.throws(() => confirmRocksInput(state, "tin1", 100, testFreeEngine), TypeError);
+});
+
+test("自由確認：死線先行，舊緩衝唔會擊破下一石，時間倒退唔接納", () => {
+  const state = createRocksGame({ now: 0, seed: "free-deadline", mode: "official" });
+  const nextAnswer = state.queue[0].answers[0];
+  const expired = confirmRocksInput(state, nextAnswer, state.target.deadline, testFreeEngine);
+  assert.equal(expired.expired, true);
+  assert.equal(expired.remainder, "");
+  assert.equal(expired.state.correct, 0);
+  assert.equal(expired.state.missed, 1);
+  assert.equal(expired.state.spawned, 2);
+  const earlier = confirmRocksInput(expired.state, nextAnswer, 0, testFreeEngine);
+  assert.equal(earlier.state, expired.state);
+  assert.equal(earlier.remainder, nextAnswer);
+});
+
+test("自由確認：練習漏接扣命，官方漏接計提交錯誤，沿用原有算法", () => {
+  for (const mode of ["practice", "official"]) {
+    const state = createRocksGame({ now: 0, seed: "free-ratio", mode });
+    const first = confirmRocksInput(state, state.target.answers[0], 100, testFreeEngine).state;
+    const missed = tick(first, first.target.deadline);
+    const metrics = getRocksMetrics(missed);
+    assert.equal(metrics.accuracy, mode === "practice" ? 1 : 0.5);
+    assert.equal(metrics.submitted, mode === "practice" ? 1 : 2);
+    assert.equal(metrics.errors, mode === "practice" ? 0 : 1);
+    assert.equal(metrics.livesLeft, mode === "practice" ? 2 : null);
+  }
+});
+
+test("自由確認 DOM：只展示當前石，確認才判對錯、清空並完整記錄錯誤原串", async () => {
+  const tab = rocksModeTab();
+  await tab.ready();
+  tab.get("#start-button").fire("click");
+  const initial = tab.calls.at(-1).state;
+  const next = initial.queue[0];
+  const raw = initial.target.answers[0] + next.answers[0];
+  const html = readFileSync(new URL("../demo/games/rocks/index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /upcoming|預告|预告|unmatched/);
+  assert.doesNotMatch(DOM_SOURCE, /previewTargets|#upcoming|#unmatched/);
+  tab.type(raw);
+  assert.equal(tab.get("#rock-hanzi").textContent, initial.target.hanzi);
+  assert.equal(tab.get("#cpm").textContent, "0");
+  assert.equal(tab.get("#accuracy").textContent, "—");
+  tab.setTime(500);
+  tab.key(" ", "Space");
+  assert.equal(tab.get("#rock-hanzi").textContent, next.hanzi);
+  assert.equal(tab.get("#cpm").textContent, "0");
+  assert.equal(tab.get("#draft").textContent, "");
+  assert.equal(tab.get("#capture").value, "");
+  assert.equal(tab.get("#accuracy").textContent, "0%");
+  assert.match(tab.get("#feedback").textContent, /已提交.*唔啱/);
+  assert.match(tab.get("#cleared").textContent, /錯誤 1/);
+  tab.type(next.answers[0]);
+  tab.key("Enter", "Enter");
+  assert.equal(tab.get("#accuracy").textContent, "50%");
+  assert.equal(tab.get("#draft").textContent, "");
+  tab.setTime(60_000);
+  tab.flushFrames();
+  assert.equal(tab.get("#result-score").textContent, "0.5");
+  assert.match(tab.get("#threshold-note").textContent, /未達門檻/);
+  const traces = JSON.parse(tab.store.get("canclid-contest-rocks-free-traces"));
+  assert.equal(traces[0].rulesVersion, FREE_INPUT_RULE_VERSION);
+  const submission = traces[0].events.find(event => event.type === "submission");
+  assert.equal(submission.targetIndex, initial.spawned);
+  assert.equal(submission.raw, raw);
+  assert.equal(submission.accepted.length, 1);
+  assert.equal(submission.accepted[0].correct, false);
+  assert.equal(submission.remainder, "");
+  assert.equal(submission.targets.length, 1);
+  assert.equal(submission.targets[0].hanzi, initial.target.hanzi);
+  assert.equal(tab.get("#export-trace").hidden, false);
+});
+
+test("自由確認 DOM：確認／刪除之後立即到達嘅原生文字唔會當重複事件吞掉", async () => {
+  const tab = rocksModeTab();
+  await tab.ready();
+  tab.get("#start-button").fire("click");
+  const initial = tab.calls.at(-1).state;
+  const targets = [initial.target, ...initial.queue.slice(0, 2)];
+  tab.type(targets[0].answers[0]);
+  tab.key("Enter", "Enter");
+  // The harness intentionally does not run the zero-delay reset timer yet.
+  const capture = tab.get("#capture");
+  capture.value = targets[1].answers[0];
+  capture.fire("input", { inputType: "insertText", data: targets[1].answers[0] });
+  assert.equal(tab.get("#draft").textContent, targets[1].answers[0]);
+  tab.key("Backspace", "Backspace");
+  const shortened = targets[1].answers[0].slice(0, -1);
+  const finalLetter = targets[1].answers[0].at(-1);
+  capture.value = shortened + finalLetter;
+  capture.fire("input", { inputType: "insertText", data: finalLetter });
+  assert.equal(tab.get("#draft").textContent, targets[1].answers[0]);
+  tab.key("Enter", "Enter");
+  assert.equal(tab.get("#rock-hanzi").textContent, targets[2].hanzi);
 });

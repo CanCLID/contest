@@ -123,7 +123,7 @@ export function finishByTime(state, now) {
 // that was in force when it was submitted (combo cap 1.5, see common.mjs).
 // Official mode never ends on the word list: the stream keeps drawing batches
 // until finishByTime (or a submission) notices the clock has run out.
-export function typeSyllable(state, answer, now) {
+export function typeSyllable(state, answer, now, { allowEmpty = false } = {}) {
   if (state.status !== "running" || !Number.isFinite(now) || now < state.startedAt) {
     return state;
   }
@@ -132,7 +132,7 @@ export function typeSyllable(state, answer, now) {
     return finishByTime(state, now);
   }
   const normalized = normalizeAnswer(answer);
-  if (!normalized) return state;
+  if (!normalized && !allowEmpty) return state;
 
   const word = state.words[state.wordIndex];
   const expected = word.syllables[state.syllableIndex];

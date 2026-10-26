@@ -83,11 +83,13 @@ export function finishRun(run, now) {
   };
 }
 
-export function submitAnswer(run, answer, now) {
+export function submitAnswer(run, answer, now, { allowEmpty = false } = {}) {
   if (run.status !== "running" || !Number.isFinite(now) || now < run.startedAt) return run;
 
   const normalized = answer.trim().toLowerCase();
-  if (!normalized) return run;
+  // An internally aligned omission is a wrong answer; a user's empty confirm
+  // remains a no-op unless the grading adapter explicitly opts in.
+  if (!normalized && !allowEmpty) return run;
   const correct = run.questionSet[run.index].answers.includes(normalized);
   return finishRun({
     ...run,

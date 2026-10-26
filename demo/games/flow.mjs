@@ -2,9 +2,9 @@
 // node --test 可以直接 import；三個遊戲頁同成績卡頁共用呢一個模組。
 //
 // 流程狀態存喺 sessionStorage（每個 tab 一次流程），完成紀錄存喺 localStorage。
-// 狀態格式（version 1）：
+// 狀態格式（version 3）：
 //   {
-//     version: 1,
+//     version: 3,
 //     startedAt: 1729580000000,   // 開流程嗰刻嘅 Date.now()
 //     rounds: { single?: RoundResult, words?: RoundResult, passage?: RoundResult },
 //     player: { name: "粵拼新星", group: "desktop" }   // 可選：主站帶入，成績卡顯示用
@@ -28,6 +28,7 @@
 import { registerStrings, t } from "../i18n.mjs";
 import { roundMetrics } from "./common.mjs";
 import { OFFICIAL_ROUND_ORDER, OFFICIAL_ROUNDS } from "./official.mjs";
+import { FREE_INPUT_RULE_VERSION } from "./free-input.mjs";
 
 // 簡體粵文譯文：輪次名同流程標籤喺度登記，三個遊戲頁同成績卡共用同一個 namespace。
 registerStrings({
@@ -41,9 +42,9 @@ registerStrings({
   },
 });
 
-export const FLOW_VERSION = 1;
+export const FLOW_VERSION = 3;
 export const FLOW_STORAGE_KEY = "canclid-contest-official-flow";
-export const FLOW_HISTORY_KEY = "canclid-contest-official-flow-history";
+export const FLOW_HISTORY_KEY = `canclid-contest-official-flow-history:${FREE_INPUT_RULE_VERSION}`;
 export const FLOW_HISTORY_LIMIT = 20;
 
 // 輪次序、標籤、時限同門檻全部由 official.mjs 推導，唔喺呢度再抄一次。
@@ -185,6 +186,15 @@ export function normalizeRoundResult(roundId, value) {
   const seconds = duration(value.seconds);
   if (correct === null || submitted === null || seconds === null) return null;
   const scored = roundMetrics({ correct, submitted, seconds }, { threshold: round.threshold });
+  if (value.rulesVersion === FREE_INPUT_RULE_VERSION) {
+    return { correct, submitted, seconds, rulesVersion: FREE_INPUT_RULE_VERSION,
+      missed: count(value.missed) ?? 0,
+      accuracy: scored.accuracy,
+      correctPerMinute: scored.correctPerMinute,
+      officialScore: scored.officialScore,
+      meetsThreshold: scored.meetsThreshold,
+      threshold: round.threshold };
+  }
   return {
     correct,
     submitted,
@@ -209,6 +219,8 @@ export function flowRoundResult(roundId, metrics = {}) {
     correct: metrics.correct,
     submitted: metrics.submitted,
     seconds,
+    rulesVersion: metrics.rulesVersion,
+    missed: metrics.missed,
   });
 }
 

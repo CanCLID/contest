@@ -1058,7 +1058,7 @@ test("主入口預設官方三輪試玩：撳開始會開流程再跳去第 1 �
 
     assert.equal(tab.evaluate("run"), null, "官方流程唔會喺主站開單篇賽");
     const saved = storage.read(flowStorageKey);
-    assert.equal(saved.version, 1);
+    assert.equal(saved.version, flow.FLOW_VERSION);
     assert.deepEqual(saved.rounds, {});
     assert.deepEqual(saved.player, { name: "阿甲", group: "mobile" });
     assert.ok(Number.isFinite(saved.startedAt));

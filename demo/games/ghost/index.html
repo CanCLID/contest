@@ -43,9 +43,11 @@
               <strong id="article-title"></strong>
               <p id="article-detail"></p>
             </div>
-            <button id="start" class="start-button"><span class="start-label" data-i18n="ghost.start">開始競速</span> <span aria-hidden="true">↗</span></button>
-            <p id="start-note" class="start-note">倒數 3 秒開始，輸入方式同試玩賽場一樣。</p>
-            <div class="demo-note"><p data-i18n="ghost.demoNote">本機試玩，幽靈時間線只存喺呢個瀏覽器。</p></div>
+            <p id="engine-status" class="start-note" role="status"></p>
+            <button id="retry-engine" class="outline-button" type="button" hidden data-i18n="ghost.retryEngine">重新載入</button>
+            <button id="start" class="start-button" disabled><span class="start-label" data-i18n="ghost.start">開始競速</span> <span aria-hidden="true">↗</span></button>
+            <p id="start-note" class="start-note">倒數 3 秒開始。逐字或者連打都得，按 Space／Enter 確認；可以跨句輸入。</p>
+            <div class="demo-note"><p data-i18n="ghost.demoNote">本機試玩，輸入過程及幽靈時間線只存喺呢個瀏覽器，完場可以匯出。</p></div>
           </section>
           <aside id="best-card" class="round-summary" hidden aria-label="本機最佳紀錄">
             <dl class="round-details">
@@ -80,7 +82,7 @@
           <div class="metrics">
             <div class="metric"><span class="metric-label" data-i18n="ghost.metricTime">已用時間</span><strong id="time">00:00.0</strong><span class="metric-unit" data-i18n="ghost.metricTimeUnit">打完全文即結算</span></div>
             <div class="metric"><span class="metric-label" data-i18n="ghost.metricSpeed">正確音節／分鐘</span><strong id="speed">0</strong><span class="metric-unit" data-i18n="ghost.metricSpeedUnit">計啱嘅音節</span></div>
-            <div class="metric"><span class="metric-label" data-i18n="ghost.metricAccuracy">答案準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
+            <div class="metric"><span class="metric-label" data-i18n="ghost.metricAccuracy">準確度</span><strong id="accuracy">—</strong><span class="metric-unit" id="attempts">未有提交</span></div>
           </div>
 
           <div class="typing-area">
@@ -89,12 +91,13 @@
               <span class="subtle-label" data-i18n="ghost.passageNote">全文一次過打完，唔會分句停頓</span>
             </div>
             <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="input-feedback typing-hint">
+              <p id="draft-anchor" class="draft-anchor" hidden><span class="sr-only" data-i18n="ghost.draftLabel">待確認輸入</span><strong id="draft">—</strong></p>
               <p id="passage" class="passage" aria-label="打字題目"></p>
-              <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" form="typing-form" type="text" aria-label="直接輸入當前字嘅粵拼" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
+              <input id="answer" class="typing-capture" name="answer" lang="en" tabindex="-1" form="typing-form" type="text" aria-label="輸入一字或連續多字嘅粵拼" maxlength="4096" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" disabled aria-describedby="passage input-feedback typing-hint">
               <span class="focus-hint" data-i18n="ghost.focusHint">點一下文字繼續輸入</span>
             </div>
             <form id="typing-form" class="typing-form" autocomplete="off">
-              <div class="input-bottom"><p id="input-feedback" role="status">揀好對手，按「開始競速」。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> <span data-i18n="ghost.hintConfirm">確認；未輸入時按</span> <kbd>Backspace</kbd> <span data-i18n="ghost.hintUndo">改上一字</span></span></div>
+              <div class="input-bottom"><p id="input-feedback" role="status">揀好對手，按「開始競速」。</p><span id="typing-hint" class="key-hint"><kbd>Space</kbd> / <kbd>Enter</kbd> <span data-i18n="ghost.hintConfirm">確認；未輸入時按</span> <kbd>Backspace</kbd> <span data-i18n="ghost.hintUndo">改上次提交</span></span></div>
             </form>
             <div id="result" class="result" hidden>
               <span class="result-icon" aria-hidden="true">✳</span>
@@ -103,6 +106,7 @@
                 <p id="result-summary"></p>
                 <dl id="result-details" class="result-details"></dl>
                 <p id="result-best" class="result-best"></p>
+                <p id="trace-warning" class="storage-note" hidden></p>
                 <p id="storage-note" class="storage-note" hidden data-i18n="ghost.storageNote">未能保存本機最佳，關頁後新紀錄會遺失。</p>
               </div>
             </div>
@@ -117,6 +121,7 @@
 
         <div class="round-actions">
           <a id="flow-next" class="outline-button flow-next" href="../summary/" hidden>查看三輪成績 →</a>
+          <button id="export-trace" class="outline-button" type="button" hidden data-i18n="ghost.exportTrace">匯出本輪輸入紀錄（JSON）</button>
           <button id="play-again" class="outline-button" hidden><span data-i18n="ghost.playAgain">再玩一場</span> <span aria-hidden="true">↗</span></button>
           <button id="edit-settings" class="text-button" hidden data-i18n="ghost.editSettings">揀過對手</button>
         </div>

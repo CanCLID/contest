@@ -82,7 +82,7 @@ kbd { font: inherit; border: 1px solid var(--line); border-radius: 4px; padding:
 /* 輸入區水印係 CSS 文字，i18n 運行庫改唔到；跟 documentElement 嘅 lang 換簡體。 */
 html[lang="yue-Hans"] .draft.empty::after { content: "打粤拼…"; }
 .capture { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
-.feedback { margin: 12px 0 0; min-height: 26px; text-align: center; font-size: 15px; }
+.feedback { overflow-wrap: anywhere; margin: 12px 0 0; min-height: 26px; text-align: center; font-size: 15px; }
 .entry .note { text-align: center; margin-top: 4px; }
 
 .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
@@ -99,7 +99,7 @@ html[lang="yue-Hans"] .draft.empty::after { content: "打粤拼…"; }
   .hud.official { grid-template-columns: repeat(2, 1fr); }
   .hud-item strong { font-size: 24px; }
   #clock { font-size: 22px; }
-  .field { height: clamp(240px, 42vh, 340px); }
+  .field { height: clamp(160px, 20vh, 200px); }
   .rock { width: 88px; height: 88px; }
   .rock-hanzi { font-size: 46px; }
   .draft { font-size: 30px; letter-spacing: 6px; text-indent: 6px; }
@@ -109,3 +109,7 @@ html[lang="yue-Hans"] .draft.empty::after { content: "打粤拼…"; }
 @media (prefers-reduced-motion: reduce) {
   *, *:before, *:after { animation: none !important; transition: none !important; }
 }
+
+.start-button:disabled { opacity: .5; cursor: wait; }
+.draft { display: block; text-align: center; max-height: 180px; overflow: auto; letter-spacing: 2px; text-indent: 0; white-space: pre-wrap; }
+.result-actions #export-trace { grid-column: 1 / -1; font-size: 16px; }

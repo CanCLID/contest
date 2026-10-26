@@ -35,7 +35,12 @@
 #passage { font-size: 30px; gap: 18px 5px; }
 #passage .glyph { min-width: 54px; }
 #passage .glyph.punctuated { min-width: 78px; padding-right: 22px; }
-#passage .glyph-reading { min-height: 24px; font-size: 15px; line-height: 24px; }
+#passage .glyph-reading { min-height: 24px; max-width: 120px; max-height: 72px; overflow-y: auto; font-size: 15px; line-height: 24px; }
+#passage .glyph.current { margin-top: 80px; scroll-margin-block: 100px 24px; }
+/* Reserve one fixed slot above the active row. Typing never changes the row's
+   height, and a wrapping draft does not cover the previous row's text. */
+.draft-anchor { position: absolute; z-index: 2; box-sizing: border-box; width: max-content; max-width: 100%; max-height: 76px; margin: 0; padding: 4px 8px; border: 1px solid #cfddc8; border-radius: 5px; background: var(--white); color: var(--ink); box-shadow: 0 2px 8px #24352a12; font: 16px/22px ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; overflow-y: auto; transform: translateY(-100%); }
+.draft-anchor strong { font-weight: 500; }
 
 .result-details { display: grid; gap: 6px; margin: 0 0 12px; }
 .result-details > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 10px; }
@@ -55,3 +60,7 @@
   #passage .glyph-reading { font-size: 14px; }
   .result-details > div { grid-template-columns: 1fr; gap: 2px; }
 }
+
+#engine-status { color: var(--muted); }
+#retry-engine { margin-bottom: 12px; }
+.round-actions { flex-wrap: wrap; }

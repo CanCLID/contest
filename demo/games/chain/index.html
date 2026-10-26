@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f6f0">
-  <meta name="description" content="粵拼詞鏈：順住詞語逐個音節打，連擊倍率最高 ×1.5。CanCLID 粵拼打字比賽小遊戲。">
+  <meta name="description" content="粵拼詞鏈：單字同連打可以混合練習，連擊倍率最高 ×1.5。CanCLID 粵拼打字比賽小遊戲。">
   <title data-i18n="chain.docTitle">粵拼詞鏈 · CanCLID</title>
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./chain.css">
@@ -25,17 +25,17 @@
       <section id="setup-view" class="view">
         <div class="hero">
           <h1 data-i18n="chain.title">粵拼詞鏈</h1>
-          <p class="hero-note" data-i18n="chain.heroNote">順住詞語逐個音節打。詞語全對就連擊 +1，倍率最高 ×1.5。</p>
+          <p class="hero-note" data-i18n="chain.heroNote">逐字打、連打幾個字或者整個詞都得。詞語全對就連擊 +1，倍率最高 ×1.5。</p>
         </div>
         <div class="panel-grid">
           <section class="panel">
             <h2 data-i18n="chain.howTitle">玩法</h2>
             <ul class="rules">
-              <li><span data-i18n="chain.rule1a">每次打一個音節，按</span> <kbd>Space</kbd> <span data-i18n="chain.rule1b">或</span> <kbd>Enter</kbd> <span data-i18n="chain.rule1c">確認；啱同錯都會去下一個音節。</span></li>
-              <li data-i18n="chain.rule2">一個詞全部音節都打啱 → 連擊 +1；個詞有任何一個錯 → 連擊即刻歸零。</li>
+              <li id="input-rule"><span data-i18n="chain.rule1a">每次打一個音節，按</span> <kbd>Space</kbd> <span data-i18n="chain.rule1b">或</span> <kbd>Enter</kbd> <span data-i18n="chain.rule1c">確認；啱同錯都會去下一個音節。</span></li>
+              <li data-i18n="chain.rule2">一個詞全對 → 連擊 +1；有錯就歸零。空草稿可撤回上次提交，修改時間照計。</li>
               <li><span data-i18n="chain.rule3">每個打啱嘅音節得 1 分 × 當時倍率。倍率 = 1 + 0.1 × 連擊，最高</span> <strong>×1.5</strong>。</li>
-              <li><span data-i18n="chain.rule4a">未輸入字母時按</span> <kbd>Backspace</kbd> <span data-i18n="chain.rule4b">可以退回上一個已提交音節重打，分數同連擊一齊回滾。</span></li>
-              <li data-i18n="chain.rule5">練習模式打完 20 個詞即完場。成績用「正確音節／分鐘 × 準確度」，準確度未夠 90% 唔達標。</li>
+              <li id="recall-rule"><span data-i18n="chain.rule4a">未輸入字母時按</span> <kbd>Backspace</kbd> <span data-i18n="chain.rule4b">可以退回上一個已提交音節重打，分數同連擊一齊回滾。</span></li>
+              <li data-i18n="chain.rule5">練習模式打完 20 個詞即完場。計分用正確音節／分鐘 × 準確度，90% 準確度為達標門檻。</li>
               <li data-i18n="chain.rule6">官方模式（正式詞組輪）：固定 120 秒連續題流，到點自動收卷，計分窗照 120 秒計。</li>
               <li data-i18n="chain.rule7">成績只存喺呢個瀏覽器，唔會上傳。</li>
             </ul>
@@ -49,6 +49,10 @@
                 <button id="mode-official" type="button" aria-pressed="false" data-i18n="chain.modeOfficial">官方</button>
               </div>
               <p id="mode-note" class="field-note" data-i18n="chain.modeNote.practice">練習模式：打完 20 個詞完場，成績只存本機。</p>
+              <p id="input-mode-note" class="field-note"></p>
+              <p id="engine-status" class="field-note" role="status"></p>
+              <button id="retry-engine" class="secondary-button" type="button" hidden data-i18n="chain.retryEngine">重新載入</button>
+              <p id="trace-note" class="field-note" data-i18n="chain.traceNote">本輪輸入及修改過程只存本機，完場可匯出 JSON。</p>
               <label id="seed-field" class="field-label" for="seed" data-i18n="chain.seedLabel">Seed（可以留空）</label>
               <input id="seed" class="seed-input" name="seed" type="text" lang="en" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" placeholder="留空＝隨機" maxlength="24" aria-describedby="seed-note" data-i18n-placeholder="chain.seedPlaceholder">
               <p id="seed-note" class="field-note" data-i18n="chain.seedNote">同一個 seed 會出同一串詞，可以同朋友用同一串詞對賽。</p>
@@ -69,7 +73,7 @@
           <div class="play-body">
             <div id="typing-surface" class="typing-surface" tabindex="0" aria-label="粵拼輸入區" aria-describedby="feedback">
               <ol id="word" class="word-row" aria-label="當前詞語"></ol>
-              <input id="answer" class="typing-capture" type="text" lang="en" tabindex="-1" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="輸入當前音節嘅粵拼">
+              <input id="answer" class="typing-capture" type="text" lang="en" tabindex="-1" inputmode="text" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="輸入當前詞語嘅粵拼" maxlength="4096">
               <p class="draft-line"><span class="draft-label" data-i18n="chain.draftLabel">輸入</span><strong id="draft">—</strong></p>
             </div>
             <p class="combo-line"><span id="combo">連擊 0</span><span id="multiplier" class="multiplier">倍率 ×1.0</span></p>
@@ -79,6 +83,11 @@
               <div class="metric"><span class="metric-label" data-i18n="chain.metricAccuracy">準確度</span><strong id="accuracy">—</strong></div>
               <div class="metric"><span class="metric-label" id="time-label">已用時間</span><strong id="time">00:00.0</strong></div>
             </div>
+            <section id="phrase-review" class="phrase-review" hidden aria-labelledby="phrase-review-title">
+              <h2 id="phrase-review-title"></h2>
+              <ol id="phrase-review-parts" class="review-parts"></ol>
+              <p id="phrase-review-note" class="field-note"></p>
+            </section>
             <p id="feedback" class="feedback" role="status">打粵拼，<kbd>Space</kbd> 或 <kbd>Enter</kbd> 確認；未輸入時按 <kbd>Backspace</kbd> 改上一個音節。</p>
           </div>
         </div>
@@ -96,9 +105,16 @@
             <div><dt data-i18n="chain.resultDetailLabel">連擊 · 得分</dt><dd id="result-detail"></dd></div>
           </dl>
           <p id="window-note" class="field-note" hidden></p>
+          <p id="result-input-mode" class="field-note"></p>
           <p id="result-summary" class="field-note"></p>
+          <section id="result-review" class="phrase-review" hidden aria-labelledby="result-review-title">
+            <h2 id="result-review-title"></h2>
+            <ol id="result-review-parts" class="review-parts"></ol>
+            <p id="result-review-note" class="field-note"></p>
+          </section>
           <div class="result-actions">
             <a id="flow-next" class="start-button flow-next" href="../ghost/?flow=1" hidden>前往第 3 輪：篇章 →</a>
+            <button id="export-trace" class="secondary-button" type="button" hidden data-i18n="chain.exportTrace">匯出本輪輸入紀錄（JSON）</button>
             <button id="play-again" class="start-button" type="button"><span data-i18n="chain.playAgain">再玩一場</span> <span aria-hidden="true">↗</span></button>
             <a id="result-lobby" class="back-link" href="../" data-i18n="chain.resultLobby">返去遊戲大廳</a>
           </div>

@@ -2,7 +2,7 @@
 import { clearFlow } from "../flow.mjs";
 import {
   formatCounts,
-  formatPercent,
+  formatInputStats,
   formatScore,
   formatThreshold,
   formatWindow,
@@ -32,7 +32,7 @@ function renderRounds() {
       cell("th", "round-name", row.label),
       cell("td", "round-window", formatWindow(row)),
       cell("td", "round-counts", formatCounts(row)),
-      cell("td", "round-accuracy", formatPercent(row.accuracy)),
+      cell("td", "round-accuracy", formatInputStats(row)),
       cell("td", "round-score", formatScore(row)),
       cell("td", "round-threshold", formatThreshold(row)),
     );

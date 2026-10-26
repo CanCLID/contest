@@ -25,13 +25,13 @@
       <section id="intro-card" class="card intro">
         <p id="intro-eyebrow" class="eyebrow" data-i18n="rocks.eyebrow">小遊戲 · 60 秒</p>
         <h1 data-i18n="rocks.title">粵拼落石</h1>
-        <p class="lead" data-i18n="rocks.lead">石頭由上面跌落嚟，你要喺佢落地之前打出石上面嗰個字嘅粵拼。唔使打聲調數字。</p>
+        <p class="lead" data-i18n="rocks.lead">打出目前石上單字嘅無聲調粵拼，按空格／Enter 判對錯；提交後繼續下一個字。</p>
         <ul class="how">
-          <li><span data-i18n="rocks.how1a">只打 A–Z 字母，打啱按</span> <kbd>Space</kbd> <span data-i18n="rocks.how1b">或</span> <kbd>Enter</kbd> <span data-i18n="rocks.how1c">提交，</span> <kbd>Backspace</kbd> <span data-i18n="rocks.how1d">刪一個字母。</span></li>
-          <li data-i18n="rocks.how2">打啱：連擊加一，倍率最多 ×1.5；打錯或者漏接：連擊即刻歸零。</li>
+          <li><span data-i18n="rocks.how1a">只打 A–Z 字母，打完當前字後按</span> <kbd>Space</kbd> <span data-i18n="rocks.how1b">或</span> <kbd>Enter</kbd> <span data-i18n="rocks.how1c">提交，</span> <kbd>Backspace</kbd> <span data-i18n="rocks.how1d">刪一個字母。</span></li>
+          <li data-i18n="rocks.how2">每次確認都判對錯、清空輸入並換下一字；打錯照計錯誤。打錯或漏接會令連擊歸零。</li>
           <li data-i18n="rocks.how3">漏接一次扣一條命。三條命用完，或者 60 秒倒數完，即刻結算。</li>
           <li data-i18n="rocks.how4">官方模式（正式單字輪）：固定 90 秒、無命；石頭落地未擊破，計一次提交錯誤。</li>
-          <li data-i18n="rocks.how5">計分同試玩賽場一致：每分鐘正確音節 × 準確度，準確度要達 90% 先計入排名。</li>
+          <li data-i18n="rocks.how5">本輪按正確音節／分鐘 × 準確度計分；準確度要達 90% 先記最佳。</li>
         </ul>
         <div class="mode-field">
           <span class="mode-label" id="mode-label" data-i18n="rocks.modeLabel">模式</span>
@@ -41,6 +41,8 @@
           </div>
           <p id="mode-note" class="note subtle" data-i18n="rocks.modeNote.practice">練習模式：60 秒、三條命，成績只存本機。</p>
         </div>
+        <p id="engine-status" class="note" role="status"></p>
+        <button id="retry-engine" class="outline-button" type="button" hidden data-i18n="rocks.retryEngine">重新載入</button>
         <button id="start-button" class="start-button" type="button"><span data-i18n="rocks.start">開始遊戲</span> <span aria-hidden="true">↗</span></button>
         <p id="intro-best" class="note">本地最佳：未有紀錄</p>
         <p class="note subtle" data-i18n="rocks.footNote">成績只存喺呢個瀏覽器；題庫未經人手校對，正式賽前須校對。</p>
@@ -66,7 +68,7 @@
           <input id="capture" class="capture" type="text" lang="en" inputmode="text" autocapitalize="off"
             autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="send" aria-label="粵拼輸入區">
           <p id="feedback" class="feedback" role="status">打粵拼，按 Space 或 Enter 提交</p>
-          <p id="cleared" class="note subtle">擊破 0 · 打錯 0 · 漏接 0</p>
+          <p id="cleared" class="note subtle">擊破 0 · 漏接 0</p>
         </div>
       </section>
 
@@ -75,14 +77,16 @@
         <div class="result-grid">
           <div class="result-item"><span class="hud-label" data-i18n="rocks.hudSpeed">速度</span><strong id="result-cpm">0</strong><span class="hud-unit" data-i18n="rocks.hudCpmUnit">音節 / 分鐘</span></div>
           <div class="result-item"><span class="hud-label" data-i18n="rocks.hudAccuracy">準確度</span><strong id="result-accuracy">0%</strong></div>
-          <div class="result-item"><span class="hud-label" data-i18n="rocks.resultScoreLabel">正式分</span><strong id="result-score">0.0</strong><span class="hud-unit" data-i18n="rocks.resultScoreUnit">每分鐘正確音節 × 準確度</span></div>
+          <div class="result-item"><span class="hud-label" data-i18n="rocks.resultScoreLabel">本輪分數</span><strong id="result-score">0.0</strong><span class="hud-unit" data-i18n="rocks.resultScoreUnit">正確音節／分鐘 × 準確度</span></div>
         </div>
         <p id="threshold-note" class="threshold">未達門檻，唔計排名。</p>
         <p id="window-note" class="note subtle" hidden></p>
         <p id="result-detail" class="note subtle"></p>
+        <p id="trace-status" class="note subtle"></p>
         <p id="best-note" class="note">本地最佳：未有紀錄</p>
         <div class="result-actions">
           <a id="flow-next" class="start-button flow-next" href="../chain/?flow=1" hidden>前往第 2 輪：詞組 →</a>
+          <button id="export-trace" class="outline-button" type="button" hidden data-i18n="rocks.exportTrace">匯出本輪輸入紀錄（JSON）</button>
           <button id="play-again" class="start-button" type="button"><span data-i18n="rocks.playAgain">再玩一次</span> <span aria-hidden="true">↗</span></button>
           <a id="result-lobby" class="outline-button" href="../" data-i18n="rocks.resultLobby">返遊戲大廳</a>
         </div>

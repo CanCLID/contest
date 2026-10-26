@@ -1,10 +1,12 @@
 // DOM layer for 「粵拼詞鏈」. Input handling follows demo/app.mjs: ASCII
 // event.key first with a KeyA–KeyZ fallback, letters only, a visually hidden
 // native input so phone keyboards open, Space/Enter to submit and Backspace to
-// delete a letter or to recall the previous syllable when the draft is empty.
-import { OFFICIAL_CHAIN, createChainGame, finishByTime, getChainMetrics, recallSyllable, typeSyllable } from "./chain.mjs";
+// delete a letter or recall the last accepted chunk when the draft is empty.
+import { OFFICIAL_CHAIN, createChainGame, finishByTime, getChainMetrics } from "./chain.mjs";
+import { MAX_FREE_INPUT, FREE_INPUT_RULE_VERSION, loadFreeInput, createFreeTrace, recordFreeEvent } from "../free-input.mjs";
+import { confirmChainInput, undoChainInput } from "./confirmed.mjs";
 import { CHAIN_BANK } from "./data.mjs";
-import { comboMultiplier, formatClock, normalizeAnswer, readJson, writeJson } from "../common.mjs";
+import { comboMultiplier, formatClock, readJson, writeJson } from "../common.mjs";
 import {
   flowNextHref,
   flowNextLabel,
@@ -21,6 +23,7 @@ import { initI18n, registerStrings, t as i18nT } from "../../i18n.mjs";
 const t = typeof i18nT === "function" ? i18nT : (key, hantText) => hantText;
 
 const STORAGE_KEY = "canclid-contest-games-chain";
+const TRACE_STORAGE_KEY = "canclid-contest-games-chain-free-traces";
 const MODE_STORAGE_KEY = "canclid-contest-games-chain-mode";
 const WORD_COUNT = 20;
 const KEEP_PLAYS = 10;
@@ -32,22 +35,48 @@ const MODE_NOTES = {
 // 全部動態文案嘅簡體譯文（繁體原文喺 t() 行內做 fallback）。
 if (typeof registerStrings === "function") {
   registerStrings({ hans: {
+    "chain.gradedReview": "啱 {correct}、错 {errors}。",
+    "chain.gradedFeedback": "已提交：啱 {correct}、错 {errors}；空草稿按 Backspace 可撤回修改。",
+    "chain.gradedResult": "逐字或连打都得；每次确认会判对错并清空输入，计分用正确音节／分钟 × 准确度。",
+    "chain.thresholdPass": "达 {threshold}% 门槛",
+    "chain.thresholdFail": "未达 {threshold}% 门槛",
+    "chain.freeNote": "逐字、几个字或整词连打都得；Space 或 Enter 判对错并清空输入。",
+    "chain.freeRule": "输入当前词嘅无声调粤拼，按 Space 或 Enter 确认；啱同错都会前进。",
+    "chain.freeRecallRule": "草稿空白时按 Backspace，恢复上一次已上屏嘅输入段，分数同连击一齐回滚。",
+    "chain.freeEngineError": "输入模组未能载入，请重新载入。",
+    "chain.freeEngineLoading": "正在准备输入模组…",
+    "chain.freeFinish": "完成。每分钟上屏 {cpm} 个音节。",
+    "chain.retryEngine": "重新载入",
+    "chain.traceNote": "本轮输入及修改过程只存本机，完场可汇出 JSON。",
+    "chain.exportTrace": "汇出本轮输入纪录（JSON）",
+    "chain.phraseIdle": "逐字或连打都得，Space 或 Enter 提交；空白时 Backspace 改上一次提交。",
+    "chain.phraseAria": "{word}，由第 {syllable} 个字开始，可以逐字或连打",
+    "chain.phraseAnswerAria": "输入当前词语嘅粤拼",
+    "chain.syllableAnswerAria": "输入当前音节嘅粤拼",
+    "chain.phraseRecallDone": "已恢复上一次提交嘅输入，可以修改再提交。",
+    "chain.reviewTitle": "上次提交：{word}",
+    "chain.phraseInputError": "暂时未能分析呢个输入，字母已保留。请再试一次。",
+    "chain.inputLimit": "每次最多输入 {limit} 个字母；原本输入已保留。",
+    "chain.invalidInput": "只接受无声调粤拼字母；原本输入已保留。",
+    "chain.traceStorageWarning": "本机储存空间不足，仍可用下方按钮汇出本轮纪录。",
+    "chain.traceTruncated": "本轮输入纪录已超过保存上限，汇出会标示缺失事件。",
+
     "chain.docTitle": "粤拼词链 · CanCLID",
     "chain.skipLink": "跳去主要内容",
     "chain.lobbyLink": "‹ 游戏大厅",
     "chain.badge": "小游戏",
     "chain.arenaLink": "试玩赛场",
     "chain.title": "粤拼词链",
-    "chain.heroNote": "顺住词语逐个音节打。词语全对就连击 +1，倍率最高 ×1.5。",
+    "chain.heroNote": "逐字打、连打几个字或者整个词都得。词语全对就连击 +1，倍率最高 ×1.5。",
     "chain.howTitle": "玩法",
     "chain.rule1a": "每次打一个音节，按",
     "chain.rule1b": "或",
     "chain.rule1c": "确认；啱同错都会去下一个音节。",
-    "chain.rule2": "一个词全部音节都打啱 → 连击 +1；个词有任何一个错 → 连击即刻归零。",
+    "chain.rule2": "一个词全对 → 连击 +1；有错就归零。空草稿可撤回上次提交，修改时间照计。",
     "chain.rule3": "每个打啱嘅音节得 1 分 × 当时倍率。倍率 = 1 + 0.1 × 连击，最高",
     "chain.rule4a": "未输入字母时按",
     "chain.rule4b": "可以退回上一个已提交音节重打，分数同连击一齐回滚。",
-    "chain.rule5": "练习模式打完 20 个词即完场。成绩用「正确音节／分钟 × 准确度」，准确度未够 90% 唔达标。",
+    "chain.rule5": "练习模式打完 20 个词即完场。计分用正确音节／分钟 × 准确度，90% 准确度为达标门槛。",
     "chain.rule6": "官方模式（正式词组轮）：固定 120 秒连续题流，到点自动收卷，计分窗照 120 秒计。",
     "chain.rule7": "成绩只存喺呢个浏览器，唔会上传。",
     "chain.startTitle": "开始",
@@ -94,28 +123,15 @@ if (typeof registerStrings === "function") {
     "chain.feedbackIdle": "打粤拼，Space 或 Enter 确认；未输入时按 Backspace 改上一个音节。",
     "chain.announceStartOfficial": "开始！官方轮固定 {seconds} 秒，seed {seed}。",
     "chain.announceStartPractice": "开始！本场 seed {seed}，共 {words} 个词。",
-    "chain.feedbackWordCorrect": "「{word}」全对！连击 {combo}，下次倍率 ×{multiplier}。",
-    "chain.feedbackWordIncorrect": "「{word}」有错，连击归零，重新储倍率。",
-    "chain.feedbackCorrect": "啱！继续打下一个音节。",
-    "chain.feedbackIncorrect": "唔啱，照样前进；未输入时按 Backspace 可以退回上一个音节。",
-    "chain.feedbackBlank": "空白提交唔计分，打字母先。",
-    "chain.recallFirst": "已经喺第一个音节，冇得再退。",
-    "chain.recallDone": "已退回上一个音节，重新打过。",
-    "chain.announceRecall": "退回上一个音节：{word}",
     "chain.resultTitleOfficial": "时间到，收卷！",
     "chain.resultTitleBest": "完成喇！新纪录！",
     "chain.resultTitleDone": "完成喇！",
     "chain.resultCpm": "{value} 音节／分",
-    "chain.thresholdOfficialPass": "达 {threshold}% 门槛，计入正式赛排名",
-    "chain.thresholdOfficialFail": "未达 {threshold}% 门槛，正式赛不计排名",
-    "chain.thresholdPracticePass": "达标",
-    "chain.thresholdPracticeFail": "未达标（要 {threshold}% 准确度）",
     "chain.windowNote": "官方模式：固定 {seconds} 秒计分窗。",
     "chain.resultBest": "正式分 {score}（{when}）",
     "chain.resultBestEmpty": "未有纪录",
     "chain.resultDetail": "连击 {combo} · 得分 {score}",
     "chain.resultSummary": "本场 seed {seed}：{words} 个词、{syllables} 个音节，用时 {clock}，啱 {correct}、错 {errors}。",
-    "chain.announceFinish": "完成。正确音节每分钟 {cpm}，准确度 {accuracy}%。",
   } });
 }
 
@@ -128,6 +144,20 @@ let physicalEdit = null;
 let ticker = null;
 let lastSeed = "";
 let lastResult = null;
+let syllabifier = null;
+let enginePromise = null;
+let engineState = "idle";
+let inputTrace = [];
+let traceDropped = 0;
+let traceStartedAt = 0;
+let lastPhraseReview = null;
+let lastExport = null;
+let tracePersisted = true;
+let freeTrace = null;
+let feedbackMessage = null;
+let announcementMessage = null;
+let compositionBase = null;
+let compositionCommit = null;
 let mode = readJson(MODE_STORAGE_KEY, null) === "official" ? "official" : "practice";
 
 // 官方三輪流程（?flow=1）：鎖定官方詞組輪，完場寫入 flow store 再接去篇章。
@@ -140,6 +170,48 @@ const flowMode = (() => {
 })();
 let flow = flowMode ? readFlow() ?? startFlow() : null;
 if (flowMode) mode = "official";
+
+
+function selectedInputMode() { return "free"; }
+function isPhrase() { return state?.inputMode === "free"; }
+function clockNow() { return typeof performance !== "undefined" ? performance.now() : Date.now(); }
+function recordInput(type, details = {}) {
+  if (!isPhrase() || !state || state.status !== "running") return;
+  recordFreeEvent(freeTrace, type, { wordIndex: state.wordIndex, syllableIndex: state.syllableIndex, ...details },
+    state.startedAt + Math.max(0, clockNow() - traceStartedAt));
+  inputTrace = freeTrace.events;
+  traceDropped = freeTrace.droppedEvents;
+}
+
+function renderInputMode() {
+  $("#input-mode-note").textContent = t("chain.freeNote", "逐字、幾個字或整詞連打都得；Space 或 Enter 判對錯並清空輸入。");
+  $("#input-rule").textContent = t("chain.freeRule", "輸入當前詞嘅無聲調粵拼，按 Space 或 Enter 確認；啱同錯都會前進。");
+  $("#recall-rule").textContent = t("chain.freeRecallRule", "草稿空白時按 Backspace，恢復上一次已上屏嘅輸入段，分數同連擊一齊回滾。");
+  $("#engine-status").hidden = engineState === "ready";
+  $("#engine-status").setAttribute("data-error", String(engineState === "error"));
+  $("#engine-status").textContent = engineState === "error"
+    ? t("chain.freeEngineError", "輸入模組未能載入，請重新載入。")
+    : t("chain.freeEngineLoading", "正在準備輸入模組…");
+  $("#retry-engine").hidden = engineState !== "error";
+  $("#start").disabled = engineState !== "ready";
+}
+
+function ensureSyllabifier() {
+  if (syllabifier) return Promise.resolve(syllabifier);
+  if (enginePromise) return enginePromise;
+  engineState = "loading";
+  renderInputMode();
+  enginePromise = Promise.resolve().then(() => loadFreeInput()).then(engine => {
+    syllabifier = engine;
+    engineState = "ready";
+    return engine;
+  }).catch(() => { engineState = "error"; return null; }).finally(() => {
+    enginePromise = null;
+    renderInputMode();
+  });
+  return enginePromise;
+}
+
 
 function renderFlow() {
   if (!flowMode) return;
@@ -165,8 +237,14 @@ function showFlowNext() {
   $("#result-lobby").hidden = true;
 }
 
-function announce(message) {
-  $("#announcer").textContent = message;
+function setFeedback(...message) {
+  feedbackMessage = message;
+  $("#feedback").textContent = t(...message);
+}
+
+function announce(...message) {
+  announcementMessage = message;
+  $("#announcer").textContent = t(...message);
 }
 
 function showView(view) {
@@ -196,6 +274,9 @@ function selectMode(next) {
   mode = next === "official" ? "official" : "practice";
   writeJson(MODE_STORAGE_KEY, mode);
   renderMode();
+  renderInputMode();
+  renderBest(readStore().best);
+  void ensureSyllabifier();
 }
 
 // --- rendering ------------------------------------------------------------
@@ -243,6 +324,8 @@ function renderWord() {
     if (entry) {
       cell.classList.add(entry.correct ? "correct" : "incorrect");
       input.append(...comparison(entry.answer, entry.expected));
+    } else if (isPhrase() && state.status === "running") {
+      cell.classList.add("current");
     } else if (index === state.syllableIndex && state.status === "running") {
       cell.classList.add("current");
       if (draft) {
@@ -265,7 +348,39 @@ function renderWord() {
     return cell;
   }));
   const syllable = Math.min(state.syllableIndex + 1, word.syllables.length);
-  row.setAttribute("aria-label", t("chain.wordAria", `${word.word}，第 ${syllable} 個音節`, { word: word.word, syllable }));
+  row.setAttribute("aria-label", isPhrase()
+    ? t("chain.phraseAria", `${word.word}，由第 ${syllable} 個字開始，可以逐字或連打`, { word: word.word, syllable })
+    : t("chain.wordAria", `${word.word}，第 ${syllable} 個音節`, { word: word.word, syllable }));
+}
+
+function renderPhraseReview() {
+  for (const prefix of ["phrase-review", "result-review"]) {
+    const review = document.querySelector(`#${prefix}`);
+    review.hidden = !lastPhraseReview;
+    if (!lastPhraseReview) continue;
+    const word = lastPhraseReview.targets.map(target => target.hanzi).join("");
+    document.querySelector(`#${prefix}-title`).textContent = t("chain.reviewTitle", `上次提交：${word}`, { word });
+    document.querySelector(`#${prefix}-parts`).replaceChildren(...lastPhraseReview.plan.accepted.map((part, index) => {
+      const node = document.createElement("li");
+      node.className = `review-part ${part.correct ? "correct" : "incorrect"}`;
+      const glyph = document.createElement("span");
+      glyph.className = "review-glyph";
+      glyph.textContent = lastPhraseReview.targets[index].hanzi;
+      const spelling = document.createElement("span");
+      if (!part.answer) spelling.textContent = "∅";
+      spelling.append(...comparison(part.answer, part.expected ?? lastPhraseReview.targets[index].answers[0]));
+      node.append(glyph, spelling);
+      return node;
+    }));
+    const correct = lastPhraseReview.plan.accepted.filter(part => part.correct).length;
+    const errors = lastPhraseReview.plan.accepted.length - correct;
+    document.querySelector(`#${prefix}-note`).textContent = t("chain.gradedReview", `啱 ${correct}、錯 ${errors}。`, { correct, errors });
+  }
+}
+
+function playMetrics(now = Date.now()) {
+  const metrics = getChainMetrics(state, now);
+  return { ...metrics, rulesVersion: FREE_INPUT_RULE_VERSION };
 }
 
 // 100ms tick 會重複行 renderMetrics，只喺值有變先寫 DOM。
@@ -276,7 +391,7 @@ function setText(selector, value) {
 
 function renderMetrics(now = Date.now()) {
   if (!state) return;
-  const metrics = getChainMetrics(state, now);
+  const metrics = playMetrics(now);
   const official = metrics.mode === "official";
   setText("#progress-label", official
     ? t("chain.progressOfficial", `第 ${metrics.wordNumber} 個詞 · 官方輪`, { n: metrics.wordNumber })
@@ -298,15 +413,22 @@ function renderMetrics(now = Date.now()) {
 
 function render() {
   if (!state) return;
+  $("#typing-surface").classList.toggle("phrase-input", isPhrase());
   renderWord();
+  renderPhraseReview();
   setText("#draft", draft || "—");
   renderMetrics();
 }
 
 // --- storage --------------------------------------------------------------
 
-function readStore() {
-  const saved = readJson(STORAGE_KEY, null);
+function recordKey(selectedMode = mode, selectedInput = selectedInputMode()) {
+  const rules = FREE_INPUT_RULE_VERSION;
+  return `${STORAGE_KEY}:${selectedMode}:${selectedInput}:${rules}`;
+}
+
+function readStore(key = recordKey()) {
+  const saved = readJson(key, null);
   const plays = Array.isArray(saved?.plays)
     ? saved.plays.filter(play => play && Number.isFinite(play.officialScore))
     : [];
@@ -326,8 +448,12 @@ function renderBest(best) {
 }
 
 function saveResult(metrics) {
-  const store = readStore();
+  const key = recordKey(state.mode, state.inputMode);
+  const store = readStore(key);
   const play = {
+    inputMode: state.inputMode,
+    mode: state.mode,
+    rulesVersion: FREE_INPUT_RULE_VERSION,
     seed: state.seed,
     words: metrics.words,
     totalSyllables: metrics.totalSyllables,
@@ -344,7 +470,7 @@ function saveResult(metrics) {
   };
   const isBest = !store.best || play.officialScore > store.best.officialScore;
   const best = isBest ? play : store.best;
-  writeJson(STORAGE_KEY, { best, plays: [...store.plays, play].slice(-KEEP_PLAYS) });
+  writeJson(key, { best, plays: [...store.plays, play].slice(-KEEP_PLAYS) });
   renderBest(best);
   return { best, isBest };
 }
@@ -356,34 +482,52 @@ function isRunning() {
 }
 
 function start() {
+  if (!syllabifier) { void ensureSyllabifier(); return; }
   const raw = flowMode ? "" : $("#seed").value.trim();
   lastSeed = raw || String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
   const now = Date.now();
   state = mode === "official"
     ? createChainGame({ ...OFFICIAL_CHAIN, now, seed: lastSeed, wordCount: WORD_COUNT, bank: CHAIN_BANK })
     : createChainGame({ now, seed: lastSeed, wordCount: WORD_COUNT, bank: CHAIN_BANK });
+  state = { ...state, inputMode: selectedInputMode() };
   draft = "";
   composing = false;
+  compositionBase = null;
+  compositionCommit = null;
   physicalEdit = null;
   lastResult = null;
+  lastPhraseReview = null;
+  lastExport = null;
+  inputTrace = [];
+  traceDropped = 0;
+  traceStartedAt = clockNow();
+  tracePersisted = true;
+  freeTrace = createFreeTrace({ round: "words", seed: state.seed, startedAt: now });
+  recordInput("start", { inputMode: state.inputMode, seed: state.seed });
   $("#answer").value = "";
   $("#answer").disabled = false;
+  $("#answer").setAttribute("maxlength", String(MAX_FREE_INPUT));
+  $("#answer").setAttribute("aria-label", isPhrase()
+    ? t("chain.phraseAnswerAria", "輸入當前詞語嘅粵拼")
+    : t("chain.syllableAnswerAria", "輸入當前音節嘅粵拼"));
   $("#seed-label").textContent = flowMode
     ? t("chain.seedFlow", `${flowRoundLabel("words")} · seed ${lastSeed}`, { label: flowRoundLabel("words"), seed: lastSeed })
     : mode === "official"
       ? t("chain.seedOfficial", `官方輪 · seed ${lastSeed}`, { seed: lastSeed })
       : t("chain.seedPlain", `seed ${lastSeed}`, { seed: lastSeed });
-  $("#feedback").textContent = t("chain.feedbackIdle", "打粵拼，Space 或 Enter 確認；未輸入時按 Backspace 改上一個音節。");
+  setFeedback(...(isPhrase()
+    ? ["chain.phraseIdle", "逐字或連打都得，Space 或 Enter 提交；空白時 Backspace 改上一次提交。"]
+    : ["chain.feedbackIdle", "打粵拼，Space 或 Enter 確認；未輸入時按 Backspace 改上一個音節。"]));
   showView("play");
   render();
   focusTyping();
   clearInterval(ticker);
   ticker = setInterval(tick, 100);
-  announce(mode === "official"
-    ? t("chain.announceStartOfficial", `開始！官方輪固定 ${state.durationSeconds} 秒，seed ${lastSeed}。`,
-      { seconds: state.durationSeconds, seed: lastSeed })
-    : t("chain.announceStartPractice", `開始！本場 seed ${lastSeed}，共 ${WORD_COUNT} 個詞。`,
-      { seed: lastSeed, words: WORD_COUNT }));
+  announce(...(mode === "official"
+    ? ["chain.announceStartOfficial", `開始！官方輪固定 ${state.durationSeconds} 秒，seed ${lastSeed}。`,
+      { seconds: state.durationSeconds, seed: lastSeed }]
+    : ["chain.announceStartPractice", `開始！本場 seed ${lastSeed}，共 ${WORD_COUNT} 個詞。`,
+      { seed: lastSeed, words: WORD_COUNT }]));
 }
 
 function tick() {
@@ -396,64 +540,99 @@ function tick() {
   renderMetrics(Date.now());
 }
 
-function feedbackFor(previous, next) {
-  const word = previous.words[previous.wordIndex].word;
-  if (next.wordResult === "correct") {
-    return t("chain.feedbackWordCorrect",
-      `「${word}」全對！連擊 ${next.combo}，下次倍率 ×${comboMultiplier(next.combo).toFixed(1)}。`,
-      { word, combo: next.combo, multiplier: comboMultiplier(next.combo).toFixed(1) });
-  }
-  if (next.wordResult === "incorrect") {
-    return t("chain.feedbackWordIncorrect", `「${word}」有錯，連擊歸零，重新儲倍率。`, { word });
-  }
-  return next.lastResult === "correct"
-    ? t("chain.feedbackCorrect", "啱！繼續打下一個音節。")
-    : t("chain.feedbackIncorrect", "唔啱，照樣前進；未輸入時按 Backspace 可以退回上一個音節。");
-}
-
 function submit() {
-  if (!isRunning()) return;
+  if (!isRunning() || composing) return;
   const value = draft;
-  draft = "";
-  $("#answer").value = "";
+  recordInput("submit-control", { buffer: value });
+  if (!value) return;
+  const now = Date.now();
   const previous = state;
-  state = typeSyllable(state, value, Date.now());
-  if (state.mode === "official" && isRunning()) state = finishByTime(state, Date.now());
-  if (state === previous) {
-    $("#feedback").textContent = t("chain.feedbackBlank", "空白提交唔計分，打字母先。");
-    render();
-    return;
+  try { state = confirmChainInput(state, value, now, syllabifier); }
+  catch { setFeedback("chain.phraseInputError", "暫時未能分析呢個輸入，字母已保留。請再試一次。"); return; }
+  if (state.lastSubmission && state.lastSubmission !== previous.lastSubmission) {
+    const submission = state.lastSubmission;
+    // Preserve this confirmation even if it completed the round.
+    const status = state.status;
+    state = { ...state, status: "running" };
+    recordInput("submit", { submission });
+    state = { ...state, status };
+    draft = submission.plan.remainder;
+    if (submission.plan.accepted.length) lastPhraseReview = submission;
   }
+  $("#answer").value = draft;
   render();
-  if (state.status === "finished") {
-    finish();
-    return;
-  }
-  $("#feedback").textContent = feedbackFor(previous, state);
-  announce($("#feedback").textContent);
+  if (state.status === "finished") { finish(); return; }
+  const parts = state.lastSubmission?.plan.accepted ?? [];
+  const correct = parts.filter(part => part.correct).length;
+  const errors = parts.length - correct;
+  setFeedback("chain.gradedFeedback", `已提交：啱 ${correct}、錯 ${errors}；空草稿按 Backspace 可撤回修改。`, { correct, errors });
+  announce(...feedbackMessage);
 }
 
 function recall() {
   if (!isRunning()) return;
   const previous = state;
-  state = recallSyllable(state);
-  if (state === previous) {
-    $("#feedback").textContent = t("chain.recallFirst", "已經喺第一個音節，冇得再退。");
-    return;
-  }
-  draft = "";
-  $("#answer").value = "";
+  const commit = state.commits?.at(-1);
+  recordInput("undo-control", { buffer: draft, commitId: commit?.id ?? null });
+  state = undoChainInput(state, Date.now());
+  if (state.status === "finished") { finish(); return; }
+  if (state === previous) return;
+  draft = state.lastAnswer;
+  $("#answer").value = draft;
+  lastPhraseReview = null;
   render();
-  $("#feedback").textContent = t("chain.recallDone", "已退回上一個音節，重新打過。");
-  announce(t("chain.announceRecall", `退回上一個音節：${state.words[state.wordIndex].word}`,
-    { word: state.words[state.wordIndex].word }));
+  setFeedback("chain.phraseRecallDone", "已恢復上一次提交嘅輸入，可以修改再提交。");
+  announce(...feedbackMessage);
+}
+
+function retainTrace(metrics) {
+  if (!isPhrase()) return;
+  recordFreeEvent(freeTrace, "finish", { finalDraft: draft, metrics, scoredFinishedAt: state.finishedAt },
+    state.startedAt + Math.max(0, clockNow() - traceStartedAt));
+  traceDropped = freeTrace.droppedEvents;
+  lastExport = {
+    format: "canclid-graded-confirm-v2",
+    inputMode: "free",
+    rulesVersion: FREE_INPUT_RULE_VERSION,
+    segmenterVersion: syllabifier.version,
+    seed: state.seed,
+    startedAt: state.startedAt,
+    finishedAt: state.finishedAt,
+    prompts: state.words,
+    metrics,
+    observation: "browser-text-edits; not a complete physical keystroke trace",
+    inputEvents: inputTrace,
+    droppedInputEvents: traceDropped,
+    bytesRecorded: freeTrace.bytesRecorded,
+    finalDraft: draft,
+    finalCommits: (state.commits ?? []).map(({ before, ...commit }) => commit),
+  };
+  const saved = readJson(TRACE_STORAGE_KEY, []);
+  let traces = [...(Array.isArray(saved) ? saved : []), lastExport].slice(-KEEP_PLAYS);
+  tracePersisted = false;
+  while (traces.length) {
+    if (writeJson(TRACE_STORAGE_KEY, traces)) { tracePersisted = true; break; }
+    traces = traces.slice(1);
+  }
+}
+
+function exportTrace() {
+  if (!lastExport) return;
+  const blob = new Blob([JSON.stringify(lastExport, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `jyutping-words-${state.seed}-${state.startedAt}.json`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function finish() {
   clearInterval(ticker);
   ticker = null;
-  const metrics = getChainMetrics(state, Date.now());
+  const metrics = playMetrics();
   const { best, isBest } = saveResult(metrics);
+  retainTrace(metrics);
   if (flowMode) {
     // 流程內：寫入詞組輪結果，完場只可以接去第 3 輪，冇「再玩一場」。
     flow = saveRoundResult(flow, "words", flowRoundResult("words", metrics)) ?? flow;
@@ -462,14 +641,17 @@ function finish() {
   lastResult = { metrics, best, isBest };
   paintResult();
   showView("result");
-  announce(t("chain.announceFinish", `完成。正確音節每分鐘 ${metrics.correctPerMinute.toFixed(1)}，準確度 ${(metrics.accuracy * 100).toFixed(1)}%。`,
-    { cpm: metrics.correctPerMinute.toFixed(1), accuracy: (metrics.accuracy * 100).toFixed(1) }));
+  announce("chain.freeFinish", `完成。每分鐘上屏 ${metrics.correctPerMinute.toFixed(1)} 個音節。`, { cpm: metrics.correctPerMinute.toFixed(1) });
 }
 
 // 完場卡：lastResult 記住嗰局嘅數字，切語言嗰陣可以原樣重畫。
 function paintResult() {
   const { metrics, best, isBest } = lastResult;
   const official = metrics.mode === "official";
+  $("#export-trace").hidden = !lastExport;
+  $("#result-input-mode").textContent = t("chain.gradedResult", "逐字或連打都得；每次確認會判對錯並清空輸入，計分用正確音節／分鐘 × 準確度。");
+  if (!tracePersisted) $("#result-input-mode").textContent += " " + t("chain.traceStorageWarning", "本機儲存空間不足，仍可用下方按鈕匯出本輪紀錄。");
+  if (traceDropped) $("#result-input-mode").textContent += " " + t("chain.traceTruncated", "本輪輸入紀錄已超過保存上限，匯出會標示缺失事件。");
   const threshold = Math.round(metrics.threshold * 100);
   $("#result-title").textContent = official
     ? t("chain.resultTitleOfficial", "時間到，收卷！")
@@ -478,13 +660,9 @@ function paintResult() {
     { value: metrics.correctPerMinute.toFixed(1) });
   $("#result-accuracy").textContent = `${(metrics.accuracy * 100).toFixed(1)}%`;
   $("#result-score").textContent = metrics.officialScore.toFixed(1);
-  $("#result-threshold").textContent = official
-    ? (metrics.meetsThreshold
-      ? t("chain.thresholdOfficialPass", `達 ${threshold}% 門檻，計入正式賽排名`, { threshold })
-      : t("chain.thresholdOfficialFail", `未達 ${threshold}% 門檻，正式賽不計排名`, { threshold }))
-    : (metrics.meetsThreshold
-      ? t("chain.thresholdPracticePass", "達標")
-      : t("chain.thresholdPracticeFail", `未達標（要 ${threshold}% 準確度）`, { threshold }));
+  $("#result-threshold").textContent = metrics.meetsThreshold
+    ? t("chain.thresholdPass", `達 ${threshold}% 門檻`, { threshold })
+    : t("chain.thresholdFail", `未達 ${threshold}% 門檻`, { threshold });
   $("#window-note").hidden = !official;
   if (official) {
     $("#window-note").textContent = t("chain.windowNote", `官方模式：固定 ${metrics.scoredSeconds} 秒計分窗。`,
@@ -520,25 +698,59 @@ function playAgain() {
 // 未有 state（仲喺設定畫面）嗰陣一樣要行得通。
 function relayout() {
   renderMode();
+  renderInputMode();
   renderFlow();
   renderBest(readStore().best);
   if (lastResult) paintResult();
   if (state) render();
+  if (feedbackMessage) $("#feedback").textContent = t(...feedbackMessage);
+  if (announcementMessage) $("#announcer").textContent = t(...announcementMessage);
 }
 
 // --- input ----------------------------------------------------------------
 
-function markPhysicalEdit() {
-  const token = {};
+function markPhysicalEdit(kind, data = null) {
+  const token = { kind, data };
   physicalEdit = token;
   // A canceled keydown can still be followed by native input in the same turn.
   setTimeout(() => { if (physicalEdit === token) physicalEdit = null; }, 0);
 }
 
-function setDraft(value) {
-  draft = normalizeAnswer(value);
+function duplicatePhysicalInput(event) {
+  if (!physicalEdit) return false;
+  if (physicalEdit.kind === "insert") {
+    return event.inputType === "insertText" && event.data === physicalEdit.data;
+  }
+  if (physicalEdit.kind === "delete") return event.inputType === "deleteContentBackward";
+  return event.inputType === "insertLineBreak" || event.inputType === "insertParagraph" ||
+    (event.inputType === "insertText" && /^\s+$/u.test(event.data ?? ""));
+}
+
+function selection() {
+  const input = $("#answer");
+  const start = Number.isInteger(input.selectionStart) ? input.selectionStart : draft.length;
+  const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+  return { start: Math.min(start, draft.length), end: Math.min(end, draft.length) };
+}
+
+function setDraft(value, details = {}, cursor = null) {
+  const normalized = value;
+  if (!/^[a-z]*$/i.test(value)) { restore(); return false; }
+  if (normalized.length > MAX_FREE_INPUT) {
+    recordInput("rejected-input", { reason: "length", attemptedLength: normalized.length, ...details });
+    setFeedback("chain.inputLimit", `每次最多輸入 ${MAX_FREE_INPUT} 個字母；原本輸入已保留。`, { limit: MAX_FREE_INPUT });
+    restore();
+    return false;
+  }
+  const before = draft;
+  draft = normalized;
   $("#answer").value = draft;
+  if (cursor !== null && typeof $("#answer").setSelectionRange === "function") {
+    $("#answer").setSelectionRange(cursor, cursor);
+  }
+  if (before !== draft) recordInput("edit", { before, after: draft, rawValue: value, ...details });
   render();
+  return true;
 }
 
 function restore() {
@@ -548,25 +760,59 @@ function restore() {
 
 function onKeydown(event) {
   if (event.ctrlKey || event.metaKey || event.altKey || event.key === "Tab") return;
-  if (!isRunning()) return;
-  const letter = /^[a-z]$/i.test(event.key ?? "") ? event.key.toLowerCase()
+  if (!isRunning() || event.isComposing || composing) return;
+  const letter = /^[a-z]$/i.test(event.key ?? "") ? event.key
     : /^Key[A-Z]$/.test(event.code ?? "") ? event.code.slice(3).toLowerCase() : null;
+  const selected = selection();
   if (letter) {
     event.preventDefault();
-    markPhysicalEdit();
-    setDraft(draft + letter);
+    markPhysicalEdit("insert", letter);
+    setDraft(draft.slice(0, selected.start) + letter + draft.slice(selected.end), {
+      source: "keydown", action: selected.end > selected.start ? "replace" : "insert",
+      key: event.key, code: event.code, repeat: !!event.repeat, selection: selected,
+    }, selected.start + 1);
     return;
   }
   const key = event.code === "Space" ? " " : event.code === "NumpadEnter" ? "Enter"
     : ["Enter", "Backspace"].includes(event.code) ? event.code : event.key;
   if (![" ", "Enter", "Backspace"].includes(key)) return;
-  if (event.isComposing || composing) return;
   event.preventDefault();
-  markPhysicalEdit();
+  markPhysicalEdit(key === "Backspace" ? "delete" : "confirm");
   if (key === "Backspace") {
-    if (draft) setDraft(draft.slice(0, -1));
-    else recall();
+    if (draft) {
+      const start = selected.start === selected.end ? Math.max(0, selected.start - 1) : selected.start;
+      setDraft(draft.slice(0, start) + draft.slice(selected.end), {
+        source: "keydown", action: "delete", key: event.key, code: event.code, selection: selected,
+      }, start);
+    } else recall();
   } else submit();
+}
+
+function handleNativeInput(event) {
+  if (!isRunning()) { restore(); return; }
+  if (event.isComposing || composing) return;
+  const value = $("#answer").value;
+  if (compositionCommit && (/Composition/.test(event.inputType ?? "") || value === draft)) {
+    compositionCommit = null;
+    restore();
+    return;
+  }
+  if (duplicatePhysicalInput(event)) { restore(); return; }
+  // Reject the whole edit rather than silently stripping tones, Hanzi or punctuation.
+  if (!/^[a-z]*\s*$/i.test(value)) {
+    recordInput("rejected-input", { source: "input", rawValue: value.slice(0, MAX_FREE_INPUT), originalLength: value.length, inputType: event.inputType, reason: "non-latin" });
+    setFeedback("chain.invalidInput", "只接受無聲調粵拼字母；原本輸入已保留。");
+    restore();
+    return;
+  }
+  const submitting = /\s$/.test(value);
+  const cursor = $("#answer").selectionStart;
+  const accepted = setDraft(value.trimEnd(), {
+    source: "input", inputType: event.inputType, data: event.data ?? null,
+    action: event.inputType?.startsWith("delete") ? "delete" : "replace",
+    paste: event.inputType === "insertFromPaste",
+  }, Number.isInteger(cursor) ? Math.min(cursor, value.trimEnd().length) : null);
+  if (accepted && submitting) submit();
 }
 
 function mount() {
@@ -575,42 +821,71 @@ function mount() {
   if (typeof window !== "undefined") window.addEventListener("canclid-locale", relayout);
   $("#setup-form").addEventListener("submit", event => { event.preventDefault(); start(); });
   $("#play-again").addEventListener("click", playAgain);
+  $("#export-trace").addEventListener("click", exportTrace);
+  $("#retry-engine").addEventListener("click", () => { void ensureSyllabifier(); });
   $("#mode-practice").addEventListener("click", () => selectMode("practice"));
   $("#mode-official").addEventListener("click", () => selectMode("official"));
   $("#typing-surface").addEventListener("click", focusTyping);
   // The hidden input sits inside the surface, so one listener covers both.
   $("#typing-surface").addEventListener("keydown", onKeydown);
   $("#answer").addEventListener("beforeinput", event => {
-    if (event.isComposing || composing) return;
-    if (event.inputType === "deleteContentBackward" && draft === "") {
+    if (!isRunning() || event.isComposing || composing) return;
+    recordInput("beforeinput", { inputType: event.inputType, data: event.data ?? null, selection: selection() });
+    if (duplicatePhysicalInput(event)) {
+      if (event.cancelable !== false) event.preventDefault();
+      return;
+    }
+    if (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph" ||
+      (event.inputType === "insertText" && /^\s+$/u.test(event.data ?? ""))) {
+      if (event.cancelable !== false) { event.preventDefault(); submit(); }
+    } else if (event.inputType === "deleteContentBackward" && draft === "") {
       if (event.cancelable !== false) event.preventDefault();
       recall();
     }
   });
-  $("#answer").addEventListener("input", event => {
-    if (!isRunning() || event.isComposing || composing || physicalEdit) { restore(); return; }
-    const value = $("#answer").value;
-    // Reject a non-Latin IME commit; never guess a pronunciation from its characters.
-    if (event.inputType !== "insertFromPaste" && /[^a-z\s]/i.test(value)) { restore(); return; }
-    const submitting = /\s$/.test(value);
-    setDraft(value);
-    if (submitting) submit();
+  $("#answer").addEventListener("input", handleNativeInput);
+  $("#answer").addEventListener("compositionstart", () => {
+    if (!isRunning()) return;
+    compositionBase = { draft, ...selection() };
+    composing = true;
+    recordInput("compositionstart", { buffer: draft, selection: selection() });
   });
-  $("#answer").addEventListener("compositionstart", () => { composing = true; restore(); });
   $("#answer").addEventListener("compositionend", event => {
+    if (!isRunning()) return;
+    const base = compositionBase ?? { draft, start: draft.length, end: draft.length };
     composing = false;
+    compositionBase = null;
     const data = event.data ?? "";
-    if (/^[a-z]*$/i.test(data)) setDraft(draft + data);
-    else restore();
+    recordInput("compositionend", { data });
+    if (!data) {
+      setDraft(base.draft, { source: "composition-cancel", data }, base.start);
+    } else if (/^[a-z]+$/i.test(data)) {
+      setDraft(base.draft.slice(0, base.start) + data + base.draft.slice(base.end),
+        { source: "composition", action: "replace", data, selection: { start: base.start, end: base.end } }, base.start + data.length);
+    } else restore();
+    compositionCommit = { data };
+    const token = compositionCommit;
+    setTimeout(() => { if (compositionCommit === token) compositionCommit = null; }, 0);
   });
   $("#typing-surface").addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
   $("#answer").addEventListener("focus", () => $("#typing-surface").classList.add("focused"));
-  $("#answer").addEventListener("blur", () => $("#typing-surface").classList.remove("focused"));
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+  $("#answer").addEventListener("blur", () => {
+    $("#typing-surface").classList.remove("focused");
+    recordInput("blur", { buffer: draft });
+  });
+  document.addEventListener("selectionchange", () => {
+    if (document.activeElement === $("#answer")) recordInput("selection", selection());
+  });
+  document.addEventListener("visibilitychange", () => {
+    recordInput("visibility", { hidden: !!document.hidden });
+    if (!document.hidden) tick();
+  });
   renderMode();
   renderFlow();
   renderBest(readStore().best);
+  renderInputMode();
   showView("setup");
+  void ensureSyllabifier();
 }
 
 if (typeof document !== "undefined" && $("#setup-view")) mount();

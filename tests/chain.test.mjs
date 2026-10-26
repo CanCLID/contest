@@ -11,6 +11,8 @@ import {
   typeSyllable,
   validateBank,
 } from "../demo/games/chain/chain.mjs";
+import { FREE_INPUT_RULE_VERSION, MAX_FREE_INPUT, loadFreeInput, createFreeTrace, recordFreeEvent } from "../demo/games/free-input.mjs";
+import { confirmChainInput, undoChainInput, visibleChainTargets } from "../demo/games/chain/confirmed.mjs";
 import { CHAIN_BANK } from "../demo/games/chain/data.mjs";
 import { comboMultiplier, formatClock, hashSeed, mulberry32, normalizeAnswer, shuffled } from "../demo/games/common.mjs";
 import * as flowApi from "../demo/games/flow.mjs";
@@ -321,219 +323,6 @@ test("頁面骨架：引用正確資源、有返大廳同賽場嘅連結", () =>
     "隱藏 input 要喺輸入區入面，按鍵先會冒泡到輸入區嘅監聽器");
 });
 
-// 用 vm + 迷你 DOM 驅動真嘅 chain-dom.mjs，覆蓋開局、打字、退回重打、完場同寫本地紀錄。
-const DOM_SOURCE = readFileSync(new URL("../demo/games/chain/chain-dom.mjs", import.meta.url), "utf8")
-  .replace(/^import[\s\S]*?from\s+"[^"]+";\n/gm, "");
-
-function chainTab() {
-  let now = 0;
-  const store = new Map();
-  const elements = new Map();
-  const documentListeners = new Map();
-
-  const makeElement = (tagName = "div", parent = null) => {
-    const classes = new Set();
-    const attributes = new Map();
-    const listeners = new Map();
-    const children = [];
-    let text = "";
-    const node = {
-      tagName, children, hidden: false, disabled: false, value: "", id: "", style: {}, clientHeight: 300,
-      classList: {
-        add: (...names) => names.forEach(name => classes.add(name)),
-        remove: (...names) => names.forEach(name => classes.delete(name)),
-        contains: name => classes.has(name),
-        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
-      },
-      get className() { return [...classes].join(" "); },
-      set className(value) {
-        classes.clear();
-        String(value).split(/\s+/).filter(Boolean).forEach(name => classes.add(name));
-      },
-      get textContent() { return text + children.map(child => child.textContent).join(""); },
-      set textContent(value) { text = String(value); children.length = 0; },
-      setAttribute: (name, value) => attributes.set(name, String(value)),
-      getAttribute: name => attributes.get(name) ?? null,
-      addEventListener(type, listener) {
-        if (!listeners.has(type)) listeners.set(type, []);
-        listeners.get(type).push(listener);
-      },
-      fire(type, event = {}) {
-        event.target ??= node;
-        event.preventDefault ??= () => {};
-        (listeners.get(type) ?? []).forEach(listener => listener(event));
-        parent?.fire(type, event);
-      },
-      append: (...nodes) => { children.push(...nodes); },
-      replaceChildren(...nodes) { children.length = 0; children.push(...nodes); },
-      focus() {}, blur() {},
-    };
-    return node;
-  };
-
-  // The hidden input sits inside the typing surface in index.html, so keydown
-  // reaches the surface listener by bubbling — the harness mirrors that.
-  const parents = new Map([["#answer", "#typing-surface"], ["#word", "#typing-surface"]]);
-  const get = selector => {
-    if (!elements.has(selector)) {
-      const parent = parents.has(selector) ? get(parents.get(selector)) : null;
-      const element = makeElement(selector === "#answer" ? "input" : "div", parent);
-      if (selector.startsWith("#")) element.id = selector.slice(1);
-      elements.set(selector, element);
-    }
-    return elements.get(selector);
-  };
-  const views = ["#setup-view", "#play-view", "#result-view"].map(get);
-  const body = makeElement("body");
-
-  class Clock extends Date {
-    static now() { return now; }
-  }
-
-  vm.runInContext(DOM_SOURCE, vm.createContext({
-    Date: Clock,
-    CHAIN_BANK, comboMultiplier, createChainGame, formatClock, getChainMetrics, normalizeAnswer,
-    recallSyllable, typeSyllable,
-    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
-    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
-    setInterval: () => 1,
-    clearInterval: () => {},
-    setTimeout: () => 1,
-    document: {
-      body,
-      querySelector: get,
-      querySelectorAll: () => views,
-      createElement: makeElement,
-      addEventListener(type, listener) { documentListeners.set(type, listener); },
-    },
-  }), { filename: "demo/games/chain/chain-dom.mjs" });
-
-  let time = 0;
-  return {
-    get,
-    views,
-    store,
-    record: () => JSON.parse(store.get("canclid-contest-games-chain") ?? "null"),
-    setTime: value => { now = value; },
-    tick: seconds => { time += seconds * 1000; now = time; return now; },
-    key: (key, code = key) => get("#answer").fire("keydown", { key, code }),
-    type(text) { for (const letter of text) this.key(letter, `Key${letter.toUpperCase()}`); },
-    submit() { this.key(" ", "Space"); },
-  };
-}
-
-test("DOM 層：開局、逐個音節打出倍率、退回重打、完場同寫本地紀錄", () => {
-  const tab = chainTab();
-  assert.equal(tab.get("#setup-view").hidden, false);
-  assert.equal(tab.get("#play-view").hidden, true);
-  assert.match(tab.get("#best-note").textContent, /未有紀錄/);
-
-  tab.get("#seed").value = "dom-seed";
-  tab.get("#setup-form").fire("submit");
-  assert.equal(tab.get("#setup-view").hidden, true);
-  assert.equal(tab.get("#play-view").hidden, false);
-  assert.equal(tab.get("#seed-label").textContent, "seed dom-seed");
-  assert.equal(tab.get("#progress-label").textContent, "第 1 / 20 個詞");
-
-  const plan = createChainGame({ now: 0, seed: "dom-seed", wordCount: 20, bank: CHAIN_BANK }).words;
-  const totalSyllables = plan.reduce((sum, word) => sum + word.syllables.length, 0);
-
-  // 一個錯音節：紅色刪線加綠色正確部分，然後空草稿按 Backspace 退回。
-  tab.setTime(1000);
-  tab.type("zzz");
-  assert.equal(tab.get("#draft").textContent, "zzz");
-  tab.submit();
-  assert.equal(tab.get("#draft").textContent, "—");
-  assert.equal(tab.get("#accuracy").textContent, "0%");
-  const wrongCell = tab.get("#word").children[0];
-  assert.ok(wrongCell.className.includes("incorrect"));
-  const descendants = node => node.children.flatMap(child => [child, ...descendants(child)]);
-  const parts = descendants(wrongCell);
-  assert.ok(parts.some(child => child.tagName === "del" && child.className.includes("cell-wrong")),
-    "錯嘅部分要用刪線標示");
-  assert.ok(parts.some(child => child.className.includes("cell-correct")), "要顯示正確嘅音節");
-  tab.key("Backspace", "Backspace");
-  assert.equal(tab.get("#accuracy").textContent, "—", "退回之後錯誤唔再計");
-  assert.equal(tab.get("#combo").textContent, "連擊 0");
-
-  // 第一個詞全部打啱 → 連擊 +1、倍率 ×1.1。
-  for (const syllable of plan[0].syllables) {
-    tab.tick(1);
-    tab.type(syllable);
-    tab.submit();
-  }
-  assert.equal(tab.get("#combo").textContent, "連擊 1");
-  assert.equal(tab.get("#multiplier").textContent, "倍率 ×1.1");
-  assert.equal(tab.get("#progress-label").textContent, "第 2 / 20 個詞");
-  assert.match(tab.get("#feedback").textContent, /全對/);
-
-  for (const word of plan.slice(1)) {
-    for (const syllable of word.syllables) {
-      tab.tick(1);
-      tab.type(syllable);
-      tab.submit();
-    }
-  }
-
-  assert.equal(tab.get("#play-view").hidden, true);
-  assert.equal(tab.get("#result-view").hidden, false);
-  assert.match(tab.get("#result-title").textContent, /新紀錄/);
-  assert.equal(tab.get("#result-accuracy").textContent, "100.0%");
-  assert.match(tab.get("#result-threshold").textContent, /達標/);
-  assert.equal(tab.get("#result-detail").textContent.startsWith("連擊 20"), true, tab.get("#result-detail").textContent);
-  assert.ok(Number(tab.get("#result-score").textContent) > 0);
-  assert.match(tab.get("#result-summary").textContent, /42 個音節|個音節/);
-
-  const record = tab.record();
-  assert.equal(record.plays.length, 1);
-  assert.equal(record.best.correct, totalSyllables);
-  assert.equal(record.best.words, 20);
-  assert.equal(record.best.seed, "dom-seed");
-  assert.ok(record.best.officialScore > 0);
-  assert.equal(record.best.meetsThreshold, true);
-  assert.match(tab.get("#result-best").textContent, /正式分/);
-
-  tab.get("#play-again").fire("click");
-  assert.equal(tab.get("#seed").value, "dom-seed", "再玩一場保留同一個 seed");
-  assert.equal(tab.get("#play-view").hidden, true);
-  assert.match(tab.get("#best-note").textContent, /本地最佳：正式分/);
-});
-
-test("DOM 層：手機原生輸入、IME 拒絕同 Enter 提交", () => {
-  const tab = chainTab();
-  tab.get("#seed").value = "phone-seed";
-  tab.get("#setup-form").fire("submit");
-  const answer = tab.get("#answer");
-  const input = (value, inputType = "insertText") => {
-    answer.value = value;
-    answer.fire("input", { inputType, data: value });
-  };
-
-  input("din");
-  assert.equal(tab.get("#draft").textContent, "din");
-  input("香港");
-  assert.equal(tab.get("#draft").textContent, "din", "漢字提交唔會變成答案");
-  input("zz!");
-  assert.equal(tab.get("#draft").textContent, "din", "含非字母嘅提交整批拒絕，同主賽場一致");
-  input("din ");
-  assert.equal(tab.get("#draft").textContent, "—", "尾巴空白等於提交");
-  assert.equal(tab.get("#word").children.filter(child => child.className.includes("correct") ||
-    child.className.includes("incorrect")).length, 1);
-
-  answer.fire("beforeinput", { inputType: "deleteContentBackward" });
-  assert.match(tab.get("#feedback").textContent, /退回/, "空草稿嘅手機 Backspace 會退回");
-
-  tab.key("d", "KeyD");
-  tab.key("i", "KeyI");
-  assert.equal(tab.get("#draft").textContent, "di");
-  tab.key("Enter", "Enter");
-  assert.equal(tab.get("#draft").textContent, "—");
-  tab.key("Unidentified", "KeyW");
-  assert.equal(tab.get("#draft").textContent, "w", "event.key 唔可用時用 KeyA–KeyZ 鍵碼");
-  tab.key("ArrowLeft", "ArrowLeft");
-  assert.equal(tab.get("#draft").textContent, "w", "其他按鍵唔會改變草稿");
-});
-
 // --- 官方模式（正式詞組輪，docs/INTEGRATION-PLAN.md §A2） --------------------
 
 test("官方模式：連續題流——打完一批唔完場，自動補下一批", () => {
@@ -697,375 +486,34 @@ test("官方模式：OFFICIAL_CHAIN 常數、參數校驗同練習模式唔受�
   assert.equal(getChainMetrics(practice, 0).mode, "practice");
 });
 
-// --- 模式切換（練習／官方）同官方輪 DOM 行為 --------------------------------
-
+// Run the actual DOM controller with a small event/selection-aware DOM. The
+// loaded matcher uses the real bundled Yune WASM, not fixture segmentation.
+const testFreeEngine = await loadFreeInput();
+const DOM_SOURCE = readFileSync(new URL("../demo/games/chain/chain-dom.mjs", import.meta.url), "utf8")
+  .replace(/^import[\s\S]*?from\s+"[^"]+";\n/gm, "");
+const CHAIN_HTML = readFileSync(new URL("../demo/games/chain/index.html", import.meta.url), "utf8");
 const CHAIN_MODE_KEY = "canclid-contest-games-chain-mode";
+const TRACE_KEY = "canclid-contest-games-chain-free-traces";
 
-// flow.mjs 喺呼叫嗰刻先讀 globalThis.sessionStorage；流程測試暫時掛一個假嘅上去。
-function withFlowStorage(run) {
-  const map = new Map();
-  const storage = {
-    map,
-    getItem: key => (map.has(key) ? map.get(key) : null),
-    setItem(key, value) { map.set(key, String(value)); },
-    removeItem(key) { map.delete(key); },
-    read: key => (map.has(key) ? JSON.parse(map.get(key)) : null),
-  };
-  const previous = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
-  Object.defineProperty(globalThis, "sessionStorage", { value: storage, configurable: true, writable: true });
-  try {
-    return run(storage);
-  } finally {
-    if (previous) Object.defineProperty(globalThis, "sessionStorage", previous);
-    else delete globalThis.sessionStorage;
-  }
-}
-
-// 同 chainTab 一樣嘅迷你 DOM，但補上官方模式要用嘅全局（OFFICIAL_CHAIN、
-// finishByTime），記低 createChainGame 嘅參數，同埋捉住 setInterval 嘅回呼
-// 令測試可以自己撳一下「到點收卷」。
-function chainModeTab({ store = new Map(), flowMode = false } = {}) {
+function chainTab(testContext, { store = new Map(), flowMode = false, i18n = false, loader, search = "" } = {}) {
   let now = 0;
-  const elements = new Map();
-  const documentListeners = new Map();
-  const calls = [];
   let intervalCallback = null;
   let intervalDelay = null;
-
-  const makeElement = (tagName = "div", parent = null) => {
-    const classes = new Set();
-    const attributes = new Map();
-    const listeners = new Map();
-    const children = [];
-    let text = "";
-    const node = {
-      tagName, children, hidden: false, disabled: false, value: "", id: "", style: {}, clientHeight: 300,
-      classList: {
-        add: (...names) => names.forEach(name => classes.add(name)),
-        remove: (...names) => names.forEach(name => classes.delete(name)),
-        contains: name => classes.has(name),
-        toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
-      },
-      get className() { return [...classes].join(" "); },
-      set className(value) {
-        classes.clear();
-        String(value).split(/\s+/).filter(Boolean).forEach(name => classes.add(name));
-      },
-      get textContent() { return text + children.map(child => child.textContent).join(""); },
-      set textContent(value) { text = String(value); children.length = 0; },
-      setAttribute: (name, value) => attributes.set(name, String(value)),
-      getAttribute: name => attributes.get(name) ?? null,
-      addEventListener(type, listener) {
-        if (!listeners.has(type)) listeners.set(type, []);
-        listeners.get(type).push(listener);
-      },
-      fire(type, event = {}) {
-        event.target ??= node;
-        event.preventDefault ??= () => {};
-        (listeners.get(type) ?? []).forEach(listener => listener(event));
-        parent?.fire(type, event);
-      },
-      append: (...nodes) => { children.push(...nodes); },
-      replaceChildren(...nodes) { children.length = 0; children.push(...nodes); },
-      focus() {}, blur() {},
-    };
-    return node;
-  };
-
-  const parents = new Map([["#answer", "#typing-surface"], ["#word", "#typing-surface"]]);
-  const get = selector => {
-    if (!elements.has(selector)) {
-      const parent = parents.has(selector) ? get(parents.get(selector)) : null;
-      const element = makeElement(selector === "#answer" ? "input" : "div", parent);
-      if (selector.startsWith("#")) element.id = selector.slice(1);
-      elements.set(selector, element);
-    }
-    return elements.get(selector);
-  };
-  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
-  for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
-  const views = ["#setup-view", "#play-view", "#result-view"].map(get);
-  const body = makeElement("body");
-
-  class Clock extends Date {
-    static now() { return now; }
-  }
-
-  vm.runInContext(DOM_SOURCE, vm.createContext({
-    Date: Clock,
-    OFFICIAL_CHAIN, CHAIN_BANK,
-    comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer, recallSyllable, typeSyllable,
-    ...flowApi,
-    location: { search: flowMode ? "?flow=1" : "", href: "" },
-    URLSearchParams,
-    createChainGame: options => {
-      const created = createChainGame(options);
-      calls.push({ options, state: created });
-      return created;
-    },
-    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
-    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
-    setInterval: (callback, delay) => { intervalCallback = callback; intervalDelay = delay; return 1; },
-    clearInterval: () => { intervalCallback = null; },
-    setTimeout: () => 1,
-    document: {
-      body,
-      querySelector: get,
-      querySelectorAll: () => views,
-      createElement: makeElement,
-      addEventListener(type, listener) { documentListeners.set(type, listener); },
-    },
-  }), { filename: "demo/games/chain/chain-dom.mjs" });
-
-  return {
-    get,
-    views,
-    store,
-    calls,
-    mode: () => JSON.parse(store.get(CHAIN_MODE_KEY) ?? "null"),
-    record: () => JSON.parse(store.get("canclid-contest-games-chain") ?? "null"),
-    setTime: value => { now = value; },
-    fireTick: () => intervalCallback?.(),
-    intervalMs: () => intervalDelay,
-    key: (key, code = key) => get("#answer").fire("keydown", { key, code }),
-    type(text) { for (const letter of text) this.key(letter, `Key${letter.toUpperCase()}`); },
-    submit() { this.key(" ", "Space"); },
-  };
-}
-
-test("DOM 層：模式切換預設練習、切官方寫入 localStorage，重開還原", () => {
-  const tab = chainModeTab();
-  assert.equal(tab.get("#mode-practice").getAttribute("aria-pressed"), "true");
-  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "false");
-  assert.ok(tab.get("#mode-practice").classList.contains("selected"));
-  assert.match(tab.get("#mode-note").textContent, /練習模式/);
-
-  tab.get("#mode-official").fire("click");
-  assert.equal(tab.mode(), "official");
-  assert.equal(tab.get("#mode-official").getAttribute("aria-pressed"), "true");
-  assert.ok(tab.get("#mode-official").classList.contains("selected"));
-  assert.ok(!tab.get("#mode-practice").classList.contains("selected"));
-  assert.match(tab.get("#mode-note").textContent, /120 秒/);
-
-  tab.get("#mode-practice").fire("click");
-  assert.equal(tab.mode(), "practice");
-
-  const reopened = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
-  assert.equal(reopened.get("#mode-official").getAttribute("aria-pressed"), "true");
-  assert.equal(reopened.get("#mode-practice").getAttribute("aria-pressed"), "false");
-  assert.match(reopened.get("#mode-note").textContent, /120 秒/);
-
-  const junk = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("ranked")]]) });
-  assert.equal(junk.get("#mode-practice").getAttribute("aria-pressed"), "true", "壞值要退回練習");
-});
-
-test("DOM 層：官方模式開局用 OFFICIAL_CHAIN、HUD 顯示剩餘時間，到點定時收卷顯示成績", () => {
-  const tab = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
-  tab.get("#seed").value = "official-seed";
-  tab.get("#setup-form").fire("submit");
-
-  const started = tab.calls.at(-1);
-  assert.equal(started.options.mode, "official");
-  assert.equal(started.options.durationSeconds, 120);
-  assert.equal(started.options.bank, CHAIN_BANK);
-  assert.equal(started.state.mode, "official");
-  assert.equal(started.state.endsAt, 120_000);
-  assert.equal(tab.get("#seed-label").textContent, "官方輪 · seed official-seed");
-  assert.equal(tab.get("#progress-label").textContent, "第 1 個詞 · 官方輪");
-  assert.equal(tab.get("#time-label").textContent, "剩餘時間");
-  assert.equal(tab.get("#time").textContent, "02:00.0");
-  assert.ok(tab.intervalMs() <= 250, "官方輪要定時檢查收卷");
-
-  tab.setTime(1000);
-  tab.type("zzz");
-  tab.submit();
-  assert.equal(tab.get("#play-view").hidden, false, "未夠鐘唔會收卷");
-
-  tab.setTime(120_000);
-  tab.fireTick();
-  assert.equal(tab.get("#play-view").hidden, true);
-  assert.equal(tab.get("#result-view").hidden, false);
-  assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
-  assert.match(tab.get("#result-threshold").textContent, /未達 90% 門檻，正式賽不計排名/);
-  assert.equal(tab.get("#window-note").hidden, false);
-  assert.match(tab.get("#window-note").textContent, /固定 120 秒計分窗/);
-  assert.match(tab.get("#result-summary").textContent, /用時 02:00\.0/);
-  const record = tab.record();
-  assert.equal(record.plays.length, 1);
-  assert.equal(record.plays[0].meetsThreshold, false);
-});
-
-test("DOM 層：官方模式連續題流唔會打完一批就完場；達門檻文案同逾時提交即刻收卷", () => {
-  const tab = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
-  tab.get("#seed").value = "official-full";
-  tab.get("#setup-form").fire("submit");
-  const plan = tab.calls.at(-1).state.words;
-
-  let time = 0;
-  for (const word of plan) {
-    for (const syllable of word.syllables) {
-      time += 1000;
-      tab.setTime(time);
-      tab.type(syllable);
-      tab.submit();
-    }
-  }
-  assert.equal(tab.get("#play-view").hidden, false, "官方模式打完一批會補下一批");
-  assert.equal(tab.get("#combo").textContent, `連擊 ${plan.length}`);
-
-  tab.setTime(120_000);
-  tab.fireTick();
-  assert.equal(tab.get("#result-view").hidden, false);
-  assert.match(tab.get("#result-threshold").textContent, /達 90% 門檻，計入正式賽排名/);
-  assert.match(tab.get("#window-note").textContent, /固定 120 秒計分窗/);
-
-  // 到點之後嘅提交：typeSyllable／finishByTime 即刻收卷，逾時答案唔入分。
-  const late = chainModeTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
-  late.get("#setup-form").fire("submit");
-  late.setTime(120_000);
-  late.type("hoeng");
-  late.submit();
-  assert.equal(late.get("#result-view").hidden, false);
-  assert.equal(late.get("#result-title").textContent, "時間到，收卷！");
-  assert.equal(late.record().plays[0].correct, 0, "逾時提交唔會計分");
-});
-
-test("DOM 層：練習模式維持原本行為——已用時間、詞數進度、冇官方文案", () => {
-  const tab = chainModeTab();
-  assert.equal(tab.get("#flow-banner").hidden, true, "唔係流程就唔會出流程橫額");
-  assert.equal(tab.get("#mode-picker").hidden, false);
-  assert.equal(tab.get("#seed-field").hidden, false);
-  tab.get("#setup-form").fire("submit");
-
-  const started = tab.calls.at(-1);
-  assert.equal(started.state.mode, "practice");
-  assert.equal(started.options.durationSeconds, undefined, "練習開局唔會傳官方參數");
-  assert.equal(tab.get("#time-label").textContent, "已用時間");
-  assert.equal(tab.get("#progress-label").textContent, "第 1 / 20 個詞");
-  assert.ok(tab.get("#seed-label").textContent.startsWith("seed "));
-
-  const plan = started.state.words;
-  let time = 0;
-  for (const word of plan) {
-    for (const syllable of word.syllables) {
-      time += 1000;
-      tab.setTime(time);
-      tab.type(syllable);
-      tab.submit();
-    }
-  }
-  assert.equal(tab.get("#result-view").hidden, false);
-  assert.equal(tab.get("#result-title").textContent, "完成喇！新紀錄！");
-  assert.equal(tab.get("#result-threshold").textContent, "達標");
-  assert.equal(tab.get("#window-note").hidden, true);
-  assert.equal(tab.get("#progress-label").textContent, `第 ${plan.length} / 20 個詞`);
-  assert.equal(tab.get("#flow-next").hidden, true, "流程外完場唔會出「下一輪」掣");
-});
-
-test("DOM 層：?flow=1 鎖定官方詞組輪、收埋 seed 輸入，到點寫入流程再接去篇章", () => {
-  withFlowStorage(storage => {
-    const tab = chainModeTab({ flowMode: true });
-    assert.deepEqual(storage.read("canclid-contest-official-flow").rounds, {}, "一入 ?flow=1 就開流程");
-    assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組/);
-    assert.equal(tab.get("#mode-picker").hidden, true, "流程鎖定官方模式");
-    assert.equal(tab.get("#seed-field").hidden, true, "流程唔收 seed 輸入");
-    assert.equal(tab.get("#seed").hidden, true);
-    assert.equal(tab.get("#seed-note").hidden, true);
-    assert.equal(tab.get("#lobby-link").textContent, "‹ 退出流程");
-    assert.equal(tab.get("#lobby-link").href, "../../index.html");
-    assert.equal(tab.get("#flow-next").hidden, true, "未開局未出下一輪掣");
-
-    // 流程唔理模式切換，亦唔理手動 seed。
-    tab.get("#mode-practice").fire("click");
-    tab.get("#seed").value = "flow-ignored";
-    tab.get("#setup-form").fire("submit");
-    const started = tab.calls.at(-1);
-    assert.equal(started.options.mode, "official");
-    assert.equal(started.options.durationSeconds, 120);
-    assert.equal(started.options.bank, CHAIN_BANK);
-    assert.notEqual(started.options.seed, "flow-ignored", "流程用隨機 seed");
-    assert.match(started.options.seed, /^\d{6}$/);
-    assert.equal(tab.get("#seed-label").textContent, `官方流程第 2 輪：詞組 · seed ${started.options.seed}`);
-    assert.equal(tab.mode(), null, "流程唔會寫入模式偏好");
-
-    tab.setTime(1000);
-    tab.type("zzz");
-    tab.submit();
-    assert.equal(tab.get("#play-view").hidden, false, "未夠鐘唔會收卷");
-
-    tab.setTime(120_000);
-    tab.fireTick();
-    assert.equal(tab.get("#result-view").hidden, false);
-    const saved = storage.read("canclid-contest-official-flow").rounds.words;
-    assert.equal(saved.seconds, 120, "定時輪記固定計分窗");
-    assert.equal(saved.correct, 0);
-    assert.equal(saved.submitted, 1);
-    assert.equal(saved.accuracy, 0);
-    assert.equal(saved.threshold, 0.9);
-    assert.equal(saved.meetsThreshold, false);
-
-    assert.equal(tab.get("#flow-next").hidden, false);
-    assert.equal(tab.get("#flow-next").href, "../ghost/?flow=1");
-    assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
-    assert.equal(tab.get("#play-again").hidden, true, "流程內冇「再玩一場」");
-    assert.equal(tab.get("#result-lobby").hidden, true);
-  });
-});
-
-// --- i18n：繁體粵語（預設）／簡體粵文（demo/i18n.mjs） ------------------------
-
-const CHAIN_HTML = readFileSync(new URL("../demo/games/chain/index.html", import.meta.url), "utf8");
-const LOCALE_STORAGE_KEY = "canclid-contest-locale";
-
-// 由 index.html 直接抽 data-i18n 元素：key → 繁體原文（同頁面開場嗰陣一樣）。
-function i18nEntries(html, attribute = "data-i18n") {
-  const pattern = new RegExp(`${attribute}="([^"]+)"[^>]*>([^<]*)<`, "g");
-  return [...html.matchAll(pattern)].map(match => ({ key: match[1], hant: match[2] }));
-}
-
-// data-i18n-placeholder 嘅原文喺同一個 tag 嘅 placeholder 屬性度。
-function placeholderEntries(html) {
-  return [...html.matchAll(/<[^>]*data-i18n-placeholder="([^"]+)"[^>]*>/g)].map(match => ({
-    key: match[1],
-    hant: match[0].match(/placeholder="([^"]*)"/)?.[1] ?? "",
-  }));
-}
-
-// i18n 運行庫喺瀏覽器度讀全局 document／window／localStorage；node 冇，測試暫時掛
-// 假嘅上去，令真嘅 demo/i18n.mjs 同 vm 入面嘅頁面模組共用同一個假 DOM。
-function withI18nGlobals(values) {
-  const saved = new Map();
-  for (const [name, value] of Object.entries(values)) {
-    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
-    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
-  }
-  return () => {
-    for (const [name, descriptor] of saved) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else delete globalThis[name];
-    }
-  };
-}
-
-// 同 chainModeTab 一樣嘅迷你 DOM，但補上 i18n 要用嘅嘢：dataset（靜態文案快取）、
-// document.querySelectorAll（data-i18n／data-i18n-placeholder／data-locale-toggle）、
-// 假 localStorage 同真嘅 i18n 運行庫。
-function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
-  let now = 0;
+  const calls = [];
+  const timers = [];
   const elements = new Map();
   const documentListeners = new Map();
   const windowListeners = new Map();
-  let intervalCallback = null;
-
   const makeElement = (tagName = "div", parent = null) => {
     const classes = new Set();
     const attributes = new Map();
     const listeners = new Map();
     const children = [];
     let text = "";
+    let value = "";
     const node = {
-      tagName, children, hidden: false, disabled: false, value: "", id: "", style: {}, dataset: {},
-      clientHeight: 300,
+      tagName, children, hidden: false, disabled: false, id: "", style: {}, dataset: {}, clientHeight: 300,
+      selectionStart: 0, selectionEnd: 0,
       classList: {
         add: (...names) => names.forEach(name => classes.add(name)),
         remove: (...names) => names.forEach(name => classes.delete(name)),
@@ -1073,13 +521,13 @@ function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
         toggle(name, on) { if (on ?? !classes.has(name)) classes.add(name); else classes.delete(name); },
       },
       get className() { return [...classes].join(" "); },
-      set className(value) {
-        classes.clear();
-        String(value).split(/\s+/).filter(Boolean).forEach(name => classes.add(name));
-      },
+      set className(next) { classes.clear(); String(next).split(/\s+/).filter(Boolean).forEach(name => classes.add(name)); },
       get textContent() { return text + children.map(child => child.textContent).join(""); },
-      set textContent(value) { text = String(value); children.length = 0; },
-      setAttribute: (name, value) => attributes.set(name, String(value)),
+      set textContent(next) { text = String(next); children.length = 0; },
+      get value() { return value; },
+      set value(next) { value = String(next); node.selectionStart = node.selectionEnd = value.length; },
+      setSelectionRange(start, end) { node.selectionStart = start; node.selectionEnd = end; },
+      setAttribute: (name, next) => attributes.set(name, String(next)),
       getAttribute: name => attributes.get(name) ?? null,
       addEventListener(type, listener) {
         if (!listeners.has(type)) listeners.set(type, []);
@@ -1087,55 +535,47 @@ function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
       },
       fire(type, event = {}) {
         event.target ??= node;
-        event.preventDefault ??= () => {};
+        event.preventDefault ??= () => { event.defaultPrevented = true; };
         (listeners.get(type) ?? []).forEach(listener => listener(event));
         parent?.fire(type, event);
       },
-      append: (...nodes) => { children.push(...nodes); },
+      append: (...nodes) => children.push(...nodes),
       replaceChildren(...nodes) { children.length = 0; children.push(...nodes); },
-      focus() {}, blur() {},
+      focus() { document.activeElement = node; }, blur() { document.activeElement = null; },
     };
     return node;
   };
-
   const parents = new Map([["#answer", "#typing-surface"], ["#word", "#typing-surface"]]);
   const get = selector => {
     if (!elements.has(selector)) {
       const parent = parents.has(selector) ? get(parents.get(selector)) : null;
       const element = makeElement(selector === "#answer" ? "input" : "div", parent);
-      if (selector.startsWith("#")) element.id = selector.slice(1);
+      element.id = selector.startsWith("#") ? selector.slice(1) : "";
       elements.set(selector, element);
     }
     return elements.get(selector);
   };
-  // index.html 入面本來就 hidden 嘅元素，迷你 DOM 要照樣開場。
   for (const id of ["#flow-banner", "#flow-next"]) get(id).hidden = true;
   const views = ["#setup-view", "#play-view", "#result-view"].map(get);
-  const body = makeElement("body");
-
-  const staticNodes = i18nEntries(CHAIN_HTML).map(({ key, hant }) => {
+  const staticNodes = [...CHAIN_HTML.matchAll(/data-i18n="([^"]+)"[^>]*>([^<]*)</g)].map(match => {
     const node = makeElement();
-    node.textContent = hant;
-    // 真 DOM 會將 data-i18n 屬性反映去 dataset；i18n 運行庫靠 el.dataset.i18n 攞 key。
-    node.dataset.i18n = key;
-    return { key, node };
+    node.dataset.i18n = match[1]; node.textContent = match[2];
+    return node;
   });
-  const placeholderNodes = placeholderEntries(CHAIN_HTML).map(({ key, hant }) => {
+  const placeholderNodes = [...CHAIN_HTML.matchAll(/<[^>]*data-i18n-placeholder="([^"]+)"[^>]*>/g)].map(match => {
     const node = makeElement("input");
-    node.setAttribute("placeholder", hant);
-    node.dataset.i18nPlaceholder = key;
-    return { key, node };
+    node.dataset.i18nPlaceholder = match[1];
+    node.setAttribute("placeholder", match[0].match(/placeholder="([^"]*)"/)?.[1] ?? "");
+    return node;
   });
   const toggle = makeElement("button");
-
   const document = {
-    documentElement: makeElement("html"),
-    body,
+    body: makeElement("body"), documentElement: makeElement("html"), activeElement: null, hidden: false,
     querySelector: get,
     querySelectorAll(selector) {
       if (selector === ".view") return views;
-      if (selector === "[data-i18n]") return staticNodes.map(entry => entry.node);
-      if (selector === "[data-i18n-placeholder]") return placeholderNodes.map(entry => entry.node);
+      if (selector === "[data-i18n]") return staticNodes;
+      if (selector === "[data-i18n-placeholder]") return placeholderNodes;
       if (selector === "[data-locale-toggle]") return [toggle];
       return [];
     },
@@ -1143,140 +583,310 @@ function chainI18nTab({ store = new Map(), flowMode = false } = {}) {
     addEventListener(type, listener) { documentListeners.set(type, listener); },
   };
   const window = {
-    CustomEvent: class {
-      constructor(type, options) { this.type = type; this.detail = options?.detail; }
-    },
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     addEventListener(type, listener) {
       if (!windowListeners.has(type)) windowListeners.set(type, []);
       windowListeners.get(type).push(listener);
     },
     dispatchEvent(event) { for (const listener of windowListeners.get(event.type) ?? []) listener(event); },
   };
-  const localStorage = {
-    getItem: key => (store.has(key) ? store.get(key) : null),
-    setItem: (key, value) => { store.set(key, String(value)); },
-    removeItem: key => { store.delete(key); },
-  };
-  const restoreGlobals = withI18nGlobals({ document, window, localStorage, CustomEvent: window.CustomEvent });
-
-  class Clock extends Date {
-    static now() { return now; }
-  }
-
-  vm.runInContext(DOM_SOURCE, vm.createContext({
-    Date: Clock,
-    OFFICIAL_CHAIN, CHAIN_BANK,
-    comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer, recallSyllable, typeSyllable,
-    ...flowApi,
-    location: { search: flowMode ? "?flow=1" : "", href: "" },
-    URLSearchParams,
-    createChainGame,
-    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
-    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
-    setInterval: (callback) => { intervalCallback = callback; return 1; },
-    clearInterval: () => { intervalCallback = null; },
-    setTimeout: () => 1,
-    // 頁面模組 import { t as i18nT }：import 被剝走之後，i18nT 由呢度嚟。
-    i18nT: t, initI18n, registerStrings, setLocale, getLocale,
-    document, window, localStorage,
-  }), { filename: "demo/games/chain/chain-dom.mjs" });
-
-  return {
-    get,
-    static: key => staticNodes.find(entry => entry.key === key)?.node ?? null,
-    placeholder: key => placeholderNodes.find(entry => entry.key === key)?.node ?? null,
-    toggle,
-    setTime: value => { now = value; },
-    fireTick: () => intervalCallback?.(),
-    // 還原語言同清走呢個測試寫入嘅 storage，唔好影響其他測試。
-    cleanup() {
-      setLocale("yue-Hant");
-      store.clear();
-      restoreGlobals();
-    },
-  };
-}
-
-test("i18n：切去簡體粵文，靜態文案（連 placeholder）、動態文案同切換掣一齊變", () => {
-  const tab = chainI18nTab({ store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
-  try {
-    assert.equal(getLocale(), "yue-Hant", "node 冇 navigator，預設一定係繁體");
-    assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
-    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
-    assert.equal(tab.toggle.textContent, "简");
-    assert.equal(tab.get("#best-note").textContent, "本地最佳：未有紀錄。");
-
-    setLocale("yue-Hans");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hans");
-
-    // 靜態文案（index.html 嘅 data-i18n／data-i18n-placeholder）
-    assert.equal(tab.static("chain.title").textContent, "粤拼词链");
-    assert.equal(tab.static("chain.startTitle").textContent, "开始");
-    assert.equal(tab.static("chain.rule2").textContent, "一个词全部音节都打啱 → 连击 +1；个词有任何一个错 → 连击即刻归零。");
-    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝随机");
-    // 切換掣：簡體界面顯示「繁」
-    assert.equal(tab.toggle.textContent, "繁");
-    assert.equal(tab.toggle.getAttribute("aria-pressed"), "true");
-
-    // 動態文案（模組 t() 畫出嚟）
-    assert.equal(tab.get("#best-note").textContent, "本地最佳：未有纪录。");
-    tab.get("#seed").value = "chain-seed";
-    tab.get("#setup-form").fire("submit");
-    assert.equal(tab.get("#seed-label").textContent, "官方轮 · seed chain-seed");
-    assert.equal(tab.get("#progress-label").textContent, "第 1 个词 · 官方轮");
-    assert.equal(tab.get("#time-label").textContent, "剩余时间");
-    assert.equal(tab.get("#combo").textContent, "连击 0");
-    assert.equal(tab.get("#multiplier").textContent, "倍率 ×1.0");
-    assert.equal(tab.get("#feedback").textContent, "打粤拼，Space 或 Enter 确认；未输入时按 Backspace 改上一个音节。");
-
-    tab.setTime(120_000);
-    tab.fireTick();
-    assert.equal(tab.get("#result-title").textContent, "时间到，收卷！");
-    assert.equal(tab.get("#result-threshold").textContent, "未达 90% 门槛，正式赛不计排名");
-    assert.equal(tab.get("#window-note").textContent, "官方模式：固定 120 秒计分窗。");
-    assert.equal(tab.get("#result-detail").textContent, "连击 0 · 得分 0.0");
-    assert.match(tab.get("#result-summary").textContent, /^本场 seed chain-seed：/);
-    assert.match(tab.get("#result-summary").textContent, /用时 02:00\.0/);
-
-    // 切返繁體：靜態、動態同切換掣全部還原
-    setLocale("yue-Hant");
-    assert.equal(localStorage.getItem(LOCALE_STORAGE_KEY), "yue-Hant");
-    assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
-    assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
-    assert.equal(tab.toggle.textContent, "简");
-    assert.match(tab.get("#best-note").textContent, /^本地最佳：正式分 0\.0（/);
-    assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
-    assert.equal(tab.get("#result-threshold").textContent, "未達 90% 門檻，正式賽不計排名");
-    assert.equal(tab.get("#result-detail").textContent, "連擊 0 · 得分 0.0");
-    assert.match(tab.get("#result-summary").textContent, /^本場 seed chain-seed：/);
-  } finally {
-    tab.cleanup();
-  }
-});
-
-test("i18n：?flow=1 流程橫額、seed 標籤同「前往第 N 輪」掣跟語言變", () => {
-  withFlowStorage(() => {
-    const tab = chainI18nTab({ flowMode: true });
-    try {
-      assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
-
-      setLocale("yue-Hans");
-      assert.equal(tab.get("#flow-banner").textContent,
-        "官方流程第 2 轮：词组 · 固定 120 秒连续题流 · 退出流程会丢弃三轮进度。");
-      assert.equal(tab.get("#mode-note").textContent,
-        "官方流程锁定官方规则：固定 120 秒连续题流，到点自动收卷；seed 每局随机，开局后显示。");
-
-      tab.get("#setup-form").fire("submit");
-      assert.match(tab.get("#seed-label").textContent, /^官方流程第 2 轮：词组 · seed \d{6}$/);
-      tab.setTime(120_000);
-      tab.fireTick();
-      assert.equal(tab.get("#flow-next").textContent, "前往第 3 轮：篇章 →");
-
-      setLocale("yue-Hant");
-      assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
-      assert.match(tab.get("#flow-banner").textContent, /官方流程第 2 輪：詞組 · 固定 120 秒連續題流/);
-    } finally {
-      tab.cleanup();
+  const storage = backing => ({
+    getItem: key => backing.get(key) ?? null,
+    setItem: (key, value) => backing.set(key, String(value)),
+    removeItem: key => backing.delete(key),
+  });
+  const flowStore = new Map();
+  const localStorage = storage(store);
+  const sessionStorage = storage(flowStore);
+  const globals = { ...(flowMode ? { sessionStorage } : {}), ...(i18n ? { document, window, localStorage } : {}) };
+  const savedGlobals = new Map(Object.keys(globals).map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  for (const [key, value] of Object.entries(globals)) Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+  testContext.after(() => {
+    if (i18n) setLocale("yue-Hant");
+    for (const [key, descriptor] of savedGlobals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
     }
   });
+  class Clock extends Date { static now() { return now; } }
+  vm.runInContext(DOM_SOURCE, vm.createContext({
+    Date: Clock, URLSearchParams, TextEncoder,
+    MAX_FREE_INPUT, FREE_INPUT_RULE_VERSION, createFreeTrace, recordFreeEvent,
+    confirmChainInput, undoChainInput, visibleChainTargets,
+    loadFreeInput: loader ?? (async () => testFreeEngine),
+    OFFICIAL_CHAIN, CHAIN_BANK, comboMultiplier, finishByTime, formatClock, getChainMetrics, normalizeAnswer,
+    ...flowApi,
+    createChainGame(options) { const state = createChainGame(options); calls.push({ options, state }); return state; },
+    location: { search: flowMode ? "?flow=1" : search, href: "" },
+    readJson: (key, fallback = null) => store.has(key) ? JSON.parse(store.get(key)) : fallback,
+    writeJson: (key, value) => { store.set(key, JSON.stringify(value)); return true; },
+    setInterval: (callback, delay) => { intervalCallback = callback; intervalDelay = delay; return 1; },
+    clearInterval: () => { intervalCallback = null; },
+    setTimeout: callback => { timers.push(callback); return timers.length; },
+    ...(i18n ? { i18nT: t, initI18n, registerStrings } : {}),
+    document, window, localStorage,
+  }), { filename: "demo/games/chain/chain-dom.mjs" });
+  const tab = {
+    get, calls, store, flowStore, toggle,
+    static: key => staticNodes.find(node => node.dataset.i18n === key),
+    placeholder: key => placeholderNodes.find(node => node.dataset.i18nPlaceholder === key),
+    ready: () => new Promise(resolve => setImmediate(resolve)),
+    flushTimers() { while (timers.length) timers.shift()(); },
+    setTime(value) { now = value; },
+    fireTick() { intervalCallback?.(); },
+    intervalMs: () => intervalDelay,
+    key(key, code = key, extra = {}) { get("#answer").fire("keydown", { key, code, ...extra }); },
+    type(value) { for (const letter of value) tab.key(letter, `Key${letter.toUpperCase()}`); tab.flushTimers(); },
+    submit() { tab.key(" ", "Space"); tab.flushTimers(); },
+    native(value, inputType = "insertText") {
+      tab.flushTimers(); get("#answer").value = value;
+      get("#answer").fire("input", { inputType, data: value });
+    },
+    async start(seed = "phrase-85") {
+      await tab.ready(); get("#seed").value = seed; get("#setup-form").fire("submit");
+      return calls.at(-1)?.state.words;
+    },
+    record() { return JSON.parse([...store.entries()].find(([key]) => key.startsWith(`canclid-contest-games-chain:`))?.[1] ?? "null"); },
+    trace() { return JSON.parse(store.get(TRACE_KEY) ?? "[]").at(-1); },
+  };
+  return tab;
+}
+
+async function finishPractice(tab, plan, fromWord = 0) {
+  for (const [index, word] of plan.slice(fromWord).entries()) {
+    tab.setTime((index + 10) * 1000);
+    tab.type(word.syllables.join("")); tab.submit();
+  }
+}
+
+// New pages expose one shared input method. Old engine behavior stays covered
+// above for stored/replay compatibility; it is no longer the browser contract.
+test("confirmed UI: single and whole-word submissions share one method without previews", async t => {
+  const tab = chainTab(t);
+  const plan = await tab.start();
+  assert.equal(plan[0].word, "香港");
+  assert.doesNotMatch(CHAIN_HTML, /id="(input-phrase|input-syllable|upcoming-words)"/);
+  tab.type("hoeng");
+  assert.equal(tab.get("#score").textContent, "0.0");
+  tab.setTime(1000); tab.submit();
+  assert.equal(tab.get("#progress-label").textContent, "第 1 / 20 個詞");
+  assert.equal(tab.get("#score").textContent, "1.0");
+  assert.equal(tab.get("#accuracy").textContent, "100%");
+  tab.type("gong"); tab.setTime(2000); tab.submit();
+  assert.equal(tab.get("#progress-label").textContent, "第 2 / 20 個詞");
+  assert.equal(tab.get("#combo").textContent, "連擊 1");
+  const raw = plan[1].syllables.join("");
+  tab.type(raw); tab.setTime(3000); tab.submit();
+  assert.equal(tab.get("#progress-label").textContent, "第 3 / 20 個詞");
+  assert.equal(tab.get("#combo").textContent, "連擊 2");
+  tab.key("Backspace");
+  assert.equal(tab.get("#draft").textContent, raw);
+  assert.equal(tab.get("#progress-label").textContent, "第 2 / 20 個詞");
+  assert.equal(tab.get("#score").textContent, "2.0");
+});
+
+test("confirmed UI: wrong spans are submitted, counted and cleared; undo restores the whole raw answer", async t => {
+  const tab = chainTab(t);
+  await tab.start();
+  tab.type("HOENGGON"); tab.setTime(1000); tab.submit();
+  assert.equal(tab.get("#draft").textContent, "—");
+  assert.equal(tab.get("#score").textContent, "1.0");
+  assert.equal(tab.get("#accuracy").textContent, "50%");
+  assert.equal(tab.get("#progress-label").textContent, "第 2 / 20 個詞");
+  assert.equal(tab.get("#phrase-review-parts").children.length, 2);
+  assert.ok(tab.get("#phrase-review-parts").children.some(cell => cell.className.includes("incorrect")));
+  tab.key("Backspace");
+  assert.equal(tab.get("#draft").textContent, "HOENGGON");
+  assert.equal(tab.get("#score").textContent, "0.0");
+  tab.type("G"); tab.setTime(2000); tab.submit();
+  assert.equal(tab.get("#accuracy").textContent, "100%");
+  assert.equal(tab.get("#score").textContent, "2.0");
+  tab.type("zzz"); tab.setTime(3000); tab.submit();
+  assert.equal(tab.get("#draft").textContent, "—");
+  assert.notEqual(tab.get("#accuracy").textContent, "100%");
+});
+
+test("confirmed UI: completion freezes input and exports replayable raw confirmations and undo", async t => {
+  const legacyKey = "canclid-contest-games-chain:practice:phrase:phrase-yune-align-v1";
+  const store = new Map([[legacyKey, JSON.stringify({ best: { officialScore: 99999 }, plays: [] })]]);
+  const tab = chainTab(t, { store });
+  assert.match(tab.get("#best-note").textContent, /未有紀錄/);
+  const plan = await tab.start();
+  tab.type("hoeng"); tab.setTime(1000); tab.submit();
+  tab.key("Backspace");
+  assert.equal(tab.get("#draft").textContent, "hoeng");
+  tab.type("gong"); tab.setTime(2000); tab.submit();
+  await finishPractice(tab, plan, 1);
+  assert.equal(tab.get("#result-view").hidden, false);
+  assert.equal(tab.get("#result-review").hidden, false);
+  assert.equal(tab.get("#export-trace").hidden, false);
+  assert.equal(tab.get("#result-accuracy").textContent, "100.0%");
+  assert.match(tab.get("#result-threshold").textContent, /達 90% 門檻/);
+  assert.ok(Number(tab.get("#result-score").textContent) > 0);
+  const trace = tab.trace();
+  assert.equal(trace.rulesVersion, FREE_INPUT_RULE_VERSION);
+  assert.equal(trace.inputMode, "free");
+  assert.equal(trace.finalCommits.length, 20);
+  assert.equal(trace.finalCommits.reduce((n, item) => n + item.plan.accepted.length, 0), plan.flatMap(word => word.syllables).length);
+  assert.ok(trace.inputEvents.some(event => event.type === "undo-control"));
+  assert.ok(trace.inputEvents.some(event => event.type === "submit" && event.submission.raw === "hoeng"));
+  assert.ok(trace.inputEvents.some(event => event.type === "edit" && event.after === "hoenggong"));
+  assert.equal(trace.droppedInputEvents, 0);
+  assert.ok(store.has(`canclid-contest-games-chain:practice:free:${FREE_INPUT_RULE_VERSION}`));
+  const result = tab.get("#result-score").textContent;
+  tab.key("Backspace"); tab.type("junk"); tab.submit();
+  assert.equal(tab.get("#result-score").textContent, result);
+  assert.deepEqual(tab.trace(), trace, "post-finish edits cannot change the exported trace");
+});
+
+test("confirmed UI: unavailable WASM prevents starting and retry loads the same input method", async t => {
+  let attempts = 0;
+  const tab = chainTab(t, { loader: async () => {
+    if (++attempts === 1) throw new Error("fixture failure");
+    return testFreeEngine;
+  } });
+  await tab.ready();
+  assert.equal(tab.get("#start").disabled, true);
+  assert.equal(tab.get("#retry-engine").hidden, false);
+  assert.match(tab.get("#engine-status").textContent, /未能載入/);
+  tab.get("#retry-engine").fire("click"); await tab.ready();
+  assert.equal(attempts, 2);
+  assert.equal(tab.get("#start").disabled, false);
+  assert.equal(tab.get("#retry-engine").hidden, true);
+  await tab.start(); tab.type("hoenggong"); tab.setTime(1000); tab.submit();
+  assert.equal(tab.get("#score").textContent, "2.0");
+});
+
+test("confirmed UI: native insert, selection edits, IME and physical-input deduplication", async t => {
+  const tab = chainTab(t);
+  await tab.start();
+  const input = tab.get("#answer");
+  tab.native("hoenggong");
+  assert.equal(tab.get("#score").textContent, "0.0");
+  input.setSelectionRange(5, 9);
+  tab.key("g", "KeyG");
+  assert.equal(tab.get("#draft").textContent, "hoengg");
+  input.value = "hoenggg";
+  input.fire("input", { inputType: "insertText", data: "g" });
+  assert.equal(tab.get("#draft").textContent, "hoengg", "physical key and native event are one edit");
+  tab.flushTimers();
+  input.setSelectionRange(5, 6); input.fire("compositionstart");
+  input.value = "hoenggong"; input.fire("input", { inputType: "insertCompositionText", data: "gong", isComposing: true });
+  assert.equal(tab.get("#draft").textContent, "hoengg");
+  input.fire("compositionend", { data: "gong" });
+  assert.equal(tab.get("#draft").textContent, "hoenggong");
+  input.fire("input", { inputType: "insertCompositionText", data: "gong" });
+  assert.equal(tab.get("#draft").textContent, "hoenggong");
+  tab.flushTimers(); input.fire("compositionstart"); input.fire("compositionend", { data: "" });
+  assert.equal(tab.get("#draft").textContent, "hoenggong", "canceled composition preserves the buffer");
+  for (const invalid of ["香港", "hoeng1gong2", "hoeng!gong"]) {
+    tab.native(invalid, "insertFromPaste");
+    assert.equal(tab.get("#draft").textContent, "hoenggong");
+  }
+  tab.native("a".repeat(MAX_FREE_INPUT + 1), "insertFromPaste");
+  assert.equal(tab.get("#draft").textContent, "hoenggong");
+  assert.match(tab.get("#feedback").textContent, /4096/);
+  tab.setTime(1000); tab.native("hoenggong ");
+  assert.equal(tab.get("#draft").textContent, "—");
+  assert.equal(tab.get("#score").textContent, "2.0");
+  input.fire("beforeinput", { inputType: "deleteContentBackward" });
+  assert.equal(tab.get("#draft").textContent, "hoenggong");
+  assert.equal(tab.get("#score").textContent, "0.0");
+  tab.setTime(2000); input.fire("beforeinput", { inputType: "insertParagraph" });
+  assert.equal(tab.get("#score").textContent, "2.0");
+  // A different native operation arriving before the keydown timer is genuine.
+  tab.key("Backspace");
+  input.value = "hoenggongX";
+  input.fire("input", { inputType: "insertText", data: "X" });
+  assert.equal(tab.get("#draft").textContent, "hoenggongX");
+});
+
+test("confirmed UI: practice and official preferences remain available without an input-mode switch", async t => {
+  const tab = chainTab(t);
+  assert.equal(tab.get("#mode-practice").getAttribute("aria-pressed"), "true");
+  tab.get("#mode-official").fire("click");
+  assert.equal(JSON.parse(tab.store.get(CHAIN_MODE_KEY)), "official");
+  assert.match(tab.get("#mode-note").textContent, /120 秒/);
+  await tab.start();
+  assert.equal(tab.calls.at(-1).options.durationSeconds, 120);
+  assert.equal(tab.get("#time-label").textContent, "剩餘時間");
+  assert.equal(tab.get("#time").textContent, "02:00.0");
+  assert.ok(tab.intervalMs() <= 250);
+  tab.type("hoenggong"); tab.setTime(1000); tab.submit();
+  assert.equal(tab.get("#score").textContent, "2.0", "official uses the same multi-syllable confirmation");
+  tab.setTime(120000); tab.fireTick();
+  assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
+  assert.equal(tab.get("#window-note").hidden, false);
+  assert.match(tab.get("#window-note").textContent, /固定 120 秒計分窗/);
+  assert.equal(tab.record().plays[0].correct, 2);
+  assert.equal(tab.record().plays[0].accuracy, 1);
+});
+
+test("confirmed UI: official keeps seeded batches and rejects late confirmations", async t => {
+  const tab = chainTab(t, { store: new Map([[CHAIN_MODE_KEY, JSON.stringify("official")]]) });
+  const plan = await tab.start("official-full");
+  for (const [index, word] of plan.entries()) {
+    tab.setTime((index + 1) * 1000); tab.type(word.syllables.join("")); tab.submit();
+  }
+  assert.equal(tab.get("#play-view").hidden, false);
+  assert.equal(tab.get("#combo").textContent, "連擊 20");
+  assert.match(tab.get("#progress-label").textContent, /第 21 個詞/);
+  const correct = plan.flatMap(word => word.syllables).length;
+  tab.setTime(120000); tab.type("hoenggong"); tab.submit();
+  assert.equal(tab.get("#result-view").hidden, false);
+  assert.equal(tab.record().plays[0].correct, correct);
+});
+
+test("confirmed UI: flow round accepts grouped input, saves the new rules and routes to passage", async t => {
+  const tab = chainTab(t, { flowMode: true });
+  assert.equal(tab.get("#mode-picker").hidden, true);
+  assert.equal(tab.get("#seed").hidden, true);
+  assert.match(tab.get("#flow-banner").textContent, /第 2 輪：詞組/);
+  const plan = await tab.start("ignored");
+  assert.notEqual(tab.calls.at(-1).options.seed, "ignored");
+  const combined = plan[0].syllables.join("");
+  tab.type(combined); tab.setTime(1000); tab.submit();
+  assert.equal(tab.get("#combo").textContent, "連擊 1");
+  tab.setTime(120000); tab.fireTick();
+  const saved = JSON.parse(tab.flowStore.get(flowApi.FLOW_STORAGE_KEY)).rounds.words;
+  assert.equal(saved.seconds, 120);
+  assert.equal(saved.correct, plan[0].syllables.length);
+  assert.equal(saved.rulesVersion, FREE_INPUT_RULE_VERSION);
+  assert.equal(saved.accuracy, 1);
+  assert.equal(saved.threshold, 0.9);
+  assert.equal(tab.get("#flow-next").href, "../ghost/?flow=1");
+  assert.equal(tab.get("#play-again").hidden, true);
+});
+
+test("confirmed UI: locale changes translate live feedback and result text without changing input", async t => {
+  const tab = chainTab(t, { i18n: true });
+  assert.equal(tab.static("chain.title").textContent, "粵拼詞鏈");
+  assert.equal(tab.toggle.textContent, "简");
+  await tab.start();
+  tab.type("hoeng"); tab.setTime(1000); tab.submit();
+  tab.type("gon");
+  setLocale("yue-Hans");
+  assert.equal(tab.static("chain.title").textContent, "粤拼词链");
+  assert.match(tab.get("#feedback").textContent, /已提交：啱 1、错 0/);
+  assert.match(tab.get("#announcer").textContent, /已提交：啱 1、错 0/);
+  assert.equal(tab.get("#draft").textContent, "gon");
+  assert.equal(tab.get("#score").textContent, "1.0");
+  assert.equal(tab.toggle.textContent, "繁");
+  setLocale("yue-Hant");
+  assert.match(tab.get("#feedback").textContent, /已提交：啱 1、錯 0/);
+  assert.equal(tab.placeholder("chain.seedPlaceholder").getAttribute("placeholder"), "留空＝隨機");
+});
+
+test("confirmed UI: flow and completed-round labels follow locale", async t => {
+  const tab = chainTab(t, { flowMode: true, i18n: true });
+  await tab.start();
+  setLocale("yue-Hans");
+  assert.match(tab.get("#flow-banner").textContent, /第 2 轮：词组/);
+  tab.setTime(120000); tab.fireTick();
+  assert.equal(tab.get("#result-title").textContent, "时间到，收卷！");
+  assert.equal(tab.get("#flow-next").textContent, "前往第 3 轮：篇章 →");
+  assert.match(tab.get("#result-threshold").textContent, /未达 90% 门槛/);
+  setLocale("yue-Hant");
+  assert.equal(tab.get("#result-title").textContent, "時間到，收卷！");
+  assert.equal(tab.get("#flow-next").textContent, "前往第 3 輪：篇章 →");
 });

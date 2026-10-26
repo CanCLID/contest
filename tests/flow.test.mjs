@@ -72,9 +72,9 @@ test("流程輪次由 official.mjs 推導：次序、標籤、時限同門檻", 
   for (const item of FLOW_ROUNDS) {
     assert.equal(item.threshold, OFFICIAL_ROUNDS[item.id].threshold);
   }
-  assert.equal(FLOW_VERSION, 1);
+  assert.equal(FLOW_VERSION, 3);
   assert.equal(FLOW_STORAGE_KEY, "canclid-contest-official-flow");
-  assert.equal(FLOW_HISTORY_KEY, "canclid-contest-official-flow-history");
+  assert.equal(FLOW_HISTORY_KEY, "canclid-contest-official-flow-history:free-confirm-v2");
   assert.equal(FLOW_HISTORY_LIMIT, 20);
 });
 
@@ -122,13 +122,13 @@ test("startFlow 開新流程、記低暱稱同組別，重開會覆蓋舊流程"
   withStorage(({ session }) => {
     const started = startFlow(1000, { name: "  阿甲  ", group: "mobile" });
     assert.deepEqual(started, {
-      version: 1, startedAt: 1000, rounds: {}, player: { name: "阿甲", group: "mobile" },
+      version: FLOW_VERSION, startedAt: 1000, rounds: {}, player: { name: "阿甲", group: "mobile" },
     });
     assert.deepEqual(session.read(FLOW_STORAGE_KEY), started);
     assert.deepEqual(readFlow(), started);
 
-    assert.deepEqual(startFlow(2000), { version: 1, startedAt: 2000, rounds: {} });
-    assert.deepEqual(readFlow(), { version: 1, startedAt: 2000, rounds: {} }, "重開覆蓋舊流程");
+    assert.deepEqual(startFlow(2000), { version: FLOW_VERSION, startedAt: 2000, rounds: {} });
+    assert.deepEqual(readFlow(), { version: FLOW_VERSION, startedAt: 2000, rounds: {} }, "重開覆蓋舊流程");
 
     assert.ok(Number.isFinite(startFlow(NaN).startedAt), "唔係有限數字就退回 Date.now()");
     assert.ok(Number.isFinite(readFlow().startedAt));
@@ -140,16 +140,16 @@ test("startFlow 開新流程、記低暱稱同組別，重開會覆蓋舊流程"
   });
 });
 
-test("saveRoundResult 只認版本 1 嘅流程物件，冇流程就唔會無中生有", () => {
+test("saveRoundResult 只認目前版本嘅流程物件，冇流程就唔會無中生有", () => {
   withStorage(({ session }) => {
     assert.equal(saveRoundResult(null, "single", round(1, 1, 90)), null);
-    assert.equal(saveRoundResult({ version: 2, startedAt: 1, rounds: {} }, "single", round(1, 1, 90)), null);
-    assert.equal(saveRoundResult({ version: 1 }, "single", round(1, 1, 90)), null);
-    assert.equal(saveRoundResult({ version: 1, startedAt: 1, rounds: {} }, "single", null), null);
-    assert.equal(saveRoundResult({ version: 1, startedAt: 1, rounds: {} }, "single", round(1.5, 2, 90)), null,
+    assert.equal(saveRoundResult({ version: FLOW_VERSION + 1, startedAt: 1, rounds: {} }, "single", round(1, 1, 90)), null);
+    assert.equal(saveRoundResult({ version: FLOW_VERSION }, "single", round(1, 1, 90)), null);
+    assert.equal(saveRoundResult({ version: FLOW_VERSION, startedAt: 1, rounds: {} }, "single", null), null);
+    assert.equal(saveRoundResult({ version: FLOW_VERSION, startedAt: 1, rounds: {} }, "single", round(1.5, 2, 90)), null,
       "非整數計數唔收");
-    assert.equal(saveRoundResult({ version: 1, startedAt: 1, rounds: {} }, "single", round(1, 1, -1)), null);
-    assert.equal(saveRoundResult({ version: 1, startedAt: 1, rounds: {} }, "single", round(1, 1, NaN)), null);
+    assert.equal(saveRoundResult({ version: FLOW_VERSION, startedAt: 1, rounds: {} }, "single", round(1, 1, -1)), null);
+    assert.equal(saveRoundResult({ version: FLOW_VERSION, startedAt: 1, rounds: {} }, "single", round(1, 1, NaN)), null);
     assert.equal(session.map.size, 0, "全部唔合格嘅寫入都唔會留低垃圾");
 
     startFlow(1000);
@@ -188,7 +188,7 @@ test("saveRoundResult 保留 player，同時重算數值、剔除垃圾輪次", 
   withStorage(() => {
     startFlow(5000, { name: "阿甲", group: "desktop" });
     const tampered = {
-      version: 1,
+      version: FLOW_VERSION,
       startedAt: 5000,
       player: { name: "阿甲", group: "desktop" },
       rounds: {
@@ -208,14 +208,14 @@ test("saveRoundResult 保留 player，同時重算數值、剔除垃圾輪次", 
 test("readFlow 抵擋壞資料：版本、開始時間同輪次內容", () => {
   withStorage(({ session }) => {
     const write = value => session.setItem(FLOW_STORAGE_KEY, JSON.stringify(value));
-    write({ version: 2, startedAt: 1, rounds: {} });
+    write({ version: FLOW_VERSION + 1, startedAt: 1, rounds: {} });
     assert.equal(readFlow(), null, "版本唔啱");
-    write({ version: 1, startedAt: "yesterday", rounds: {} });
+    write({ version: FLOW_VERSION, startedAt: "yesterday", rounds: {} });
     assert.equal(readFlow(), null, "開始時間唔係數字");
-    write({ version: 1, startedAt: 1, rounds: "nope" });
-    assert.deepEqual(readFlow(), { version: 1, startedAt: 1, rounds: {} });
+    write({ version: FLOW_VERSION, startedAt: 1, rounds: "nope" });
+    assert.deepEqual(readFlow(), { version: FLOW_VERSION, startedAt: 1, rounds: {} });
     write({
-      version: 1,
+      version: FLOW_VERSION,
       startedAt: 1,
       rounds: {
         single: { correct: 1, submitted: 2, seconds: 90 },
@@ -296,7 +296,7 @@ test("flowTotals 加埋已完成嘅輪次，缺輪唔會當 0 分", () => {
 test("appendFlowHistory 記低完成流程，同一次流程唔會重複記錄，最多 20 條", () => {
   withStorage(({ local }) => {
     const store = id => ({
-      version: 1,
+      version: FLOW_VERSION,
       startedAt: id,
       rounds: { single: normalizeRoundResult("single", round(27, 30, 90)) },
     });
@@ -385,4 +385,23 @@ test("遊戲大廳：語言切換掣、data-i18n 覆蓋同 i18n 啟動腳本", (
     assert.ok(lobby.includes(`"${key}":`), `大廳 inline script 冇登記 ${key} 嘅簡體譯文`);
   }
   assert.match(lobby, /<h2 data-i18n="lobby\.rocksTitle">粵拼落石<\/h2>/, "繁體原文要留喺 HTML 度做 fallback");
+});
+
+test("graded confirmation restores original accuracy and scoring in every flow round", () => {
+  withStorage(() => {
+    const words = flowRoundResult("words", { correct: 8, submitted: 10, scoredSeconds: 120,
+      rulesVersion: "free-confirm-v2" });
+    assert.equal(words.correctPerMinute, 4);
+    assert.equal(words.officialScore, 3.2);
+    assert.equal(words.accuracy, 0.8);
+    assert.equal(words.meetsThreshold, false);
+    assert.equal(words.threshold, 0.9);
+    saveRoundResult(startFlow(1000), "words", words);
+    assert.deepEqual(readFlow().rounds.words, words);
+    const passage = flowRoundResult("passage", { correct: 9, submitted: 10, elapsedSeconds: 60,
+      rulesVersion: "free-confirm-v2" });
+    assert.equal(passage.accuracy, 0.9);
+    assert.equal(passage.officialScore, 8.1);
+    assert.equal(passage.threshold, 0.85);
+  });
 });

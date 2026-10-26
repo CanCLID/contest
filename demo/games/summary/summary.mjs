@@ -95,6 +95,7 @@ export function roundRows(flow) {
       correct: result?.correct ?? 0,
       submitted: result?.submitted ?? 0,
       accuracy: result?.accuracy ?? null,
+      rulesVersion: result?.rulesVersion ?? null,
       officialScore: result?.officialScore ?? null,
       meetsThreshold: result?.meetsThreshold ?? false,
     };
@@ -117,6 +118,11 @@ export function formatScore(row) {
   return row?.done && Number.isFinite(row.officialScore)
     ? row.officialScore.toFixed(1)
     : t("summary.score.missing", "未完成");
+}
+
+export function formatInputStats(row) {
+  if (!row?.done) return "—";
+  return formatPercent(row.accuracy);
 }
 
 export function formatThreshold(row) {
