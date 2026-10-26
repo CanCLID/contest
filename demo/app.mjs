@@ -9,13 +9,13 @@ import { ARTICLE, QUESTIONS, flattenQuestions } from "./questions.mjs?v=10";
 registerStrings({
   hans: {
     // 頁面骨架同導覽
-    "site.page.title": "粤拼竞速 · CanCLID",
+    "site.page.title": "粤语打字比赛 · CanCLID",
     "site.skipLink": "跳去主要内容",
-    "site.brand": "粤拼竞速",
+    "site.brand": "粤语打字比赛",
     "site.nav.arena": "试玩赛场",
     "site.nav.games": "小游戏",
     "site.demoBadge": "试玩模式",
-    "site.hero.title": "粤拼打字比赛",
+    "site.hero.title": "粤语打字比赛",
     // 本輪資料卡同 HUD
     "site.round.name": "参赛者",
     "site.round.group": "参赛组别",

@@ -93,6 +93,11 @@ html[lang="yue-Hans"] .draft.empty::after { content: "打粤拼…"; }
 
 @media (max-width: 620px) {
   .shell { padding: 0 16px 32px; }
+  .topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 12px 0; }
+  .topbar .brand { grid-column: 1; grid-row: 1; white-space: nowrap; }
+  .topbar .locale-toggle { grid-column: 2; grid-row: 1; justify-self: end; }
+  .topbar-link { grid-row: 2; }
+  .topbar-link:last-child { justify-self: end; }
   .card { padding: 20px; }
   h1 { font-size: 28px; }
   .hud { grid-template-columns: repeat(3, 1fr); gap: 12px 8px; }

@@ -61,7 +61,7 @@ if (typeof registerStrings === "function") {
     "chain.traceStorageWarning": "本机储存空间不足，仍可用下方按钮汇出本轮纪录。",
     "chain.traceTruncated": "本轮输入纪录已超过保存上限，汇出会标示缺失事件。",
 
-    "chain.docTitle": "粤拼词链 · CanCLID",
+    "chain.docTitle": "粤拼词链 · 粤语打字比赛",
     "chain.skipLink": "跳去主要内容",
     "chain.lobbyLink": "‹ 游戏大厅",
     "chain.badge": "小游戏",

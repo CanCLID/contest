@@ -22,7 +22,8 @@ registerStrings({
   hans: {
     // index.html 嘅 data-i18n 靜態文案
     "tower.skipLink": "跳去主要内容",
-    "tower.brand": "粤拼小游戏",
+    "tower.docTitle": "声韵解锁塔 · 粤语打字比赛",
+    "tower.brand": "粤语打字比赛",
     "tower.navLobby": "‹ 游戏大厅",
     "tower.navArena": "试玩赛场",
     "tower.badge": "练习模式，不设排名",

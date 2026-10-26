@@ -1,8 +1,8 @@
-# Contest
+# 粵語打字比賽
 
-粵拼打字比賽嘅純前端 demo，用嚟試輸入流程同討論賽規。正式需求同實現計劃見 [SPEC.md](SPEC.md)。
+粵語打字比賽嘅純前端 demo，用嚟試輸入流程同討論賽規。正式需求同實現計劃見 [SPEC.md](SPEC.md)。
 
-**試玩：[粵拼競速 demo](https://canclid.github.io/contest/)**
+**試玩：[粵語打字比賽 demo](https://canclid.github.io/contest/)**
 
 ## Demo 有乜
 
