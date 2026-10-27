@@ -1112,7 +1112,10 @@ test("設定卡「自由練習」捷徑：揀自由練習先展開面板，其�
   assert.doesNotMatch(arena, /practice-chip[^>]*flow=1/, "自由練習捷徑唔帶 flow=1");
 
   const lobby = readFileSync(new URL("../demo/games/index.html", import.meta.url), "utf8");
-  assert.match(lobby, /href="\.\.\/\.\.\/index\.html\?practice=1"/, "大廳要有單篇練習卡");
+  const practiceHref = lobby.match(/href="([^"]+\?practice=1)"/)?.[1];
+  assert.ok(practiceHref, "大廳要有單篇練習卡");
+  assert.equal(new URL(practiceHref, "https://canclid.github.io/contest/games/").href,
+    "https://canclid.github.io/contest/index.html?practice=1", "單篇練習要留喺 GitHub Pages 項目路徑內");
   assert.equal((lobby.match(/class="game-card"/g) ?? []).length, 5, "大廳係練習集中地，共 5 張卡");
   assert.match(lobby, /單篇練習/);
   assert.doesNotMatch(lobby, /game-card[^>]*flow=1/, "官方三輪流程唔係小遊戲，大廳唔准有 flow=1 卡");
